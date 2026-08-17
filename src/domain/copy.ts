@@ -1,0 +1,70 @@
+/**
+ * 문구 생성.
+ *
+ * 자동 추천의 신뢰는 정확도가 아니라 설명에서 나온다.
+ * "왜 이 길인지" 한 줄이 없으면 이 앱은 그냥 알 수 없는 우회길이 된다.
+ */
+
+import { moodById } from './mood';
+import { formatDuration } from './time';
+import type { FeatureKey, MoodId } from './types';
+import type { WalkPlan } from './time';
+
+/** 성질별로 사람에게 하는 말. 기능 이름을 그대로 노출하지 않는다. */
+const FEATURE_REASON: Record<FeatureKey, string> = {
+  quiet: '사람이 거의 없는 길이에요',
+  flat: '오르막이 거의 없어요',
+  shade: '이 시간엔 그늘이 이어지는 길이에요',
+  scenic: '걷다 보면 볼 게 있는 길이에요',
+  novelty: '아직 안 가보신 길이에요',
+  unbroken: '신호등이 두 개뿐이라 생각이 안 끊겨요',
+};
+
+/**
+ * 경로 추천 이유 한 줄.
+ * "{기분}이라고 하셔서, {성질}." 형태로 사용자의 말과 앱의 선택을 잇는다.
+ */
+export function routeReason(mood: MoodId, feature: FeatureKey): string {
+  const label = moodById(mood).label.replace(/요$/, '다고').replace(/어다고$/, '다고');
+  return `${label} 하셔서, ${FEATURE_REASON[feature]}.`;
+}
+
+/** 계획 종류에 따른 첫 화면 문구. 여유가 없을 때도 빈 화면을 보여주지 않는다. */
+export function planHeadline(plan: WalkPlan): string {
+  switch (plan.kind) {
+    case 'stretch':
+      return plan.capped
+        ? '시간이 꽤 남았어요. 넉넉히 걸어볼까요?'
+        : `${formatDuration(plan.targetWalkSec)}짜리 길을 찾아볼게요.`;
+    case 'straight':
+      return plan.reason === 'no-early'
+        ? '3분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.'
+        : '여유가 딱 그만큼이에요. 오늘은 그냥 곧장 가요.';
+    case 'too-late':
+      return `최단으로 가도 ${formatDuration(plan.shortBySec)} 늦어요.`;
+  }
+}
+
+/** 도착 3분 전 화면. 이 앱의 시그니처 순간. */
+export function arrivalPrompt(companion: string | null): string {
+  if (companion == null || companion.trim() === '') {
+    return '3분 남았어요.\n숨 고르고, 첫 마디를 생각해요.';
+  }
+  return `3분 남았어요.\n${companion}에게 무슨 말부터 할까요?`;
+}
+
+/** 한 줄 기록을 청하는 말. 강요하지 않는 톤으로. */
+export const NOTE_PLACEHOLDER = '걸으면서 무슨 생각 했어요?';
+
+/** 예전에 걸었던 길의 그 지점을 다시 지날 때. */
+export function memoryRecall(note: string, daysAgo: number): string {
+  const when =
+    daysAgo === 0
+      ? '오늘'
+      : daysAgo === 1
+        ? '어제'
+        : daysAgo < 30
+          ? `${daysAgo}일 전`
+          : `${Math.round(daysAgo / 30)}달 전`;
+  return `${when} 여기서 "${note}"`;
+}
