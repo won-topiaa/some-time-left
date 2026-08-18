@@ -5,3 +5,4 @@
 .granite/
 dist/
 node_modules/
+src/config.local.ts
