@@ -70,7 +70,8 @@ const config: ApiConfig = {
     appKey: null,
   },
   congestionProxy: {
-    baseUrl: null,
+    // 공개 엔드포인트라 여기 둔다. 서울 인증키는 이 뒤(프록시 서버)에만 있다.
+    baseUrl: 'https://some-time-left-proxy.yangjuwon240.workers.dev',
     token: null,
   },
   publicData: {

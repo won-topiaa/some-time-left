@@ -18,11 +18,8 @@ import { localSecrets } from './config.local';
  */
 configureApi({
   tmap: { appKey: localSecrets.tmapAppKey },
-  congestionProxy: {
-    // 공개 엔드포인트라 커밋해도 된다. 서울 인증키는 이 뒤(프록시 서버)에만 있다.
-    baseUrl: 'https://some-time-left-proxy.yangjuwon240.workers.dev',
-    token: localSecrets.congestionProxyToken,
-  },
+  // 프록시 주소는 공개값이라 config.ts에 기본값으로 있다. 여기선 토큰만 넘긴다.
+  congestionProxy: { token: localSecrets.congestionProxyToken },
   publicData: { serviceKey: localSecrets.publicDataServiceKey },
   vworld: { key: localSecrets.vworldKey },
 });

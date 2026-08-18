@@ -148,6 +148,16 @@ export const localSecrets = {
 npm run link-proxy
 ```
 
+**잘 들어갔는지는 `typecheck`로 알 수 없다** — 값이 `null`이어도 통과한다.
+설정이 실제로 동작하는지 보려면:
+
+```bash
+npm run check-config
+```
+
+어떤 키가 들어갔는지 보여주고, 프록시 토큰은 **실제로 호출해서** 확인한다.
+비밀값은 출력하지 않고 길이만 보여준다.
+
 값이 없으면 그 기능만 꺼지고 앱은 계속 돈다. TMAP 키가 없으면 경로가 mock으로,
 프록시 토큰이 없으면 `quiet`이 중립값으로 떨어진다.
 
