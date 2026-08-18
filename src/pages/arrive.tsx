@@ -4,6 +4,11 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../domain/copy';
 import { saveRecord } from '../data/records';
+import { CONGESTION_LABEL } from '../data/tmap/congestion';
+import {
+  lookupDestinationCongestion,
+  type DestinationCongestion,
+} from '../data/destination-congestion';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useTrip } from '../state/TripContext';
 
@@ -23,10 +28,35 @@ function Arrive() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [congestion, setCongestion] = useState<DestinationCongestion | null>(null);
 
   useEffect(() => {
     generateHapticFeedback({ type: 'softMedium' }).catch(() => {});
   }, []);
+
+  // 약속 장소가 대형 시설이면 지금 얼마나 붐비는지 한 줄 얹는다.
+  // 대부분의 장소는 대상이 아니므로 없으면 조용히 생략한다.
+  useEffect(() => {
+    if (trip.destination == null) {
+      return;
+    }
+    let cancelled = false;
+
+    lookupDestinationCongestion({
+      name: trip.destinationName,
+      address: '',
+      at: trip.destination,
+      ...(trip.destinationPoiId != null ? { poiId: trip.destinationPoiId } : {}),
+    }).then((result) => {
+      if (!cancelled) {
+        setCongestion(result);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [trip.destination, trip.destinationName, trip.destinationPoiId]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -69,6 +99,12 @@ function Arrive() {
         {arrivalPrompt(trip.companion.trim() === '' ? null : trip.companion)}
       </Text>
 
+      {congestion != null && (
+        <Text style={styles.congestion}>
+          {congestion.poiName}, 지금 {CONGESTION_LABEL[congestion.level]}
+        </Text>
+      )}
+
       <View style={styles.noteBox}>
         <TextInput
           style={styles.note}
@@ -101,6 +137,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
   },
   prompt: { ...type.title, color: colors.ink, marginTop: spacing.md },
+  congestion: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
   noteBox: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

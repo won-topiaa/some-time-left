@@ -16,6 +16,8 @@ import type { WalkPlan } from '../domain/time';
 export interface Trip {
   destinationName: string;
   destination: LatLng | null;
+  /** TMAP POI ID. 목적지 혼잡도를 조회할 때 쓴다. */
+  destinationPoiId: string | null;
   /** 약속 시각 (epoch ms) */
   arriveAtMs: number | null;
   companion: string;
@@ -32,6 +34,7 @@ export interface Trip {
 const EMPTY: Trip = {
   destinationName: '',
   destination: null,
+  destinationPoiId: null,
   arriveAtMs: null,
   companion: '',
   mood: null,

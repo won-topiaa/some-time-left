@@ -67,6 +67,8 @@ export interface TmapPedestrianRequest {
 }
 
 export interface TmapPoi {
+  /** POI ID. 혼잡도 데이터가 있는 장소인지 대조할 때 쓴다. */
+  id?: string;
   name: string;
   /** 중심 좌표 */
   noorLat: string;

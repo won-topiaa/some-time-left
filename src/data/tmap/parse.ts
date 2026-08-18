@@ -138,6 +138,8 @@ export interface Place {
   name: string;
   address: string;
   at: LatLng;
+  /** TMAP POI ID. 검색으로 고른 장소에만 있다(지오코딩 결과에는 없다). */
+  poiId?: string;
 }
 
 export function parsePoi(poi: TmapPoi): Place {
@@ -149,7 +151,12 @@ export function parsePoi(poi: TmapPoi): Place {
     .filter((part) => part != null && part !== '')
     .join(' ');
 
-  return { name: poi.name, address, at: { lat, lng } };
+  return {
+    name: poi.name,
+    address,
+    at: { lat, lng },
+    ...(poi.id != null && poi.id !== '' ? { poiId: poi.id } : {}),
+  };
 }
 
 /** 경유지 파라미터 형식: "경도,위도_경도,위도" (최대 5개) */

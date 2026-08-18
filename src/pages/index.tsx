@@ -31,7 +31,11 @@ function Home() {
   const canProceed = trip.destination != null && trip.arriveAtMs != null;
 
   const pick = (place: Place) => {
-    update({ destinationName: place.name, destination: place.at });
+    update({
+      destinationName: place.name,
+      destination: place.at,
+      destinationPoiId: place.poiId ?? null,
+    });
     setQuery('');
   };
 
@@ -46,7 +50,9 @@ function Home() {
       {trip.destination != null ? (
         <Pressable
           style={styles.picked}
-          onPress={() => update({ destinationName: '', destination: null })}
+          onPress={() =>
+            update({ destinationName: '', destination: null, destinationPoiId: null })
+          }
         >
           <Text style={styles.pickedName}>{trip.destinationName}</Text>
           <Text style={styles.pickedChange}>변경</Text>
