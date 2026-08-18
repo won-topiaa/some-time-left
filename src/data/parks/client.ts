@@ -84,7 +84,7 @@ export async function fetchParks(sido: string, rows = 1000): Promise<Park[]> {
   });
 
   const response = await requestJson<ParkResponse>(
-    `${publicData.standardDataBaseUrl}${publicData.parkPath}?${params.toString()}`,
+    `${publicData.baseUrl}${publicData.parkPath}?${params.toString()}`,
     { method: 'GET' }
   );
 

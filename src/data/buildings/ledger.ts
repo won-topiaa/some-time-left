@@ -86,7 +86,7 @@ export async function fetchLedgerBuildings(key: LedgerKey): Promise<LedgerBuildi
   });
 
   const response = await requestJson<LedgerResponse>(
-    `${publicData.ledgerBaseUrl}${publicData.ledgerPath}?${params.toString()}`,
+    `${publicData.baseUrl}${publicData.ledgerPath}?${params.toString()}`,
     { method: 'GET' }
   );
 

@@ -22,26 +22,33 @@ export interface ApiConfig {
     keyId: string | null;
     key: string | null;
   };
-  /** 서울 열린데이터광장 — 실시간 인구데이터(혼잡도) */
+  /**
+   * 서울 열린데이터광장 — 실시간 인구데이터(혼잡도).
+   *
+   * 주의: 이 API는 평문 HTTP(8088 포트)로 서비스된다.
+   * iOS의 App Transport Security가 평문 HTTP를 기본 차단하므로 토스 앱 안에서
+   * 그대로 호출하면 실패할 수 있다. 자체 HTTPS 프록시를 두고 `baseUrl`을
+   * 그쪽으로 돌리는 것을 전제로 한다 — 어차피 키 보호를 위해서도 프록시가 필요하다.
+   */
   seoul: {
     baseUrl: string;
     key: string | null;
   };
 /**
-   * 공공데이터포털. 인증키는 하나지만 **호스트가 둘로 갈린다** —
-   * 표준데이터는 odcloud, 부처 제공 서비스(건축물대장)는 apis.data.go.kr이다.
+   * 공공데이터포털. 인증키 하나로 두 서비스를 쓴다.
+   * 둘 다 `apis.data.go.kr`에 있다 — `api.data.go.kr`(s 없음)이나
+   * `api.odcloud.kr`은 이 API들을 서빙하지 않는다(실측 확인).
    */
   publicData: {
     serviceKey: string | null;
-    /** 전국도시공원표준데이터. 경로 미검증 — 키 발급 후 실측 필요. */
-    standardDataBaseUrl: string;
+    baseUrl: string;
+    /** 전국도시공원표준데이터. 실측 확인 — 서비스 존재, 키만 필요. */
     parkPath: string;
     /**
      * 국토교통부 건축물대장.
      * 실측 확인: `BldRgstService_v2`는 폐기됐고(NO_OPENAPI_SERVICE_ERROR)
      * `BldRgstHubService`가 살아 있다(SERVICE_KEY_IS_NOT_REGISTERED_ERROR).
      */
-    ledgerBaseUrl: string;
     ledgerPath: string;
   };
   /** 브이월드 — 건물 공간 질의 (건축물대장은 좌표로 못 찾는다) */
@@ -50,7 +57,8 @@ export interface ApiConfig {
     key: string | null;
     /**
      * 건물 레이어 아이디. **미검증** — 브이월드 2D 데이터 레이어 목록에서 확인할 것.
-     * (유효한 키 없이는 응답을 받을 수 없어 여기서 확인하지 못했다)
+     * (api.vworld.kr이 이 환경의 게이트웨이를 통과하지 못해 실측하지 못했다.
+     *  값이 틀리면 건물 목록이 비고 그늘 계산이 기본 높이로 떨어질 뿐, 앱은 계속 돈다)
      */
     buildingLayer: string;
     /** 층수 속성 이름. 레이어에 따라 다르다. 함께 확인할 것. */
@@ -76,10 +84,9 @@ const config: ApiConfig = {
   },
   publicData: {
     serviceKey: null,
-    standardDataBaseUrl: 'https://api.odcloud.kr/api',
+    baseUrl: 'https://apis.data.go.kr',
     parkPath: '/openapi/tn_pubr_public_cty_park_info_api',
-    ledgerBaseUrl: 'https://apis.data.go.kr/1613000',
-    ledgerPath: '/BldRgstHubService/getBrTitleInfo',
+    ledgerPath: '/1613000/BldRgstHubService/getBrTitleInfo',
   },
   vworld: {
     baseUrl: 'https://api.vworld.kr/req/data',

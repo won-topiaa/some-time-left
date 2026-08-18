@@ -181,12 +181,30 @@ src/
 
 ### 엔드포인트 검증 상태
 
+무효한 키로 호출해 응답을 보고 확인했다. `INVALID_API_KEY`나
+`SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 오면 경로는 맞고 키만 없다는 뜻이다.
+
 | 경로 | 상태 |
 |---|---|
-| 건축물대장 `BldRgstHubService/getBrTitleInfo` | **실측 확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
-| TMAP 보행자 경로안내 | 미검증 (호스트 접근 불가) |
-| 도시공원 표준데이터 | 미검증 (호스트 접근 불가) |
-| 브이월드 건물 레이어 아이디·층수 속성명 | **미검증** — 레이어 목록에서 확인 필요 |
+| TMAP `POST /tmap/routes/pedestrian?version=1` | **확인** — `INVALID_API_KEY` |
+| TMAP `GET /tmap/pois?version=1` | **확인** — `INVALID_API_KEY` |
+| 도시공원 `apis.data.go.kr/openapi/tn_pubr_public_cty_park_info_api` | **확인** — 키 미등록 응답 |
+| 건축물대장 `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | **확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
+| 서울 실시간 인구데이터 | 미확인 — 평문 HTTP(8088)라 검증 환경에서 호출 불가 |
+| 네이버 지오코딩 | 미확인 |
+| 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 레이어 목록에서 확인 필요 |
+
+찾은 오류 두 가지:
+- 공공데이터포털 두 API는 **모두 `apis.data.go.kr`에 있다.**
+  `api.odcloud.kr`도 `api.data.go.kr`(s 없음)도 이들을 서빙하지 않는다.
+- 건축물대장 `BldRgstService_v2`는 폐기됐다(`NO_OPENAPI_SERVICE_ERROR`).
+
+### 서울 API의 HTTP 문제
+
+서울 실시간 인구데이터는 **평문 HTTP(8088 포트)로만 서비스된다.**
+iOS의 App Transport Security가 평문 HTTP를 기본 차단하므로 토스 앱 안에서 그대로
+호출하면 실패할 수 있다. 자체 HTTPS 프록시를 거치는 것을 전제로 해야 한다 —
+어차피 키 보호를 위해서도 프록시가 필요하다.
 
 ## 다음에 붙일 것
 
