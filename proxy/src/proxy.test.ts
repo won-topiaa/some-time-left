@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { TtlCache } from './cache';
 import { isValidAreaName, normalizePopulation, populationUrl, toCongestionLevel } from './seoul';
-import { areasFromUrl, createHandler, isAuthorized, type ProxyConfig } from './handler';
+import {
+  MIN_TOKEN_LENGTH,
+  areasFromUrl,
+  configFromEnv,
+  createHandler,
+  isAuthorized,
+  type ProxyConfig,
+} from './handler';
 
 describe('TtlCache', () => {
   it('TTL 안에서는 캐시로 답한다', () => {
@@ -157,6 +164,37 @@ describe('isAuthorized', () => {
   it('틀리거나 없으면 거부', () => {
     expect(isAuthorized(request('Bearer wrong'), 'secret')).toBe(false);
     expect(isAuthorized(request(), 'secret')).toBe(false);
+  });
+});
+
+describe('configFromEnv', () => {
+  const token = 'x'.repeat(MIN_TOKEN_LENGTH);
+
+  it('서울 키가 없으면 뜨지 않는다', () => {
+    expect(() => configFromEnv({ PROXY_TOKEN: token })).toThrow(/SEOUL_OPEN_DATA_KEY/);
+  });
+
+  it('토큰이 없으면 뜨지 않는다 — 기본이 막힘이어야 한다', () => {
+    expect(() => configFromEnv({ SEOUL_OPEN_DATA_KEY: 'k' })).toThrow(/PROXY_TOKEN/);
+  });
+
+  it('짧은 토큰은 거부한다', () => {
+    expect(() => configFromEnv({ SEOUL_OPEN_DATA_KEY: 'k', PROXY_TOKEN: 'short' })).toThrow(
+      /짧아요/
+    );
+  });
+
+  it('명시적으로 밝히면 토큰 없이도 연다', () => {
+    const config = configFromEnv({ SEOUL_OPEN_DATA_KEY: 'k', ALLOW_ANONYMOUS: 'true' });
+    expect(config.authToken).toBeNull();
+  });
+
+  it('제대로 주면 설정이 만들어진다', () => {
+    const config = configFromEnv({ SEOUL_OPEN_DATA_KEY: 'k', PROXY_TOKEN: token });
+
+    expect(config.seoulKey).toBe('k');
+    expect(config.authToken).toBe(token);
+    expect(config.seoulBaseUrl).toBe('http://openapi.seoul.go.kr:8088');
   });
 });
 

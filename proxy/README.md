@@ -41,15 +41,25 @@ GET /population?area=광화문·덕수궁&area=강남역
 | 이름 | 필수 | 기본값 | 설명 |
 |---|---|---|---|
 | `SEOUL_OPEN_DATA_KEY` | ✅ | — | 서울 열린데이터광장 인증키 |
-| `PROXY_TOKEN` | | 없음 | 설정하면 `Authorization: Bearer <token>`을 요구 |
+| `PROXY_TOKEN` | ✅ | — | `Authorization: Bearer <token>`으로 요구. `npm run gen-token`으로 만든다 |
+| `ALLOW_ANONYMOUS` | | 없음 | `true`면 토큰 없이 연다 (권장하지 않음) |
 | `SEOUL_BASE_URL` | | `http://openapi.seoul.go.kr:8088` | 업스트림 |
 | `CACHE_TTL_MS` | | `300000` (5분) | 서울이 5분 단위로 갱신하므로 그에 맞춤 |
 | `UPSTREAM_TIMEOUT_MS` | | `6000` | 업스트림 타임아웃 |
 | `MAX_AREAS` | | `12` | 한 요청에서 조회할 장소 수 상한 |
 | `PORT` | | `8787` | Node 서버 포트 |
 
-`PROXY_TOKEN`을 걸어두길 권한다. 걸지 않으면 주소를 아는 누구나 이 프록시를 통해
-서울 API 할당량을 쓸 수 있다.
+**토큰 없이는 프록시가 뜨지 않는다.** 실수로 열린 채 배포되는 일이 없도록 기본이
+'막힘'이다. 토큰이 없으면 주소를 아는 누구나 이 프록시를 통해 서울 인증키
+할당량을 쓸 수 있기 때문이다.
+
+```bash
+cd proxy
+npm run gen-token
+```
+
+정말 열어두려면 `ALLOW_ANONYMOUS=true`를 명시해야 한다 — 실수가 아니라 선택이
+되도록.
 
 ## 실행
 
@@ -57,6 +67,7 @@ GET /population?area=광화문·덕수궁&area=강남역
 
 ```bash
 cd proxy
+npm run gen-token          # PROXY_TOKEN 만들기
 npm run build
 SEOUL_OPEN_DATA_KEY=... PROXY_TOKEN=... npm start
 ```
@@ -67,7 +78,7 @@ SEOUL_OPEN_DATA_KEY=... PROXY_TOKEN=... npm start
 개발 중에는 빌드 없이:
 
 ```bash
-SEOUL_OPEN_DATA_KEY=... npm run dev
+SEOUL_OPEN_DATA_KEY=... PROXY_TOKEN=... npm run dev
 ```
 
 ### Cloudflare Workers

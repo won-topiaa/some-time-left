@@ -11,7 +11,10 @@ import { fetchPopulation, isValidAreaName, type AreaPopulation } from './seoul';
 export interface ProxyConfig {
   seoulBaseUrl: string;
   seoulKey: string;
-  /** 설정하면 Authorization: Bearer <token>을 요구한다. */
+  /**
+   * `Authorization: Bearer <token>`으로 요구할 토큰.
+   * null이면 누구나 부를 수 있다 — 명시적으로 허용했을 때만 그렇게 된다.
+   */
   authToken: string | null;
   /** 캐시 유지 시간 (ms). 서울이 5분 단위로 갱신하므로 그에 맞춘다. */
   cacheTtlMs: number;
@@ -21,16 +24,41 @@ export interface ProxyConfig {
   maxAreasPerRequest: number;
 }
 
+/** 이보다 짧은 토큰은 무차별 대입에 버티지 못한다. */
+export const MIN_TOKEN_LENGTH = 24;
+
 export function configFromEnv(env: Record<string, string | undefined>): ProxyConfig {
   const key = env.SEOUL_OPEN_DATA_KEY;
   if (key == null || key === '') {
     throw new Error('SEOUL_OPEN_DATA_KEY가 필요합니다.');
   }
 
+  const token = env.PROXY_TOKEN != null && env.PROXY_TOKEN !== '' ? env.PROXY_TOKEN : null;
+
+  // 토큰 없이 열어두면 주소를 아는 누구나 서울 인증키 할당량을 쓴다.
+  // 실수로 열리는 일이 없도록 기본은 '막힘'이고, 열려면 명시적으로 밝혀야 한다.
+  if (token == null && env.ALLOW_ANONYMOUS !== 'true') {
+    throw new Error(
+      [
+        'PROXY_TOKEN이 필요합니다.',
+        '토큰 없이 띄우면 주소를 아는 누구나 서울 인증키 할당량을 쓸 수 있어요.',
+        '',
+        '  토큰 만들기:  npm run gen-token',
+        '  그래도 열려면: ALLOW_ANONYMOUS=true',
+      ].join('\n')
+    );
+  }
+
+  if (token != null && token.length < MIN_TOKEN_LENGTH) {
+    throw new Error(
+      `PROXY_TOKEN이 너무 짧아요. ${MIN_TOKEN_LENGTH}자 이상으로 만들어 주세요 (npm run gen-token).`
+    );
+  }
+
   return {
     seoulBaseUrl: env.SEOUL_BASE_URL ?? 'http://openapi.seoul.go.kr:8088',
     seoulKey: key,
-    authToken: env.PROXY_TOKEN != null && env.PROXY_TOKEN !== '' ? env.PROXY_TOKEN : null,
+    authToken: token,
     cacheTtlMs: Number(env.CACHE_TTL_MS ?? 5 * 60 * 1000),
     timeoutMs: Number(env.UPSTREAM_TIMEOUT_MS ?? 6000),
     maxAreasPerRequest: Number(env.MAX_AREAS ?? 12),
