@@ -142,6 +142,12 @@ export const localSecrets = {
 `_app.tsx`는 이 값을 읽어 `configureApi()`에 넘길 뿐이라 **손댈 일이 없다** —
 `git pull` 때 충돌하지도, 실수로 키를 올리지도 않는다.
 
+프록시 토큰은 손으로 옮기지 않아도 된다. `proxy/.env`에서 가져다 넣어 준다:
+
+```bash
+npm run link-proxy
+```
+
 값이 없으면 그 기능만 꺼지고 앱은 계속 돈다. TMAP 키가 없으면 경로가 mock으로,
 프록시 토큰이 없으면 `quiet`이 중립값으로 떨어진다.
 

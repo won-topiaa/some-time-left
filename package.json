@@ -14,7 +14,8 @@
     "predev": "node scripts/ensure-local-config.mjs",
     "prebuild": "node scripts/ensure-local-config.mjs",
     "pretypecheck": "node scripts/ensure-local-config.mjs",
-    "pretest": "node scripts/ensure-local-config.mjs"
+    "pretest": "node scripts/ensure-local-config.mjs",
+    "link-proxy": "node scripts/link-proxy-token.mjs"
   },
   "dependencies": {
     "@apps-in-toss/framework": "^2.10.10",
