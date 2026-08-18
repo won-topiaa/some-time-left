@@ -56,7 +56,12 @@ async function readJson(response) {
   }
 }
 
-async function probe(label, run) {
+/**
+ * @param {string} label
+ * @param {(() => Promise<string>) | null} run  키가 없으면 null
+ * @param {{ optional?: boolean }} [opts]  선택 기능은 실패해도 전체를 실패로 치지 않는다
+ */
+async function probe(label, run, opts = {}) {
   if (run == null) {
     console.log(`  – ${label.padEnd(18)} 키가 없어 건너뜀`);
     return;
@@ -65,6 +70,11 @@ async function probe(label, run) {
     const message = await run();
     console.log(`  ✓ ${label.padEnd(18)} ${message}`);
   } catch (error) {
+    if (opts.optional === true) {
+      // 선택 기능(예: 별도 상품)이 안 된 것은 고장이 아니다. 참고로만 보여준다.
+      console.log(`  ◦ ${label.padEnd(18)} ${error.message} (선택 기능)`);
+      return;
+    }
     console.log(`  ✗ ${label.padEnd(18)} ${error.message}`);
     failures.push(label);
   }
@@ -116,7 +126,7 @@ await probe(
       }
 );
 
-// 3. TMAP Puzzle — 같은 키지만 상품 사용 신청이 따로 필요하다
+// 3. TMAP Puzzle — TMAP과 별개 상품이다. 목적지 붐빔 한 줄용 선택 기능.
 await probe(
   '장소 혼잡도',
   appKey == null
@@ -127,10 +137,11 @@ await probe(
         });
         const body = await readJson(response);
         if (body?.error?.code != null) {
-          throw new Error(`${body.error.code} — 상품 사용 신청이 필요할 수 있어요`);
+          throw new Error(`${body.error.code} — Puzzle 상품 미신청`);
         }
         return `제공 장소 ${body?.status?.totalCount ?? '?'}곳`;
-      }
+      },
+  { optional: true }
 );
 
 // 4. 공공데이터포털 — 공원 표준데이터
@@ -199,3 +210,4 @@ if (failures.length > 0) {
 }
 
 console.log('설정한 것은 모두 실제로 동작합니다.');
+console.log('◦ 표시는 선택 기능이라 없어도 앱은 완전합니다.');
