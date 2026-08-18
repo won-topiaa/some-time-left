@@ -190,8 +190,8 @@ src/
 | TMAP `GET /tmap/pois?version=1` | **확인** — `INVALID_API_KEY` |
 | 도시공원 `apis.data.go.kr/openapi/tn_pubr_public_cty_park_info_api` | **확인** — 키 미등록 응답 |
 | 건축물대장 `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | **확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
-| 서울 실시간 인구데이터 | 미확인 — 평문 HTTP(8088)라 검증 환경에서 호출 불가 |
-| 네이버 지오코딩 | 미확인 |
+| 네이버 지오코딩 `maps.apigw.ntruss.com/map-geocode/v2/geocode` | **확인** — `401 Authentication information are missing` |
+| 서울 실시간 인구데이터 | 경로 미확인 — 아래 참고 |
 | 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 레이어 목록에서 확인 필요 |
 
 찾은 오류 두 가지:
@@ -199,12 +199,16 @@ src/
   `api.odcloud.kr`도 `api.data.go.kr`(s 없음)도 이들을 서빙하지 않는다.
 - 건축물대장 `BldRgstService_v2`는 폐기됐다(`NO_OPENAPI_SERVICE_ERROR`).
 
-### 서울 API의 HTTP 문제
+### 서울 API는 HTTPS를 아예 안 받는다
 
-서울 실시간 인구데이터는 **평문 HTTP(8088 포트)로만 서비스된다.**
-iOS의 App Transport Security가 평문 HTTP를 기본 차단하므로 토스 앱 안에서 그대로
-호출하면 실패할 수 있다. 자체 HTTPS 프록시를 거치는 것을 전제로 해야 한다 —
-어차피 키 보호를 위해서도 프록시가 필요하다.
+`openapi.seoul.go.kr`의 443과 8088 양쪽에 TLS 핸드셰이크를 시도하면 둘 다
+`Connection reset by peer`로 끊긴다. 평문 HTTP 전용이다.
+
+iOS의 App Transport Security는 평문 HTTP를 기본 차단한다. 즉 **토스 앱 안에서 이
+주소를 직접 호출하면 실패한다.** 혼잡도(`quiet`)를 쓰려면 자체 HTTPS 프록시가
+선택이 아니라 필수다. 키 보호를 위해 어차피 필요했던 그 프록시다.
+
+`src/config.ts`의 `seoul.baseUrl` 기본값은 프록시를 세우기 전까지의 자리표시자다.
 
 ## 다음에 붙일 것
 
