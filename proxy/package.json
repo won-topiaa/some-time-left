@@ -13,7 +13,8 @@
     "check": "node --experimental-strip-types --env-file-if-exists=.env scripts/check-key.mjs",
     "setup": "node scripts/setup.mjs",
     "deploy": "npx wrangler deploy",
-    "secrets": "npx wrangler secret put SEOUL_OPEN_DATA_KEY && npx wrangler secret put PROXY_TOKEN"
+    "secrets": "npx wrangler secret put SEOUL_OPEN_DATA_KEY && npx wrangler secret put PROXY_TOKEN",
+    "verify": "node --env-file-if-exists=.env scripts/verify-deployed.mjs"
   },
   "engines": {
     "node": ">=22.9"

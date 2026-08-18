@@ -137,7 +137,17 @@ npm run secrets      # SEOUL_OPEN_DATA_KEY, PROXY_TOKEN 순서로 물어본다
 배포 후 확인:
 
 ```bash
-curl "https://some-time-left-proxy.<계정>.workers.dev/health"
+npm run verify
+```
+
+`/health`로 코드가 살아 있는지 보고, `/population`으로 **서울까지 실제로 닿는지**
+확인한다. 후자가 진짜 관문이다 — Workers가 평문 HTTP(8088)로 나갈 수 있는지가
+여기서 드러난다. 토큰은 `.env`에서 읽고 출력에 찍지 않는다.
+
+주소가 다르면 인자로 넘긴다:
+
+```bash
+npm run verify -- https://다른-주소
 ```
 
 무료 티어로 충분하고 HTTPS가 기본이다. 다만 서울 업스트림이 평문 HTTP라
