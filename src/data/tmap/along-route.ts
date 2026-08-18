@@ -29,7 +29,7 @@ export interface AlongRoutePlace {
  * 잠깐(3~5분) 들를 만한 곳의 감성. 앉아서 밥 먹는 식당이 아니라
  * 스쳐 들르는 곳 — 카페·베이커리·디저트.
  */
-export const QUICK_STOP_CATEGORIES = ['카페', '베이커리', '디저트'] as const;
+export const QUICK_STOP_CATEGORIES = ['카페', '베이커리', '디저트', '책방', '소품샵'] as const;
 
 export interface PickOptions {
   /** 이 거리 안이라야 "길 곁"으로 본다 (m). */
