@@ -15,7 +15,7 @@ import { configureApi } from './config';
  */
 configureApi({
   tmap: { appKey: null },
-  seoul: { key: null },
+  congestionProxy: { baseUrl: null, token: null },
   publicData: { serviceKey: null },
   vworld: { key: null },
 });

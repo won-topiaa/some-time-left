@@ -1,8 +1,12 @@
 /**
- * 서울시 실시간 인구데이터 (혼잡도).
+ * 혼잡도 (서울시 실시간 인구데이터).
  *
  * 통신사 기지국 집계를 5분 단위로 갱신한다. 우리에게 필요한 건 딱 하나,
  * "이 길이 한적한가"이다.
+ *
+ * 서울 API는 평문 HTTP 전용이라 iOS에서 직접 부를 수 없다. 그래서 앱은
+ * `proxy/`의 HTTPS 프록시를 부르고, 인증키는 프록시에만 둔다.
+ * 프록시는 여러 장소를 한 번에 받으므로 왕복이 한 번으로 끝난다.
  *
  * 한계: 서울 주요 장소 중심이라 그 밖의 동네는 값이 없다.
  * 모르는 건 모른다고 두고 중립값으로 떨어뜨린다.
@@ -34,13 +38,15 @@ const QUIET_BY_LEVEL: Record<CongestionLevel, number> = {
 /** 값을 모를 때. 있는 척하지 않는다. */
 export const NEUTRAL_QUIET = 0.5;
 
-interface PopulationRow {
-  AREA_NM?: string;
-  AREA_CONGEST_LVL?: string;
+/** 프록시가 정규화해서 내려주는 형태. 서울 원본 스키마는 프록시가 감춘다. */
+interface ProxyArea {
+  areaName?: string;
+  level?: string;
+  updatedAt?: string;
 }
 
-interface CityDataPopulationResponse {
-  'SeoulRtd.citydata_ppltn'?: PopulationRow[];
+interface ProxyResponse {
+  areas?: ProxyArea[];
 }
 
 function toLevel(raw: string | undefined): CongestionLevel | null {
@@ -48,6 +54,23 @@ function toLevel(raw: string | undefined): CongestionLevel | null {
     return raw;
   }
   return null;
+}
+
+/** 프록시 응답 → 좌표가 붙은 혼잡도. 순수 함수. */
+export function parseProxyAreas(
+  response: ProxyResponse,
+  hotspots: Hotspot[] = SEOUL_HOTSPOTS
+): AreaCongestion[] {
+  return (response.areas ?? []).flatMap((area) => {
+    const level = toLevel(area.level);
+    const hotspot = hotspots.find((h) => h.areaName === area.areaName);
+
+    // 프록시가 아는 장소라도 우리 좌표 목록에 없으면 경로와 대조할 수 없다.
+    if (level == null || hotspot == null) {
+      return [];
+    }
+    return [{ areaName: hotspot.areaName, at: hotspot.at, level }];
+  });
 }
 
 /** 경로가 지나는 장소들. API가 한 번에 한 곳씩만 받으므로 먼저 추려야 한다. */
@@ -60,37 +83,37 @@ export function hotspotsAlong(
   );
 }
 
-async function fetchArea(areaName: string): Promise<AreaCongestion | null> {
-  const { seoul } = getApiConfig();
-  if (seoul.key == null) {
-    return null;
-  }
-
-  const url = `${seoul.baseUrl}/${seoul.key}/json/citydata_ppltn/1/5/${encodeURIComponent(areaName)}`;
-  const response = await requestJson<CityDataPopulationResponse>(url, { method: 'GET' });
-
-  const row = response['SeoulRtd.citydata_ppltn']?.[0];
-  const level = toLevel(row?.AREA_CONGEST_LVL);
-  const hotspot = SEOUL_HOTSPOTS.find((h) => h.areaName === areaName);
-
-  if (level == null || hotspot == null) {
-    return null;
-  }
-  return { areaName, at: hotspot.at, level };
-}
-
-/** 경로가 지나는 장소들의 현재 혼잡도. 실패한 곳은 빼고 돌려준다. */
+/**
+ * 경로가 지나는 장소들의 현재 혼잡도.
+ * 프록시가 없으면 빈 배열 — `scoreQuiet`이 중립값으로 떨어진다.
+ */
 export async function fetchCongestionAlong(path: LatLng[]): Promise<AreaCongestion[]> {
+  const { congestionProxy } = getApiConfig();
+  if (congestionProxy.baseUrl == null) {
+    return [];
+  }
+
   const targets = hotspotsAlong(path);
   if (targets.length === 0) {
     return [];
   }
 
-  const results = await Promise.allSettled(targets.map((h) => fetchArea(h.areaName)));
+  const params = new URLSearchParams();
+  for (const hotspot of targets) {
+    params.append('area', hotspot.areaName);
+  }
 
-  return results.flatMap((result) =>
-    result.status === 'fulfilled' && result.value != null ? [result.value] : []
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (congestionProxy.token != null) {
+    headers.Authorization = `Bearer ${congestionProxy.token}`;
+  }
+
+  const response = await requestJson<ProxyResponse>(
+    `${congestionProxy.baseUrl}/population?${params.toString()}`,
+    { method: 'GET', headers }
   );
+
+  return parseProxyAreas(response);
 }
 
 /**

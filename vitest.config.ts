@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 // 순수 로직이라 네이티브 런타임 없이 CI에서 그대로 돌아간다.
 export default defineConfig({
   test: {
-    include: ['src/{domain,data}/**/*.test.ts'],
+    include: ['src/{domain,data}/**/*.test.ts', 'proxy/src/**/*.test.ts'],
     environment: 'node',
   },
 });

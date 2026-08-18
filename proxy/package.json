@@ -1,0 +1,13 @@
+{
+  "name": "some-time-left-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "서울 실시간 인구데이터용 HTTPS 프록시. 평문 HTTP인 서울 API를 앱이 부를 수 있게 감싸고, 인증키를 서버에만 둔다.",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "node --watch --experimental-strip-types src/server.ts"
+  }
+}

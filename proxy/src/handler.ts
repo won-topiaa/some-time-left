@@ -1,0 +1,120 @@
+/**
+ * 요청 처리기.
+ *
+ * 웹 표준 Request/Response로 쓴다. Node 서버(`server.ts`)와
+ * Cloudflare Workers(`worker.ts`)가 같은 함수를 공유한다.
+ */
+
+import { TtlCache } from './cache';
+import { fetchPopulation, isValidAreaName, type AreaPopulation } from './seoul';
+
+export interface ProxyConfig {
+  seoulBaseUrl: string;
+  seoulKey: string;
+  /** 설정하면 Authorization: Bearer <token>을 요구한다. */
+  authToken: string | null;
+  /** 캐시 유지 시간 (ms). 서울이 5분 단위로 갱신하므로 그에 맞춘다. */
+  cacheTtlMs: number;
+  /** 업스트림 타임아웃 (ms) */
+  timeoutMs: number;
+  /** 한 요청에서 조회할 수 있는 장소 수 */
+  maxAreasPerRequest: number;
+}
+
+export function configFromEnv(env: Record<string, string | undefined>): ProxyConfig {
+  const key = env.SEOUL_OPEN_DATA_KEY;
+  if (key == null || key === '') {
+    throw new Error('SEOUL_OPEN_DATA_KEY가 필요합니다.');
+  }
+
+  return {
+    seoulBaseUrl: env.SEOUL_BASE_URL ?? 'http://openapi.seoul.go.kr:8088',
+    seoulKey: key,
+    authToken: env.PROXY_TOKEN != null && env.PROXY_TOKEN !== '' ? env.PROXY_TOKEN : null,
+    cacheTtlMs: Number(env.CACHE_TTL_MS ?? 5 * 60 * 1000),
+    timeoutMs: Number(env.UPSTREAM_TIMEOUT_MS ?? 6000),
+    maxAreasPerRequest: Number(env.MAX_AREAS ?? 12),
+  };
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
+
+/** 토큰이 설정돼 있으면 맞는지 본다. 열린 릴레이가 되지 않도록. */
+export function isAuthorized(request: Request, token: string | null): boolean {
+  if (token == null) {
+    return true;
+  }
+  const header = request.headers.get('authorization') ?? '';
+  return header === `Bearer ${token}`;
+}
+
+/**
+ * 요청에서 조회할 장소 목록을 뽑는다.
+ * `?area=A&area=B` 형태로 여러 곳을 한 번에 받는다 — 모바일에서 왕복을 줄이려고.
+ */
+export function areasFromUrl(url: URL, max: number): string[] {
+  const raw = url.searchParams.getAll('area');
+  const valid = raw.map((a) => a.trim()).filter(isValidAreaName);
+
+  // 같은 장소를 여러 번 넘겨도 한 번만 조회한다.
+  return [...new Set(valid)].slice(0, max);
+}
+
+export function createHandler(config: ProxyConfig, now: () => number = Date.now) {
+  const cache = new TtlCache<AreaPopulation>(config.cacheTtlMs);
+
+  return async function handle(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (request.method !== 'GET') {
+      return json({ error: 'GET만 지원해요.' }, 405);
+    }
+
+    if (url.pathname === '/health') {
+      return json({ ok: true, cached: cache.size });
+    }
+
+    if (url.pathname !== '/population') {
+      return json({ error: '없는 경로예요.' }, 404);
+    }
+
+    if (!isAuthorized(request, config.authToken)) {
+      return json({ error: '인증이 필요해요.' }, 401);
+    }
+
+    const areas = areasFromUrl(url, config.maxAreasPerRequest);
+    if (areas.length === 0) {
+      return json({ error: 'area 파라미터가 필요해요.' }, 400);
+    }
+
+    const nowMs = now();
+
+    const results = await Promise.all(
+      areas.map(async (area) => {
+        const cached = cache.get(area, nowMs);
+        if (cached != null) {
+          return cached;
+        }
+
+        const fetched = await fetchPopulation(
+          { baseUrl: config.seoulBaseUrl, key: config.seoulKey },
+          area,
+          config.timeoutMs
+        );
+
+        if (fetched != null) {
+          cache.set(area, fetched, nowMs);
+        }
+        return fetched;
+      })
+    );
+
+    // 못 읽은 장소는 빼고 준다. 하나 실패해도 나머지는 쓸 수 있어야 한다.
+    return json({ areas: results.filter((r): r is AreaPopulation => r != null) });
+  };
+}

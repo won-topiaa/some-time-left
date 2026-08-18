@@ -14,11 +14,12 @@
 |---|---|
 | 도메인 로직 (시간 예산·그늘·기분 매핑·경로 랭킹·페이스) | 구현 완료 |
 | 화면 5개 (입력 → 기분 → 경로 → 걷기 → 도착) | 구현 완료, iOS/Android 번들 빌드 성공 |
-| 테스트 | 159개 통과 (도메인 + 파싱/휴리스틱/스코어러) |
+| 테스트 | 194개 통과 (앱 + 프록시) |
 | 도보 경로 (TMAP 보행자 경로안내) | 연동 완료 — 키 넣으면 동작, 없으면 mock으로 폴백 |
 | 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
 | 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — 응답 구조 1회 확인 필요 |
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
+| 혼잡도 프록시 | 구현 완료 — 배포 필요 |
 | 앱인토스 배포 | 미등록 (콘솔에서 미니앱 생성 필요) |
 
 ## 명령어
@@ -59,6 +60,12 @@ src/
   state/             화면 간 상태, 경로 추천 훅
   pages/             파일 기반 라우팅 화면 5개
   ui/                테마, 경로 미리보기(SVG)
+
+proxy/               혼잡도 HTTPS 프록시 (의존성 없음)
+  src/seoul.ts       서울 업스트림 + 응답 정규화
+  src/handler.ts     요청 처리 (웹 표준 Request/Response)
+  src/server.ts      Node 진입점
+  src/worker.ts      Cloudflare Workers 진입점
 ```
 
 ## 설계에서 물러서지 않을 것 세 가지
@@ -203,6 +210,7 @@ curl -s -H "appKey: invalid" "https://apis.openapi.sk.com<경로>" | grep -o '"c
 |---|---|---|
 | **TMAP** appKey | [openapi.sk.com](https://openapi.sk.com) → 앱 등록 | 경로 자체가 mock |
 | 서울 열린데이터광장 | [data.seoul.go.kr](https://data.seoul.go.kr) → 인증키 신청 | `quiet` 중립값 |
+| (서울 키는 앱이 아니라 [`proxy/`](proxy/README.md)에 넣는다) | | |
 | 공공데이터포털 | [data.go.kr](https://www.data.go.kr) → 활용신청 | `scenic` 중립값 |
 | 브이월드 | [vworld.kr](https://www.vworld.kr) → 오픈API 인증키 | `shade` 기본 높이 |
 
@@ -270,7 +278,7 @@ node scripts/discover-vworld.mjs <VWORLD_KEY> <레이어아이디>
 
 `scripts/discover-vworld.mjs`는 이 경우를 따로 구분해 알려준다.
 
-### 서울 API는 HTTPS를 아예 안 받는다
+### 서울 API는 HTTPS를 아예 안 받는다 → 프록시로 해결
 
 `openapi.seoul.go.kr`의 443과 8088 양쪽에 TLS 핸드셰이크를 시도하면 둘 다
 `Connection reset by peer`로 끊긴다. 평문 HTTP 전용이다.
@@ -279,7 +287,20 @@ iOS의 App Transport Security는 평문 HTTP를 기본 차단한다. 즉 **토�
 주소를 직접 호출하면 실패한다.** 혼잡도(`quiet`)를 쓰려면 자체 HTTPS 프록시가
 선택이 아니라 필수다. 키 보호를 위해 어차피 필요했던 그 프록시다.
 
-`src/config.ts`의 `seoul.baseUrl` 기본값은 프록시를 세우기 전까지의 자리표시자다.
+그래서 [`proxy/`](proxy/README.md)에 얇은 HTTPS 프록시를 두었다. 앱은 서울을
+직접 부르지 않고 프록시를 부른다. **인증키는 프록시에만 있고 앱 번들에는 없다.**
+
+프록시는 여러 장소를 한 번에 받아(`?area=A&area=B`) 병렬 조회하므로, 서울 API가
+한 번에 한 곳씩만 받는 제약도 앱 입장에서는 왕복 한 번으로 끝난다.
+
+```ts
+configureApi({
+  congestionProxy: { baseUrl: 'https://<배포한 주소>', token: '<PROXY_TOKEN>' },
+});
+```
+
+`baseUrl`이 없으면 혼잡도를 건너뛰고 `quiet`은 중립값이 된다 — 프록시가 죽어도
+경로 추천은 계속된다.
 
 ## 다음에 붙일 것
 

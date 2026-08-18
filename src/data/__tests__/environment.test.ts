@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { NEUTRAL_QUIET, hotspotsAlong, scoreQuiet, type AreaCongestion } from '../seoul/congestion';
+import {
+  NEUTRAL_QUIET,
+  hotspotsAlong,
+  parseProxyAreas,
+  scoreQuiet,
+  type AreaCongestion,
+} from '../seoul/congestion';
 import { NEUTRAL_SCENIC, parksNear, scoreScenic } from '../parks/scenic';
 import { parseParkRow, type Park } from '../parks/client';
 import { boundingBoxOf, parseVWorldBuildings } from '../buildings/vworld';
@@ -23,6 +29,30 @@ describe('hotspotsAlong', () => {
 
   it('아무 장소에도 안 걸리면 빈 목록', () => {
     expect(hotspotsAlong([BUSAN])).toEqual([]);
+  });
+});
+
+describe('parseProxyAreas', () => {
+  it('프록시 응답에 좌표를 붙인다', () => {
+    const areas = parseProxyAreas({
+      areas: [{ areaName: '강남역', level: '붐빔', updatedAt: '2026-08-18 03:20' }],
+    });
+
+    expect(areas).toHaveLength(1);
+    expect(areas[0].level).toBe('붐빔');
+    expect(areas[0].at.lat).toBeCloseTo(37.4979, 3);
+  });
+
+  it('우리 좌표 목록에 없는 장소는 버린다 — 경로와 대조할 수 없다', () => {
+    expect(parseProxyAreas({ areas: [{ areaName: '모르는곳', level: '여유' }] })).toEqual([]);
+  });
+
+  it('알 수 없는 등급은 버린다', () => {
+    expect(parseProxyAreas({ areas: [{ areaName: '강남역', level: '한산' }] })).toEqual([]);
+  });
+
+  it('빈 응답에도 죽지 않는다', () => {
+    expect(parseProxyAreas({})).toEqual([]);
   });
 });
 

@@ -17,19 +17,18 @@ export interface ApiConfig {
     appKey: string | null;
   };
   /**
-   * 서울 열린데이터광장 — 실시간 인구데이터(혼잡도).
+   * 혼잡도 프록시 (`proxy/` 디렉터리).
    *
-   * 주의: 이 API는 **평문 HTTP 전용이다.** 443과 8088 양쪽에 TLS 핸드셰이크를
-   * 시도하면 둘 다 connection reset으로 끊는다(실측 확인). HTTPS를 아예 안 받는다.
+   * 서울 실시간 인구데이터는 **평문 HTTP 전용이라** iOS의 App Transport Security가
+   * 차단한다. 그래서 앱은 서울을 직접 부르지 않고 우리 프록시를 부른다.
    *
-   * iOS의 App Transport Security는 평문 HTTP를 기본 차단하므로, 토스 앱 안에서
-   * 이 주소를 직접 호출하면 실패한다. **자체 HTTPS 프록시가 선택이 아니라 필수다.**
-   * 아래 기본값은 프록시를 세우기 전까지의 자리표시자이며, 실제로는
-   * `configureApi({ seoul: { baseUrl: 'https://<우리 서버>/seoul' } })`로 덮어쓴다.
+   * 인증키는 프록시에만 있다 — 앱 번들에는 키가 들어가지 않는다.
+   * `baseUrl`이 없으면 혼잡도 조회를 건너뛰고 `quiet`은 중립값이 된다.
    */
-  seoul: {
-    baseUrl: string;
-    key: string | null;
+  congestionProxy: {
+    baseUrl: string | null;
+    /** 프록시에 PROXY_TOKEN을 걸었다면 같은 값을 넣는다. */
+    token: string | null;
   };
 /**
    * 공공데이터포털. 인증키 하나로 두 서비스를 쓴다.
@@ -70,9 +69,9 @@ const config: ApiConfig = {
     baseUrl: 'https://apis.openapi.sk.com',
     appKey: null,
   },
-  seoul: {
-    baseUrl: 'http://openapi.seoul.go.kr:8088',
-    key: null,
+  congestionProxy: {
+    baseUrl: null,
+    token: null,
   },
   publicData: {
     serviceKey: null,
