@@ -10,7 +10,12 @@
  * 인증키는 출력에 찍히지 않는다.
  */
 
-import { fetchPopulation } from '../src/seoul.ts';
+import { requireNode } from './require-node.mjs';
+
+// 버전 확인이 먼저다. .ts를 정적으로 import하면 낮은 버전에서 이 줄 전에 터진다.
+requireNode();
+
+const { fetchPopulation } = await import('../src/seoul.ts');
 
 const key = process.env.SEOUL_OPEN_DATA_KEY;
 

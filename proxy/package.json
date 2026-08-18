@@ -12,5 +12,8 @@
     "gen-token": "node scripts/gen-token.mjs",
     "check": "node --experimental-strip-types --env-file-if-exists=.env scripts/check-key.mjs",
     "setup": "node scripts/setup.mjs"
+  },
+  "engines": {
+    "node": ">=22.9"
   }
 }

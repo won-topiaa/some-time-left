@@ -13,6 +13,9 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { requireNode } from './require-node.mjs';
+
+requireNode();
 
 const ENV_PATH = join(dirname(dirname(fileURLToPath(import.meta.url))), '.env');
 

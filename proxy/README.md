@@ -69,9 +69,21 @@ npm run gen-token
 
 ### Node (Fly · Railway · Render · EC2 등)
 
+**Node 22.9 이상이 필요하다** (`--experimental-strip-types`, `--env-file-if-exists`).
+낮으면 스크립트가 먼저 알려준다.
+
+리포지토리를 아직 안 받았다면:
+
+```bash
+git clone https://github.com/won-topiaa/some-time-left.git
+cd some-time-left
+git checkout claude/on-time-arrival-map-research-0smyp6
+```
+
+그다음:
+
 ```bash
 cd proxy
-npm install                # 의존성은 없지만 스크립트를 쓰려면 한 번
 npm run setup              # 인증키를 물어보고 .env를 만들어 준다
 npm run check              # 인증키가 살아 있는지 확인
 npm run build

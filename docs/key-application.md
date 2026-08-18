@@ -42,12 +42,16 @@
 인증키는 **앱이 아니라 프록시**에 넣는다. 서울 API는 평문 HTTP 전용이라
 앱에서 직접 부를 수 없다([`proxy/README.md`](../proxy/README.md)).
 
+리포지토리를 로컬에 받은 뒤(`git clone` → `cd some-time-left`), **한 줄씩** 실행한다.
+
 ```bash
 cd proxy
 npm run setup    # 인증키를 물어보고 .env를 만든다 (토큰은 자동 생성)
 npm run check    # 서버 없이 인증키가 살아 있는지 확인
 npm run dev      # 확인됐으면 프록시 실행
 ```
+
+Node 22.9 이상이 필요하다. 낮으면 스크립트가 먼저 알려준다.
 
 `npm run check`가 이렇게 나오면 성공이다.
 
