@@ -76,3 +76,45 @@ export function offsetPoint(p: LatLng, eastM: number, northM: number): LatLng {
 export function interpolate(a: LatLng, b: LatLng, t: number): LatLng {
   return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
 }
+
+export interface SideOfLine {
+  /**
+   * 선분 기준 부호 있는 수직 거리 (m).
+   * 진행 방향 기준으로 음수면 왼쪽, 양수면 오른쪽.
+   */
+  distanceM: number;
+  /** 선분 위 투영 위치 (0=시작, 1=끝). 범위를 벗어나면 선분 밖이다. */
+  alongRatio: number;
+}
+
+/**
+ * 점이 선분의 어느 쪽에 있는가.
+ * 그늘 계산에서 "해가 있는 쪽 건물"을 가르려면 좌우 구분이 필요하다.
+ */
+export function signedSideOf(from: LatLng, to: LatLng, point: LatLng): SideOfLine {
+  // 국소 평면으로 투영한다. 수십 미터 범위이므로 오차는 무시할 수 있다.
+  const metersPerDegLat = 111320;
+  const metersPerDegLng = metersPerDegLat * Math.cos(from.lat * DEG);
+
+  const ax = 0;
+  const ay = 0;
+  const bx = (to.lng - from.lng) * metersPerDegLng;
+  const by = (to.lat - from.lat) * metersPerDegLat;
+  const px = (point.lng - from.lng) * metersPerDegLng;
+  const py = (point.lat - from.lat) * metersPerDegLat;
+
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSq = dx * dx + dy * dy;
+
+  if (lengthSq === 0) {
+    return { distanceM: Math.hypot(px, py), alongRatio: 0 };
+  }
+
+  const alongRatio = (px * dx + py * dy) / lengthSq;
+  // 외적의 부호가 좌우를 가른다. 화면 좌표가 아니라 동-북 좌표이므로
+  // 진행 방향 오른쪽이 양수가 되도록 부호를 잡는다.
+  const cross = dx * py - dy * px;
+
+  return { distanceM: -cross / Math.sqrt(lengthSq), alongRatio };
+}

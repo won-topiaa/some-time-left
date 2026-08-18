@@ -1,22 +1,24 @@
 /**
  * 실제 경로 데이터 → RouteFeatures.
  *
- * 정직하게 적어두면, 지금 진짜로 계산되는 건 세 개다.
- *   unbroken — TMAP 횡단보도 개수에서
- *   flat     — TMAP 계단·육교 개수에서 (경사 데이터가 없어 대리 지표)
- *   novelty  — 사용자 본인의 걷기 기록에서
+ * 여섯 성질이 각각 어디서 오는지:
+ *   unbroken — TMAP 횡단보도 개수
+ *   flat     — TMAP 계단·육교 개수 (경사 데이터가 없어 대리 지표)
+ *   novelty  — 사용자 본인의 걷기 기록
+ *   quiet    — 서울 실시간 인구데이터 (혼잡도)
+ *   scenic   — 전국도시공원표준데이터 (공원·수변 근접)
+ *   shade    — 태양 위치 × 건물 높이 (브이월드)
  *
- * quiet(유동인구)과 scenic(공원·수변)은 외부 데이터가 있어야 하고,
- * shade는 계산식은 완성돼 있으나 건물 높이 입력이 아직 기본값이다.
- * 없는 값은 0.5(중립)로 두고 여기 주석으로 남긴다 — 있는 척하지 않는다.
+ * 외부 데이터가 안 오면 그 성질만 중립값(0.5)으로 떨어진다.
+ * 모르는 걸 아는 척하지 않는다.
  */
 
 import { routeShadeOverTime } from '../domain/shade';
 import type { LatLng, RouteFeatures, StreetSegment } from '../domain/types';
 import { distanceM } from '../domain/geo';
-
-/** 아직 데이터가 없는 성질의 기본값. */
-const NEUTRAL = 0.5;
+import { scoreQuiet } from './seoul/congestion';
+import { scoreScenic } from './parks/scenic';
+import { EMPTY_ENVIRONMENT, type Environment } from './environment';
 
 /** 이 밀도를 넘으면 사실상 최악으로 본다 (개/km). */
 const CROSSINGS_PER_KM_WORST = 8;
@@ -37,6 +39,8 @@ export interface FeatureInput {
   departAtMs: number;
   /** 사용자가 예전에 걸었던 경로들의 좌표 */
   previousPaths?: LatLng[][];
+  /** 혼잡도·공원·건물. 없으면 해당 성질이 중립값이 된다. */
+  environment?: Environment;
 }
 
 export function deriveFeatures({
@@ -49,6 +53,7 @@ export function deriveFeatures({
   origin,
   departAtMs,
   previousPaths = [],
+  environment = EMPTY_ENVIRONMENT,
 }: FeatureInput): RouteFeatures {
   const km = Math.max(0.1, distance / 1000);
 
@@ -59,8 +64,8 @@ export function deriveFeatures({
     flat: clamp01(1 - stairs / km / STAIRS_PER_KM_WORST),
     shade: routeShadeOverTime(segments, origin, departAtMs, durationSec),
     novelty: noveltyOf(path, previousPaths),
-    quiet: NEUTRAL, // TODO: 유동인구 데이터 연동
-    scenic: NEUTRAL, // TODO: 공원·수변 레이어 연동
+    quiet: scoreQuiet(path, environment.congestion),
+    scenic: scoreScenic(path, environment.parks),
   };
 }
 

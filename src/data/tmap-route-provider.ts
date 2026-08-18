@@ -16,6 +16,8 @@ import { deriveFeatures } from './features';
 import { fetchPedestrianRoute } from './tmap/client';
 import { toStreetSegments } from './tmap/parse';
 import { planWaypoints, refineScale } from './waypoints';
+import { EMPTY_ENVIRONMENT, loadEnvironment, type Environment } from './environment';
+import { buildProfileLookup } from './buildings/profile';
 import type { LatLng, RouteCandidate } from '../domain/types';
 import type { RouteProvider, RouteRequest } from './route-provider';
 import { DEFAULT_WALK_SPEED_MPS } from '../domain/pace';
@@ -27,6 +29,10 @@ const REFINE_THRESHOLD_SEC = 120;
 const CANDIDATE_COUNT = 6;
 
 export class TmapRouteProvider implements RouteProvider {
+  /**
+   * 최단 경로는 시간 예산을 잡기 위한 것이라 환경 데이터를 부르지 않는다.
+   * 여기서까지 외부 API를 때리면 첫 화면이 느려진다.
+   */
   async shortest(origin: LatLng, destination: LatLng): Promise<RouteCandidate> {
     const parsed = await fetchPedestrianRoute({ origin, destination });
     const segments = toStreetSegments(parsed.path);
@@ -110,30 +116,44 @@ export class TmapRouteProvider implements RouteProvider {
       )
     );
 
-    return results.flatMap((result, index) => {
-      // 일부 경유지는 도로망에 안 붙는다. 하나 실패해도 나머지는 살린다.
-      if (result.status !== 'fulfilled' || result.value.path.length < 2) {
-        return [];
-      }
-      const parsed = result.value;
-      const segments = toStreetSegments(parsed.path);
+    // 일부 경유지는 도로망에 안 붙는다. 하나 실패해도 나머지는 살린다.
+    const routes = results.flatMap((result, index) =>
+      result.status === 'fulfilled' && result.value.path.length >= 2
+        ? [{ parsed: result.value, index }]
+        : []
+    );
 
-      return [
-        {
-          id: `tmap-${tag}-${index}`,
-          durationSec: parsed.durationSec,
-          distanceM: parsed.distanceM,
-          path: parsed.path,
+    if (routes.length === 0) {
+      return [];
+    }
+
+    // 후보들이 대개 같은 동네를 지난다. 환경 데이터는 한 번만 받아 나눠 쓴다.
+    const environment: Environment = await loadEnvironment(
+      routes.map((r) => r.parsed.path)
+    ).catch(() => EMPTY_ENVIRONMENT);
+
+    return routes.map(({ parsed, index }) => {
+      // 건물 높이가 있으면 그늘 계산이 실제 값으로 바뀐다.
+      const segments = toStreetSegments(
+        parsed.path,
+        buildProfileLookup(parsed.path, environment.buildings)
+      );
+
+      return {
+        id: `tmap-${tag}-${index}`,
+        durationSec: parsed.durationSec,
+        distanceM: parsed.distanceM,
+        path: parsed.path,
+        segments,
+        features: deriveFeatures({
+          ...parsed,
           segments,
-          features: deriveFeatures({
-            ...parsed,
-            segments,
-            origin,
-            departAtMs,
-            previousPaths,
-          }),
-        },
-      ];
+          origin,
+          departAtMs,
+          previousPaths,
+          environment,
+        }),
+      };
     });
   }
 }
