@@ -212,12 +212,21 @@ node scripts/discover-vworld.mjs <VWORLD_KEY> <레이어아이디>
 | 건축물대장 `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | **확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
 | 네이버 지오코딩 `maps.apigw.ntruss.com/map-geocode/v2/geocode` | **확인** — `401 Authentication information are missing` |
 | 서울 실시간 인구데이터 | 경로 미확인 — 아래 참고 |
-| 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 레이어 목록에서 확인 필요 |
+| 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 아래 참고 |
 
 찾은 오류 두 가지:
 - 공공데이터포털 두 API는 **모두 `apis.data.go.kr`에 있다.**
   `api.odcloud.kr`도 `api.data.go.kr`(s 없음)도 이들을 서빙하지 않는다.
 - 건축물대장 `BldRgstService_v2`는 폐기됐다(`NO_OPENAPI_SERVICE_ERROR`).
+
+### 브이월드가 확인되지 않은 이유
+
+`api.vworld.kr`은 TLS 종단이 vworld 실서버다(인증서 `CN=*.vworld.kr`, GlobalSign
+발급, 검증 통과). 그런데 API 경로든 없는 경로든 루트든 **모든 요청이 502**를
+반환한다. 없는 경로가 404가 아니라 502라는 건 라우팅 이전에서 실패한다는 뜻이라,
+레이어 아이디 문제가 아니라 vworld 쪽 문제로 보인다.
+
+`scripts/discover-vworld.mjs`는 이 경우를 따로 구분해 알려준다.
 
 ### 서울 API는 HTTPS를 아예 안 받는다
 

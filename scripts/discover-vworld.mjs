@@ -57,6 +57,16 @@ async function probe(layer) {
 
   const text = await response.text();
 
+  // 브이월드 서버가 통째로 죽으면 모든 경로가 502를 뱉는다. 레이어 문제와 구분한다.
+  if (response.status >= 500) {
+    return {
+      layer,
+      ok: false,
+      fatal: true,
+      reason: `브이월드 서버가 ${response.status}를 반환. 레이어 아이디 문제가 아니라 서비스 장애일 수 있다.`,
+    };
+  }
+
   let json;
   try {
     json = JSON.parse(text);
@@ -118,6 +128,7 @@ const targets = ONLY != null ? [ONLY] : CANDIDATES;
 console.log(`강남역 근처(${BOX})에서 ${targets.length}개 레이어를 조회합니다.\n`);
 
 let found = false;
+let fatal = false;
 for (const layer of targets) {
   const result = await probe(layer);
   if (result.ok) {
@@ -125,10 +136,17 @@ for (const layer of targets) {
     report(result);
   } else {
     console.log(`❌ ${layer.padEnd(20)} ${result.reason}`);
+    if (result.fatal === true) {
+      fatal = true;
+      break;
+    }
   }
 }
 
-if (!found) {
+if (fatal) {
+  console.log('\n브이월드 서버 쪽 문제로 보입니다. 잠시 후 다시 시도하세요.');
+  console.log('https://api.vworld.kr/req/data 를 브라우저로 열어 같은 오류가 나는지 확인하면 확실합니다.');
+} else if (!found) {
   console.log('\n맞는 레이어가 없습니다. 브이월드 레이어 목록에서 건물 레이어 아이디를 찾아');
   console.log('두 번째 인자로 넘기세요:');
   console.log('  https://www.vworld.kr → 오픈API → 2D 데이터 API → 데이터 제공목록');
