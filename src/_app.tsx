@@ -7,15 +7,23 @@ import { TripProvider } from './state/TripContext';
 import { configureApi } from './config';
 
 /**
- * 외부 API 키 주입.
+ * 외부 API 설정 주입.
  *
- * 지금은 값이 비어 있어 mock 경로로 동작한다. 실제 키를 넣거나,
- * 더 나은 방법으로 `baseUrl`을 자체 서버 프록시로 바꾼다 —
- * 클라이언트 번들에 들어간 키는 그대로 노출된다.
+ * **비밀값은 이 파일에 커밋하지 않는다.** 여기 적힌 값은 앱 번들에 그대로
+ * 들어가고, 이 리포지토리에도 남는다. 주소처럼 공개돼도 되는 값만 둔다.
+ *
+ * 키가 필요한 항목(`tmap.appKey`, `congestionProxy.token` 등)은 로컬에서
+ * 채워 넣고 커밋하지 않는다. 값이 없으면 해당 기능만 꺼지고 앱은 계속 돈다 —
+ * TMAP 키가 없으면 경로가 mock으로, 프록시가 없으면 `quiet`이 중립값으로.
  */
 configureApi({
   tmap: { appKey: null },
-  congestionProxy: { baseUrl: null, token: null },
+  congestionProxy: {
+    // 공개 엔드포인트라 커밋해도 된다. 인증키는 이 뒤(프록시 서버)에만 있다.
+    baseUrl: 'https://some-time-left-proxy.yangjuwon240.workers.dev',
+    // 프록시의 PROXY_TOKEN과 같은 값. 로컬에서 채우고 커밋하지 않는다.
+    token: null,
+  },
   publicData: { serviceKey: null },
   vworld: { key: null },
 });

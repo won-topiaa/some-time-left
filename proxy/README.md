@@ -159,16 +159,24 @@ Railway에 올린다 — 핸들러가 같아서 코드는 그대로다.
 
 ## 앱에 연결하기
 
-`src/_app.tsx`의 `configureApi`에 프록시 주소를 넣는다.
+`src/_app.tsx`의 `configureApi`에 이미 배포 주소가 들어 있다.
+남은 건 토큰인데, **커밋하지 않고 로컬에서만 채운다.**
 
 ```ts
-configureApi({
-  congestionProxy: {
-    baseUrl: 'https://<배포한 주소>',
-    token: '<PROXY_TOKEN을 걸었다면 같은 값>',
-  },
-});
+congestionProxy: {
+  baseUrl: 'https://some-time-left-proxy.<계정>.workers.dev',  // 커밋해도 됨
+  token: null,  // ← 로컬에서 PROXY_TOKEN 값으로 바꾸고 커밋하지 않는다
+},
 ```
+
+### 토큰의 한계를 알고 쓸 것
+
+앱 번들에 들어간 토큰은 번들을 뜯으면 나온다. 즉 이 토큰은 **작정한 사람을
+막는 장치가 아니라, 주소만 알고 들이치는 것을 막는 문턱**이다.
+
+그래도 없는 것보다 훨씬 낫다 — 주소는 앱 트래픽만 봐도 드러나지만, 토큰이
+있으면 그 URL을 그대로 긁어가는 것은 막힌다. 더 단단히 하려면 프록시 쪽에
+IP 단위 rate limit을 두는 편이 토큰보다 효과적이다.
 
 `baseUrl`이 없으면 혼잡도 조회를 건너뛰고 `quiet`은 중립값(0.5)이 된다.
 프록시가 죽어도 경로 추천은 계속된다.
