@@ -122,15 +122,40 @@ npm run dev    # .env를 자동으로 읽는다
 
 `src/worker.ts`가 진입점이다. 핸들러는 Node 버전과 같은 것을 쓴다.
 
+**반드시 `proxy/` 안에서 실행한다.** `wrangler.toml`이 여기 있다.
+다른 곳에서 실행하면 wrangler가 상위 디렉터리를 훑다가 엉뚱한 오류를 낸다
+(홈에서 실행하면 macOS의 `.Trash` 권한 오류가 난다).
+
 ```bash
-npx wrangler deploy proxy/src/worker.ts --name some-time-left-proxy
-npx wrangler secret put SEOUL_OPEN_DATA_KEY
-npx wrangler secret put PROXY_TOKEN
+cd ~/some-time-left/proxy
+npx wrangler login
+npm run deploy
+npm run secrets      # SEOUL_OPEN_DATA_KEY, PROXY_TOKEN 순서로 물어본다
+```
+
+시크릿 값은 `.env`에 있는 것과 같다. `cat .env`로 확인해 붙여넣는다.
+배포 후 확인:
+
+```bash
+curl "https://some-time-left-proxy.<계정>.workers.dev/health"
 ```
 
 무료 티어로 충분하고 HTTPS가 기본이다. 다만 서울 업스트림이 평문 HTTP라
 배포 환경에서 `http://` 아웃바운드가 막히면 Node 쪽으로 옮기면 된다 —
 핸들러가 같아서 옮기는 비용이 거의 없다.
+
+## 잘 안 될 때
+
+**`A permission error occurred while accessing the file system` / `.Trash`**
+`proxy/` 밖에서 실행한 것이다. `cd ~/some-time-left/proxy` 후 다시.
+
+**`/population`이 늘 빈 배열**
+Workers에서 서울의 평문 HTTP(8088) 아웃바운드가 막힌 경우일 수 있다.
+`/health`는 되는데 `/population`만 비면 그렇다. 이때는 Node 버전을 Fly나
+Railway에 올린다 — 핸들러가 같아서 코드는 그대로다.
+
+**`401`**
+`Authorization: Bearer <PROXY_TOKEN>` 헤더가 빠졌거나 값이 다르다.
 
 ## 앱에 연결하기
 

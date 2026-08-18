@@ -11,7 +11,9 @@
     "dev": "node --watch --experimental-strip-types --env-file-if-exists=.env src/server.ts",
     "gen-token": "node scripts/gen-token.mjs",
     "check": "node --experimental-strip-types --env-file-if-exists=.env scripts/check-key.mjs",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "deploy": "npx wrangler deploy",
+    "secrets": "npx wrangler secret put SEOUL_OPEN_DATA_KEY && npx wrangler secret put PROXY_TOKEN"
   },
   "engines": {
     "node": ">=22.9"
