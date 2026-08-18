@@ -15,12 +15,29 @@
  *   VWORLD_DOMAIN=localhost node scripts/discover-vworld.mjs <KEY>
  */
 
-const KEY = process.argv[2];
+let KEY = process.argv[2];
 const ONLY = process.argv[3];
-const DOMAIN = process.env.VWORLD_DOMAIN ?? 'some-time-left-proxy.yangjuwon240.workers.dev';
+let DOMAIN = process.env.VWORLD_DOMAIN;
+
+// 키를 인자로 안 주면 저장된 키(config.local.ts)를 읽는다 — 셸 기록에 키가 안 남는다.
+// 이 경로는 `npm run vworld-layers`로 실행해야 한다(.ts를 읽으려면 타입 스트립 필요).
+if (KEY == null || KEY === '') {
+  try {
+    const { localSecrets } = await import('../src/config.local.ts');
+    KEY = localSecrets.vworldKey ?? '';
+    if (DOMAIN == null) {
+      const { getApiConfig } = await import('../src/config.ts');
+      DOMAIN = getApiConfig().vworld.domain;
+    }
+  } catch {
+    // 플래그 없이 실행돼 .ts를 못 읽으면 아래 사용법 안내로 떨어진다.
+  }
+}
+DOMAIN = DOMAIN ?? 'some-time-left-proxy.yangjuwon240.workers.dev';
 
 if (KEY == null || KEY === '') {
-  console.error('사용법: node scripts/discover-vworld.mjs <VWORLD_KEY> [레이어아이디]');
+  console.error('사용법: npm run vworld-layers            (저장된 키 사용)');
+  console.error('   또는: node scripts/discover-vworld.mjs <VWORLD_KEY> [레이어아이디]');
   process.exit(1);
 }
 
@@ -156,5 +173,5 @@ if (fatal) {
   console.log('\n맞는 레이어가 없습니다. 브이월드 레이어 목록에서 건물 레이어 아이디를 찾아');
   console.log('두 번째 인자로 넘기세요:');
   console.log('  https://www.vworld.kr → 오픈API → 2D 데이터 API → 데이터 제공목록');
-  console.log('  node scripts/discover-vworld.mjs <KEY> <레이어아이디>');
+  console.log('  npm run vworld-layers -- <레이어아이디>   (저장된 키로 특정 레이어 조회)');
 }
