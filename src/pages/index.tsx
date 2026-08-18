@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useTrip } from '../state/TripContext';
+import { usePlaceSearch } from '../state/usePlaceSearch';
 import { formatClock } from '../domain/time';
+import type { Place } from '../data/places';
 
 export const Route = createRoute('/', {
   component: Home,
@@ -22,8 +24,16 @@ function Home() {
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const [nowMs] = useState(() => Date.now());
+  const [query, setQuery] = useState('');
+  const { results, searching, available } = usePlaceSearch(query);
 
-  const canProceed = trip.destinationName.trim() !== '' && trip.arriveAtMs != null;
+  // 검색 결과에서 고르기 전에는 좌표가 없다. 좌표 없이는 경로를 찾을 수 없다.
+  const canProceed = trip.destination != null && trip.arriveAtMs != null;
+
+  const pick = (place: Place) => {
+    update({ destinationName: place.name, destination: place.at });
+    setQuery('');
+  };
 
   return (
     <View style={styles.screen}>
@@ -33,13 +43,44 @@ function Home() {
       </View>
 
       <Text style={styles.label}>어디로 가세요?</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="약속 장소"
-        placeholderTextColor={colors.inkFaint}
-        value={trip.destinationName}
-        onChangeText={(destinationName) => update({ destinationName })}
-      />
+      {trip.destination != null ? (
+        <Pressable
+          style={styles.picked}
+          onPress={() => update({ destinationName: '', destination: null })}
+        >
+          <Text style={styles.pickedName}>{trip.destinationName}</Text>
+          <Text style={styles.pickedChange}>변경</Text>
+        </Pressable>
+      ) : (
+        <>
+          <TextInput
+            style={styles.input}
+            placeholder={available ? '약속 장소' : '약속 장소 (검색 키 미설정)'}
+            placeholderTextColor={colors.inkFaint}
+            value={query}
+            onChangeText={setQuery}
+          />
+          {results.length > 0 && (
+            <ScrollView style={styles.results} keyboardShouldPersistTaps="handled">
+              {results.map((place) => (
+                <Pressable
+                  key={`${place.name}-${place.at.lat}-${place.at.lng}`}
+                  style={styles.result}
+                  onPress={() => pick(place)}
+                >
+                  <Text style={styles.resultName}>{place.name}</Text>
+                  {place.address !== '' && (
+                    <Text style={styles.resultAddress}>{place.address}</Text>
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+          {searching && results.length === 0 && (
+            <Text style={styles.searching}>찾는 중...</Text>
+          )}
+        </>
+      )}
 
       <Text style={styles.label}>몇 시 약속이에요?</Text>
       <View style={styles.chips}>
@@ -106,6 +147,33 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.accent },
   chipText: { ...type.body, color: colors.inkSoft },
   chipTextOn: { color: colors.surface, fontWeight: '600' },
+  picked: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pickedName: { ...type.body, color: colors.ink, flexShrink: 1 },
+  pickedChange: { ...type.caption, color: colors.accent, marginLeft: spacing.sm },
+  results: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+    maxHeight: 220,
+  },
+  result: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  resultName: { ...type.body, color: colors.ink },
+  resultAddress: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
+  searching: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.lg },
   spacer: { flex: 1 },
   cta: {
     backgroundColor: colors.accent,

@@ -58,3 +58,21 @@ export function remainingDistanceM(path: LatLng[], current: LatLng): number {
   }
   return remaining;
 }
+
+/**
+ * 한 지점에서 동/북 방향으로 미터만큼 이동한 좌표.
+ * 우회 경유지를 만들 때 쓴다. 수 km 범위에서는 평면 근사로 충분하다.
+ */
+export function offsetPoint(p: LatLng, eastM: number, northM: number): LatLng {
+  const metersPerDegLat = 111320;
+  const metersPerDegLng = metersPerDegLat * Math.cos(p.lat * DEG);
+  return {
+    lat: p.lat + northM / metersPerDegLat,
+    lng: p.lng + eastM / Math.max(1e-6, metersPerDegLng),
+  };
+}
+
+/** 두 좌표를 t(0~1)로 내분한 지점. */
+export function interpolate(a: LatLng, b: LatLng, t: number): LatLng {
+  return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
+}

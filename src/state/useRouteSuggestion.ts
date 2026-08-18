@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Accuracy, getCurrentLocation, getServerTime } from '@apps-in-toss/framework';
 import { MockRouteProvider, type RouteProvider } from '../data/route-provider';
+import { TmapRouteProvider } from '../data/tmap-route-provider';
+import { isTmapConfigured } from '../config';
 import { recentRouteIds } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
@@ -8,7 +10,13 @@ import { nextRoute, rankRoutes } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
-const provider: RouteProvider = new MockRouteProvider();
+/**
+ * 키가 설정돼 있으면 실제 도보 경로를, 아니면 mock을 쓴다.
+ * 키 없이도 화면 개발이 막히지 않아야 한다.
+ */
+function routeProvider(): RouteProvider {
+  return isTmapConfigured() ? new TmapRouteProvider() : new MockRouteProvider();
+}
 
 export interface Suggestion {
   loading: boolean;
@@ -67,6 +75,7 @@ export function useRouteSuggestion({
           lng: position.coords.longitude,
         };
 
+        const provider = routeProvider();
         const shortest = await provider.shortest(origin, destination);
         const walkPlan = planWalk({
           nowMs,
