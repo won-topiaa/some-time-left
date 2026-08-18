@@ -142,20 +142,30 @@ export const localSecrets = {
 `_app.tsx`는 이 값을 읽어 `configureApi()`에 넘길 뿐이라 **손댈 일이 없다** —
 `git pull` 때 충돌하지도, 실수로 키를 올리지도 않는다.
 
-프록시 토큰은 손으로 옮기지 않아도 된다. `proxy/.env`에서 가져다 넣어 준다:
+파일을 직접 열 필요는 없다. 물어보고 대신 써 준다 (입력은 화면에 안 찍힌다):
 
 ```bash
-npm run link-proxy
+npm run set-key tmap        # 또는 publicdata / vworld
+npm run set-key             # 목록에서 고르기
+npm run link-proxy          # 프록시 토큰은 proxy/.env에서 자동으로
 ```
 
 **잘 들어갔는지는 `typecheck`로 알 수 없다** — 값이 `null`이어도 통과한다.
-설정이 실제로 동작하는지 보려면:
+설정한 키를 **실제로 호출해서** 확인하려면:
 
 ```bash
 npm run check-config
 ```
 
-어떤 키가 들어갔는지 보여주고, 프록시 토큰은 **실제로 호출해서** 확인한다.
+```
+  ✓ 혼잡도 프록시        강남역 보통
+  ✓ TMAP 장소검색       1건 조회됨
+  ✗ 장소 혼잡도          INVALID_API_KEY — 상품 사용 신청이 필요할 수 있어요
+  – 공공데이터 공원        키가 없어 건너뜀
+```
+
+키마다 실패 원인이 다르므로 무엇을 해야 하는지까지 알려준다 —
+공공데이터는 Decoding 키인지, 브이월드는 레이어 아이디와 도메인 등록인지.
 비밀값은 출력하지 않고 길이만 보여준다.
 
 값이 없으면 그 기능만 꺼지고 앱은 계속 돈다. TMAP 키가 없으면 경로가 mock으로,

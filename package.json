@@ -16,8 +16,10 @@
     "pretypecheck": "node scripts/ensure-local-config.mjs",
     "pretest": "node scripts/ensure-local-config.mjs",
     "link-proxy": "node scripts/link-proxy-token.mjs",
-    "check-config": "node --experimental-strip-types scripts/check-app-config.mjs",
-    "precheck-config": "node scripts/ensure-local-config.mjs"
+    "check-config": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-app-config.mjs",
+    "precheck-config": "node scripts/ensure-local-config.mjs",
+    "set-key": "node scripts/set-key.mjs",
+    "preset-key": "node scripts/ensure-local-config.mjs"
   },
   "dependencies": {
     "@apps-in-toss/framework": "^2.10.10",
