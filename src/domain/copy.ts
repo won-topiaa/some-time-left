@@ -68,3 +68,11 @@ export function memoryRecall(note: string, daysAgo: number): string {
           : `${Math.round(daysAgo / 30)}달 전`;
   return `${when} 여기서 "${note}"`;
 }
+
+/**
+ * 가는 길에 스치는 가게 한 줄.
+ * 권하는 말투가 아니라, 그냥 곁에 있다고 알려주는 정도. 우연의 여지를 남긴다.
+ */
+export function alongRouteHint(name: string): string {
+  return `가는 길에 ${name}, 잠깐 들러도 좋고요`;
+}

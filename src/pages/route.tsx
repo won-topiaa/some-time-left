@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { planHeadline, routeReason } from '../domain/copy';
+import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
+import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
 import { formatClock, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { RoutePreview } from '../ui/RoutePreview';
@@ -23,6 +25,28 @@ function RouteScreen() {
     arriveAtMs: trip.arriveAtMs,
     mood: trip.mood,
   });
+
+  // 가는 길에 스치는 가게 한 곳. 목적이 아니라 곁에 있다고 알려주는 정도.
+  // 경로가 바뀌면(다른 길) 다시 찾고, 없으면 없는 채로 둔다.
+  const [nearbyPlace, setNearbyPlace] = useState<AlongRoutePlace | null>(null);
+  const routeId = route?.candidate.id;
+  const routePath = route?.candidate.path;
+
+  useEffect(() => {
+    setNearbyPlace(null);
+    if (routePath == null || routePath.length < 2) {
+      return;
+    }
+    let cancelled = false;
+    fetchPlaceAlongRoute(routePath).then((place) => {
+      if (!cancelled) {
+        setNearbyPlace(place);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [routeId]);
 
   if (loading) {
     return (
@@ -80,6 +104,10 @@ function RouteScreen() {
                 {routeReason(trip.mood, route.dominantFeature)}
               </Text>
             )}
+
+            {nearbyPlace != null && (
+              <Text style={styles.nearby}>{alongRouteHint(nearbyPlace.name)}</Text>
+            )}
           </View>
 
           {/* 조건 버튼은 입구가 아니라 출구에 둔다. 자동 추천이 틀렸을 때의 도망갈 곳. */}
@@ -125,6 +153,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
+  nearby: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
   ghost: { paddingVertical: spacing.md, alignItems: 'center' },
   ghostText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
   spacer: { flex: 1 },

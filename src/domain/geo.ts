@@ -118,3 +118,50 @@ export function signedSideOf(from: LatLng, to: LatLng, point: LatLng): SideOfLin
 
   return { distanceM: -cross / Math.sqrt(lengthSq), alongRatio };
 }
+
+export interface PathProjection {
+  /** 경로에서 점까지의 최단 거리 (m) */
+  distanceM: number;
+  /** 경로 위 위치 (0=출발, 1=도착). "길 중간쯤인가"를 판단할 때 쓴다. */
+  alongRatio: number;
+}
+
+/**
+ * 점을 경로(폴리라인)에 투영한다.
+ *
+ * 가장 가까운 구간을 찾아 그 구간 위 수선의 발까지의 거리와,
+ * 경로 전체에서의 진행 비율을 돌려준다. "경로 곁에 있는 가게인가,
+ * 있다면 길 중간쯤인가"를 판단하는 데 쓴다.
+ */
+export function projectToPath(path: LatLng[], point: LatLng): PathProjection {
+  if (path.length === 0) {
+    return { distanceM: Infinity, alongRatio: 0 };
+  }
+  if (path.length === 1) {
+    return { distanceM: distanceM(path[0], point), alongRatio: 0 };
+  }
+
+  const total = pathLengthM(path);
+  let best: PathProjection = { distanceM: Infinity, alongRatio: 0 };
+  let travelled = 0;
+
+  for (let i = 1; i < path.length; i += 1) {
+    const from = path[i - 1];
+    const to = path[i];
+    const segLen = distanceM(from, to);
+    const side = signedSideOf(from, to, point);
+
+    // 구간 밖으로 투영되면 가까운 끝점으로 잘라낸다.
+    const clamped = Math.min(1, Math.max(0, side.alongRatio));
+    const foot = interpolate(from, to, clamped);
+    const d = distanceM(foot, point);
+
+    if (d < best.distanceM) {
+      const alongM = travelled + clamped * segLen;
+      best = { distanceM: d, alongRatio: total > 0 ? alongM / total : 0 };
+    }
+    travelled += segLen;
+  }
+
+  return best;
+}
