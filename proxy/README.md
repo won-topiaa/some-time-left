@@ -41,6 +41,10 @@ GET /population?area=광화문·덕수궁&area=강남역
 | 이름 | 필수 | 기본값 | 설명 |
 |---|---|---|---|
 | `SEOUL_OPEN_DATA_KEY` | ✅ | — | 서울 열린데이터광장 인증키 |
+
+`.env` 파일에 넣으면 `npm run dev` · `start` · `check`가 알아서 읽는다
+(`.env.example` 참고). `.env`는 커밋되지 않는다.
+
 | `PROXY_TOKEN` | ✅ | — | `Authorization: Bearer <token>`으로 요구. `npm run gen-token`으로 만든다 |
 | `ALLOW_ANONYMOUS` | | 없음 | `true`면 토큰 없이 연다 (권장하지 않음) |
 | `SEOUL_BASE_URL` | | `http://openapi.seoul.go.kr:8088` | 업스트림 |
@@ -67,9 +71,20 @@ npm run gen-token
 
 ```bash
 cd proxy
-npm run gen-token          # PROXY_TOKEN 만들기
+cp .env.example .env       # 키를 여기 넣는다 (.env는 커밋되지 않는다)
+npm run gen-token          # PROXY_TOKEN 만들어 .env에 넣기
+npm run check              # 인증키가 살아 있는지 먼저 확인
 npm run build
-SEOUL_OPEN_DATA_KEY=... PROXY_TOKEN=... npm start
+npm start
+```
+
+`npm run check`는 서버를 띄우지 않고 **프록시가 실제로 쓰는 코드 경로로** 네 곳을
+조회해 본다. 키가 유효한지, 응답이 우리 파서와 맞는지 한 번에 드러난다.
+인증키는 출력에 찍히지 않는다.
+
+```
+  ✓ 광화문·덕수궁      보통 (2026-08-18 03:20)
+  ✓ 강남역            붐빔 (2026-08-18 03:20)
 ```
 
 이 프로세스는 평문 HTTP를 듣는다. **HTTPS 종단은 앞단(플랫폼 로드밸런서나 nginx)이
@@ -78,7 +93,7 @@ SEOUL_OPEN_DATA_KEY=... PROXY_TOKEN=... npm start
 개발 중에는 빌드 없이:
 
 ```bash
-SEOUL_OPEN_DATA_KEY=... PROXY_TOKEN=... npm run dev
+npm run dev    # .env를 자동으로 읽는다
 ```
 
 ### Cloudflare Workers
