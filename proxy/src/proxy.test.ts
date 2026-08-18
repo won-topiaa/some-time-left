@@ -6,6 +6,7 @@ import {
   areasFromUrl,
   configFromEnv,
   createHandler,
+  createWorkerFetch,
   isAuthorized,
   type ProxyConfig,
 } from './handler';
@@ -268,5 +269,43 @@ describe('createHandler', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ areas: [] });
+  });
+});
+
+describe('createWorkerFetch', () => {
+  const token = 'x'.repeat(MIN_TOKEN_LENGTH);
+
+  it('설정이 잘못되면 1101이 아니라 읽을 수 있는 오류를 준다', async () => {
+    const fetchHandler = createWorkerFetch({});
+    const response = await fetchHandler(new Request('http://x/health'));
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/SEOUL_OPEN_DATA_KEY/);
+  });
+
+  it('토큰이 빠진 것도 그대로 알려준다', async () => {
+    const fetchHandler = createWorkerFetch({ SEOUL_OPEN_DATA_KEY: 'k' });
+    const body = (await (await fetchHandler(new Request('http://x/health'))).json()) as {
+      error: string;
+    };
+
+    expect(body.error).toMatch(/PROXY_TOKEN/);
+  });
+
+  it('오류 메시지에 비밀값을 담지 않는다', async () => {
+    const fetchHandler = createWorkerFetch({ SEOUL_OPEN_DATA_KEY: 'SUPERSECRET' });
+    const text = await (await fetchHandler(new Request('http://x/health'))).text();
+
+    expect(text).not.toContain('SUPERSECRET');
+  });
+
+  it('설정이 정상이면 평소처럼 답한다', async () => {
+    const fetchHandler = createWorkerFetch({ SEOUL_OPEN_DATA_KEY: 'k', PROXY_TOKEN: token });
+    const response = await fetchHandler(new Request('http://x/health'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true });
   });
 });

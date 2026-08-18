@@ -157,6 +157,18 @@ Railway에 올린다 — 핸들러가 같아서 코드는 그대로다.
 **`401`**
 `Authorization: Bearer <PROXY_TOKEN>` 헤더가 빠졌거나 값이 다르다.
 
+**`error code: 1101` (Workers)**
+Worker가 예외를 던졌다는 뜻인데 원인이 안 보인다. 지금은 설정 오류를 잡아
+읽을 수 있는 JSON으로 돌려주므로 이 코드가 보이면 그 밖의 런타임 오류다.
+실제 예외는 로그로 본다:
+
+```bash
+cd ~/some-time-left/proxy
+npx wrangler tail
+```
+
+다른 터미널에서 요청을 한 번 보내면 예외가 그대로 찍힌다.
+
 ## 앱에 연결하기
 
 `src/_app.tsx`의 `configureApi`에 이미 배포 주소가 들어 있다.

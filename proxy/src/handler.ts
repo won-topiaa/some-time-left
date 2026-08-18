@@ -93,6 +93,29 @@ export function areasFromUrl(url: URL, max: number): string[] {
   return [...new Set(valid)].slice(0, max);
 }
 
+/**
+ * Workers 진입점이 쓰는 래퍼.
+ *
+ * 설정이 잘못되면 예외가 아니라 **읽을 수 있는 응답**을 돌려준다.
+ * Workers에서 예외를 그대로 던지면 `error code: 1101`만 보이고 원인을 알 수 없다.
+ */
+export function createWorkerFetch(env: Record<string, string | undefined>) {
+  let handle: ((request: Request) => Promise<Response>) | null = null;
+
+  return async function fetchHandler(request: Request): Promise<Response> {
+    if (handle == null) {
+      try {
+        handle = createHandler(configFromEnv(env));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '설정을 읽지 못했어요.';
+        // 비밀값은 담지 않는다. 무엇이 빠졌는지만 말한다.
+        return json({ ok: false, error: message }, 500);
+      }
+    }
+    return handle(request);
+  };
+}
+
 export function createHandler(config: ProxyConfig, now: () => number = Date.now) {
   const cache = new TtlCache<AreaPopulation>(config.cacheTtlMs);
 
