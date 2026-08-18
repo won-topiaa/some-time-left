@@ -129,11 +129,13 @@ function Arrive() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
+  // 이 화면의 주인공. 색으로 강조하지 않고 크기로만 말한다 —
+  // 파란 숫자는 알림처럼 읽히고, 먹색 숫자는 그냥 남은 시간으로 읽힌다.
   countdown: {
+    ...type.numeral,
     fontSize: 64,
-    lineHeight: 74,
-    fontWeight: '300',
-    color: colors.accent,
+    lineHeight: 72,
+    color: colors.ink,
     marginTop: spacing.xxl,
   },
   prompt: { ...type.title, color: colors.ink, marginTop: spacing.md },
@@ -148,8 +150,10 @@ const styles = StyleSheet.create({
   note: { ...type.body, color: colors.ink, minHeight: 96, textAlignVertical: 'top' },
   hint: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
   spacer: { flex: 1 },
+  // 버튼은 먹색. 레퍼런스 세 앱 모두 크롬에 색을 쓰지 않는다 —
+  // 색은 사용자가 쌓은 것에서만 나온다.
   cta: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ink,
     borderRadius: radius.md,
     paddingVertical: spacing.md + 2,
     alignItems: 'center',

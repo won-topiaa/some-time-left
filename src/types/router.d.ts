@@ -10,6 +10,7 @@ declare module '@granite-js/react-native' {
     '/route': undefined;
     '/walk': undefined;
     '/arrive': undefined;
+    '/trace': undefined;
   }
 }
 

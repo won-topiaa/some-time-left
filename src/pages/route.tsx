@@ -5,6 +5,7 @@ import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
 import { formatClock, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
+import { moodTint } from '../ui/moodTint';
 import { RoutePreview } from '../ui/RoutePreview';
 import { useTrip } from '../state/TripContext';
 import { useRouteSuggestion } from '../state/useRouteSuggestion';
@@ -51,7 +52,7 @@ function RouteScreen() {
   if (loading) {
     return (
       <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.inkFaint} />
         <Text style={styles.searching}>길을 찾고 있어요</Text>
       </View>
     );
@@ -87,7 +88,11 @@ function RouteScreen() {
       {route != null && (
         <>
           <View style={styles.card}>
-            <RoutePreview path={route.candidate.path} />
+            {/* 길에 그날의 기분 색을 입힌다. 이 색 그대로 기록에 남는다. */}
+            <RoutePreview
+              path={route.candidate.path}
+              tint={trip.mood != null ? moodTint(trip.mood) : colors.ink}
+            />
 
             <View style={styles.meta}>
               <Text style={styles.duration}>
@@ -136,29 +141,28 @@ const styles = StyleSheet.create({
   searching: { ...type.body, color: colors.inkSoft, marginTop: spacing.md },
   headline: { ...type.display, color: colors.ink, marginTop: spacing.xl },
   sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-  },
+  // 면을 채우지 않는다. 배경 위에 그대로 두고 선과 여백으로만 나눈다.
+  card: { marginTop: spacing.lg },
   meta: { marginTop: spacing.md },
-  duration: { ...type.display, color: colors.ink },
+  // 걷는 시간이 이 화면의 주인공. 굵기 대신 크기로 말한다.
+  duration: { ...type.numeral, fontSize: 44, lineHeight: 52, color: colors.ink },
   metaSub: { ...type.caption, color: colors.inkFaint, marginTop: spacing.xs },
+  // 추천 이유는 이 앱의 생명줄이라 또렷하게 두되, 색이 아니라 자리로 강조한다.
   reason: {
     ...type.body,
-    color: colors.accent,
+    color: colors.ink,
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
   nearby: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
+  // 자동 추천이 틀렸을 때의 도망갈 곳이다. 눌러진다는 게 보여야 한다.
   ghost: { paddingVertical: spacing.md, alignItems: 'center' },
   ghostText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
   spacer: { flex: 1 },
   cta: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ink,
     borderRadius: radius.md,
     paddingVertical: spacing.md + 2,
     alignItems: 'center',

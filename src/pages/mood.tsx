@@ -3,6 +3,7 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
 import { MOODS } from '../domain/mood';
 import { colors, radius, spacing, type } from '../ui/theme';
+import { moodTint } from '../ui/moodTint';
 import { useTrip } from '../state/TripContext';
 import type { MoodId } from '../domain/types';
 
@@ -35,6 +36,8 @@ function Mood() {
       <View style={styles.cards}>
         {MOODS.map((mood) => (
           <Pressable key={mood.id} style={styles.card} onPress={() => choose(mood.id)}>
+            {/* 기분마다 제 색을 가진 점. 여기서 고른 색이 길에 입혀지고 기록에 남는다. */}
+            <View style={[styles.dot, { backgroundColor: moodTint(mood.id) }]} />
             <Text style={styles.cardText}>{mood.label}</Text>
           </Pressable>
         ))}
@@ -59,11 +62,15 @@ const styles = StyleSheet.create({
   },
   cards: { gap: spacing.sm },
   card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.lg,
   },
+  dot: { width: 10, height: 10, borderRadius: radius.pill },
   cardText: { ...type.title, color: colors.ink },
   footnote: {
     ...type.caption,

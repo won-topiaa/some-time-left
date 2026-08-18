@@ -1,0 +1,214 @@
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { createRoute, useNavigation } from '@granite-js/react-native';
+import { loadRecords } from '../data/records';
+import { formatRecordDate, formatTotalDistance, groupByMonth, traceSummary } from '../domain/trace';
+import { moodById } from '../domain/mood';
+import { colors, spacing, type } from '../ui/theme';
+import { moodTint } from '../ui/moodTint';
+import { RouteGlyph } from '../ui/RoutePreview';
+import type { WalkRecord } from '../domain/types';
+
+export const Route = createRoute('/trace', {
+  component: Trace,
+});
+
+/** 글리프 한 칸의 크기와 개수. 한 줄에 네 개가 들어가는 크기로 맞춘다. */
+const GLYPH = 64;
+const GRID_MIN = 4;
+const GRID_MAX = 24;
+
+/** 아래 목록에 그릴 최대 개수. 그 위로는 숫자로만 알린다. */
+const LIST_MAX = 60;
+
+/**
+ * 지나온 길.
+ *
+ * 기록을 저장만 하고 보여주지 않으면 그건 기록이 아니라 로그다.
+ * 발자취가 누적 거리를, Liltie가 채워진 날들을 첫 화면에 크게 두는 이유가 그것이고,
+ * 이 화면이 이 앱에서 유일하게 '쌓이는' 화면이다.
+ *
+ * 색은 여기서만 진해진다. 기분 색을 띤 길들이 모여야 비로소 화면에 색이 생긴다 —
+ * 한 번 걸었을 땐 거의 무채색이고, 여러 번 걸어야 알록달록해진다.
+ */
+function Trace() {
+  const navigation = useNavigation();
+  const [records, setRecords] = useState<WalkRecord[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRecords()
+      // 저장된 값이 배열이 아니면 정렬에서 터진다. 기록을 못 읽는 것이
+      // 영영 빈 화면이 될 이유는 없으니 없는 셈 치고 화면은 살려 둔다.
+      .catch(() => [])
+      .then((loaded) => {
+        if (!cancelled) {
+          setRecords(Array.isArray(loaded) ? loaded : []);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 불러오는 사이 빈 화면을 '기록 없음'으로 잘못 보여주지 않는다.
+  if (records == null) {
+    return <View style={styles.screen} />;
+  }
+
+  if (records.length === 0) {
+    return (
+      <View style={[styles.screen, styles.center]}>
+        <Text style={styles.emptyTitle}>아직 걸은 길이 없어요.</Text>
+        <Text style={styles.emptyBody}>
+          한 번 걷고 나면{'\n'}여기에 그 길의 모양이 남아요.
+        </Text>
+        <Pressable style={styles.back} onPress={() => navigation.navigate('/')}>
+          <Text style={styles.backText}>돌아가기</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // 요약은 전부를 세고, 그리는 것만 끊는다.
+  // ScrollView는 화면 밖도 다 그리므로, 기록이 쌓일수록 SVG 수백 개를 한 번에 만들게 된다.
+  const summary = traceSummary(records);
+  const months = groupByMonth(records.slice(0, LIST_MAX));
+  const hidden = Math.max(0, records.length - LIST_MAX);
+
+  // 한 줄이 덩그러니 남지 않도록 최소 한 줄은 채운다. 그 이상은 빈칸을 만들지 않는다.
+  const emptyCount = Math.max(0, GRID_MIN - records.length);
+  const emptySlots = Array.from({ length: emptyCount }, (_, i) => i);
+
+  return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {/* 주인공은 숫자 하나. 목표가 아니라 사실이라 단위는 작게 붙인다. */}
+      <Text style={styles.label}>지금까지 걸은 길</Text>
+      <View style={styles.numeralRow}>
+        <Text style={styles.numeral}>{formatTotalDistance(summary.totalDistanceM)}</Text>
+        <Text style={styles.unit}>km</Text>
+      </View>
+      <Text style={styles.micro}>
+        {summary.count}번 걸었고, {summary.noteCount}번 한 줄을 남겼어요
+      </Text>
+
+      {/*
+        길들을 모아 놓은 자리.
+        레퍼런스 여섯 앱은 회고를 목록으로 두지 않는다 — 발자취는 지도의 빈 곳을 보게 하고
+        Catch!는 병을 흔들게 한다. 우리에게 그 그릇은 '길의 모양들'이다.
+        아래 목록이 사실을 말한다면, 여기는 한눈에 보이는 무늬를 말한다.
+      */}
+      <View style={styles.grid}>
+        {records.slice(0, GRID_MAX).map((record) => (
+          <RouteGlyph key={record.id} path={record.path} tint={moodTint(record.mood)} size={GLYPH} />
+        ))}
+        {/* 아직 빈 자리는 비워 두되 보이게 둔다. 채우라고 재촉하지는 않는다. */}
+        {emptySlots.map((i) => (
+          <View key={`empty-${i}`} style={styles.emptySlot} />
+        ))}
+      </View>
+
+      {months.map((month) => (
+        <View key={month.key} style={styles.month}>
+          <Text style={styles.monthLabel}>{month.label}</Text>
+
+          {month.records.map((record) => {
+            const tint = moodTint(record.mood);
+            return (
+              <View key={record.id} style={styles.row}>
+                <RouteGlyph path={record.path} tint={tint} />
+
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {record.destinationName !== '' ? record.destinationName : '어딘가'}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    {formatRecordDate(record.arrivedAt)}
+                    {record.companion.trim() !== '' && ` · ${record.companion}`}
+                    {` · ${moodById(record.mood).label}`}
+                  </Text>
+                  {/* 남긴 말이 있으면 그게 이 줄의 주인공이다. tash처럼 글이 곧 디자인. */}
+                  {record.note.trim() !== '' && (
+                    <Text style={styles.rowNote}>{record.note}</Text>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+
+      {hidden > 0 && (
+        <Text style={styles.hidden}>그 전에 걸은 {hidden}번은 위 숫자에만 담겨 있어요.</Text>
+      )}
+
+      <Pressable style={styles.back} onPress={() => navigation.navigate('/')}>
+        <Text style={styles.backText}>돌아가기</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  center: { alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+
+  label: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xl },
+  numeralRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  numeral: { ...type.numeral, color: colors.ink },
+  unit: { ...type.caption, color: colors.inkFaint, marginLeft: spacing.xs, marginBottom: spacing.sm },
+  micro: { ...type.caption, color: colors.inkFaint, marginTop: spacing.xs },
+  hidden: { ...type.caption, color: colors.inkFaint, marginTop: spacing.lg },
+
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  // 채워지지 않은 자리. 테두리 없이 아주 옅은 점 하나로만 있음을 알린다.
+  emptySlot: {
+    width: GLYPH,
+    height: GLYPH,
+    borderRadius: GLYPH / 2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+
+  month: { marginTop: spacing.xl },
+  monthLabel: {
+    ...type.caption,
+    color: colors.inkSoft,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+
+  // 면을 채우지 않는다. 헤어라인과 여백만으로 나눈다.
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  rowBody: { flex: 1, paddingTop: spacing.xs },
+  rowTitle: { ...type.body, color: colors.ink },
+  // 11px 회색은 읽히지 않는다. 곁다리 정보라도 읽을 수는 있어야 한다.
+  rowMeta: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
+  rowNote: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+
+  emptyTitle: { ...type.title, color: colors.ink, textAlign: 'center' },
+  emptyBody: {
+    ...type.body,
+    color: colors.inkFaint,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+
+  back: { marginTop: spacing.xl, paddingVertical: spacing.md, alignItems: 'center' },
+  backText: { ...type.body, color: colors.inkSoft },
+});

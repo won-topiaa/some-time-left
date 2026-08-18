@@ -29,7 +29,11 @@ async function writeJson(key: string, value: unknown): Promise<void> {
 
 export async function loadRecords(): Promise<WalkRecord[]> {
   const records = await readJson<WalkRecord[]>(RECORDS_KEY, []);
-  return records.sort((a, b) => b.arrivedAt - a.arrivedAt);
+  // 저장된 값이 손상돼 배열이 아니면 sort에서 터진다. 읽기가 화면을 죽이지 않게 한다.
+  if (!Array.isArray(records)) {
+    return [];
+  }
+  return [...records].sort((a, b) => b.arrivedAt - a.arrivedAt);
 }
 
 export async function saveRecord(record: WalkRecord): Promise<void> {

@@ -118,11 +118,19 @@ function Walk() {
   );
 }
 
+/**
+ * 페이스 안내의 바탕색.
+ *
+ * 걷는 중에 흘깃 보는 화면이라 여기서만 색을 쓴다. 다만 경고처럼 보이면 안 된다 —
+ * 늦는 게 사고는 아니니까. 채도를 낮춰 종이 위에 색을 얹은 정도로만 둔다.
+ */
 const adviceTone = StyleSheet.create({
-  slower: { backgroundColor: colors.accentSoft },
-  keep: { backgroundColor: colors.surface },
-  faster: { backgroundColor: '#FBF0DC' },
-  hurry: { backgroundColor: '#F8E0DC' },
+  // 네 상태가 서로 구별되면서도 경고처럼 보이지 않게. 바탕(#FAF9F6)보다는 또렷해야
+  // 카드로 읽히므로 keep도 흰색에 테두리를 준다.
+  slower: { backgroundColor: '#E9EEF6' },
+  keep: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  faster: { backgroundColor: '#F6EEDD' },
+  hurry: { backgroundColor: '#F4E0D9' },
 });
 
 const styles = StyleSheet.create({
@@ -134,8 +142,10 @@ const styles = StyleSheet.create({
   },
   top: { alignItems: 'center', marginBottom: spacing.xl },
   remainingLabel: { ...type.caption, color: colors.inkSoft },
-  remaining: { fontSize: 56, lineHeight: 66, fontWeight: '700', color: colors.ink },
-  distance: { ...type.body, color: colors.inkFaint, marginTop: spacing.xs },
+  // 굵기를 빼고 크기로만. 굵은 숫자는 재촉처럼 읽힌다.
+  remaining: { ...type.numeral, color: colors.ink },
+  // 걸으면서 흘깃 보는 화면이다. 여기서는 작게 만들지 않는다.
+  distance: { ...type.body, color: colors.inkSoft, marginTop: spacing.xs },
   advice: {
     borderRadius: radius.lg,
     paddingVertical: spacing.lg,

@@ -122,7 +122,12 @@ function Home() {
         disabled={!canProceed}
         onPress={() => navigation.navigate('/mood')}
       >
-        <Text style={styles.ctaText}>다음</Text>
+        <Text style={[styles.ctaText, !canProceed && styles.ctaTextOff]}>다음</Text>
+      </Pressable>
+
+      {/* 지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 가장 옅게. */}
+      <Pressable style={styles.trace} onPress={() => navigation.navigate('/trace')}>
+        <Text style={styles.traceText}>지나온 길</Text>
       </Pressable>
     </View>
   );
@@ -150,7 +155,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
   },
-  chipOn: { backgroundColor: colors.accent },
+  chipOn: { backgroundColor: colors.ink },
   chipText: { ...type.body, color: colors.inkSoft },
   chipTextOn: { color: colors.surface, fontWeight: '600' },
   picked: {
@@ -181,12 +186,17 @@ const styles = StyleSheet.create({
   resultAddress: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
   searching: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.lg },
   spacer: { flex: 1 },
+  // 버튼은 먹색. 색은 크롬이 아니라 쌓인 기록이 낸다.
   cta: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ink,
     borderRadius: radius.md,
     paddingVertical: spacing.md + 2,
     alignItems: 'center',
   },
-  ctaOff: { backgroundColor: colors.inkFaint },
+  // 꺼진 버튼도 글자는 읽혀야 한다. inkGhost 위 흰 글자는 대비가 거의 없다.
+  ctaOff: { backgroundColor: colors.line },
+  ctaTextOff: { color: colors.inkFaint },
   ctaText: { ...type.title, color: colors.surface },
+  trace: { paddingVertical: spacing.md, alignItems: 'center' },
+  traceText: { ...type.caption, color: colors.inkFaint },
 });
