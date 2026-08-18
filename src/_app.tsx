@@ -15,7 +15,6 @@ import { configureApi } from './config';
  */
 configureApi({
   tmap: { appKey: null },
-  naver: { keyId: null, key: null },
   seoul: { key: null },
   publicData: { serviceKey: null },
   vworld: { key: null },

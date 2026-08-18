@@ -1,12 +1,14 @@
 /**
  * 목적지 찾기.
  *
- * 장소 이름은 TMAP POI 검색이, 주소는 네이버 지오코딩이 잘한다.
- * 둘 다 붙여두고 입력이 주소처럼 보이면 네이버를 함께 부른다.
+ * 장소 이름은 POI 검색이, 주소는 지오코딩이 잘한다. 둘 다 TMAP이고
+ * 같은 appKey를 쓴다 — 사용자가 "성수동 어니언"을 치든 "테헤란로 152"를 치든
+ * 하나만 물어보고 실패하지 않도록 입력 모양을 보고 둘을 섞는다.
  */
 
 import { searchPlaces } from './tmap/client';
-import { geocodeAddress, isNaverConfigured } from './naver/geocode';
+import { geocodeAddress } from './tmap/geocode';
+import { isTmapConfigured } from '../config';
 import type { Place } from './tmap/parse';
 import type { LatLng } from '../domain/types';
 
@@ -25,7 +27,7 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
 
   const lookups: Promise<Place[]>[] = [searchPlaces(trimmed, near).catch(() => [])];
 
-  if (looksLikeAddress(trimmed) && isNaverConfigured()) {
+  if (looksLikeAddress(trimmed) && isTmapConfigured()) {
     lookups.push(geocodeAddress(trimmed).catch(() => []));
   }
 

@@ -16,7 +16,7 @@
 | 화면 5개 (입력 → 기분 → 경로 → 걷기 → 도착) | 구현 완료, iOS/Android 번들 빌드 성공 |
 | 테스트 | 127개 통과 (도메인 + 파싱/휴리스틱/스코어러) |
 | 도보 경로 (TMAP 보행자 경로안내) | 연동 완료 — 키 넣으면 동작, 없으면 mock으로 폴백 |
-| 목적지 검색 (TMAP POI + 네이버 지오코딩) | 연동 완료 |
+| 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
 | 앱인토스 배포 | 미등록 (콘솔에서 미니앱 생성 필요) |
 
@@ -47,7 +47,6 @@ src/
     route-provider.ts    경로 공급자 인터페이스 + mock
     tmap-route-provider.ts  TMAP 기반 실제 구현
     tmap/                TMAP 클라이언트와 순수 파서
-    naver/geocode.ts     네이버 지오코딩 (주소 → 좌표)
     seoul/               서울 실시간 인구데이터 (혼잡도) + 순수 스코어러
     parks/               도시공원 표준데이터 + 경치 스코어러
     buildings/           브이월드 건물(공간) · 건축물대장(주소) · 도로 단면
@@ -102,7 +101,7 @@ src/
 |---|---|
 | 도보 경로 + 경유지 우회 | **TMAP 보행자 경로안내** (`/tmap/routes/pedestrian`) |
 | 장소 이름 검색 ("성수동 어니언") | **TMAP POI 검색** (`/tmap/pois`) |
-| 주소 → 좌표 ("테헤란로 152") | **네이버 지오코딩** (`/map-geocode/v2/geocode`) |
+| 주소 → 좌표 ("테헤란로 152") | **TMAP 지오코딩** (`/tmap/geo/fullAddrGeo`) |
 
 ### 후보 경로를 만드는 방법
 
@@ -164,7 +163,6 @@ src/
 | 무엇 | 어디서 | 없으면 |
 |---|---|---|
 | **TMAP** appKey | [openapi.sk.com](https://openapi.sk.com) → 앱 등록 | 경로 자체가 mock |
-| 네이버 Maps | [ncloud.com](https://www.ncloud.com) → Console → AI·NAVER API → Maps | 주소 검색만 빠짐 |
 | 서울 열린데이터광장 | [data.seoul.go.kr](https://data.seoul.go.kr) → 인증키 신청 | `quiet` 중립값 |
 | 공공데이터포털 | [data.go.kr](https://www.data.go.kr) → 활용신청 | `scenic` 중립값 |
 | 브이월드 | [vworld.kr](https://www.vworld.kr) → 오픈API 인증키 | `shade` 기본 높이 |
@@ -204,13 +202,18 @@ node scripts/discover-vworld.mjs <VWORLD_KEY> <레이어아이디>
 무효한 키로 호출해 응답을 보고 확인했다. `INVALID_API_KEY`나
 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 오면 경로는 맞고 키만 없다는 뜻이다.
 
+**TMAP은 경로 존재 여부를 오류 코드로 구분해준다** — 있는 경로는 `INVALID_API_KEY`,
+없는 경로는 `MISSING_AUTHENTICATION_TOKEN`. 없는 경로(`/tmap/geo/thisdoesnotexist`)로
+대조군을 확인했다. 이 방법으로 확인한 geo 계열: `fullAddrGeo`, `geocoding`,
+`reversegeocoding`, `postcode`는 존재하고 `convertcoordinate`는 없다.
+
 | 경로 | 상태 |
 |---|---|
 | TMAP `POST /tmap/routes/pedestrian?version=1` | **확인** — `INVALID_API_KEY` |
 | TMAP `GET /tmap/pois?version=1` | **확인** — `INVALID_API_KEY` |
 | 도시공원 `apis.data.go.kr/openapi/tn_pubr_public_cty_park_info_api` | **확인** — 키 미등록 응답 |
 | 건축물대장 `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | **확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
-| 네이버 지오코딩 `maps.apigw.ntruss.com/map-geocode/v2/geocode` | **확인** — `401 Authentication information are missing` |
+| TMAP `GET /tmap/geo/fullAddrGeo` | **확인** — `INVALID_API_KEY` |
 | 서울 실시간 인구데이터 | 경로 미확인 — 아래 참고 |
 | 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 아래 참고 |
 

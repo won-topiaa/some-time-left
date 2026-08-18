@@ -16,12 +16,6 @@ export interface ApiConfig {
     baseUrl: string;
     appKey: string | null;
   };
-  /** 네이버 지오코딩 (주소 → 좌표). 도보 경로는 네이버가 제공하지 않는다. */
-  naver: {
-    baseUrl: string;
-    keyId: string | null;
-    key: string | null;
-  };
   /**
    * 서울 열린데이터광장 — 실시간 인구데이터(혼잡도).
    *
@@ -75,11 +69,6 @@ const config: ApiConfig = {
   tmap: {
     baseUrl: 'https://apis.openapi.sk.com',
     appKey: null,
-  },
-  naver: {
-    baseUrl: 'https://maps.apigw.ntruss.com',
-    keyId: null,
-    key: null,
   },
   seoul: {
     baseUrl: 'http://openapi.seoul.go.kr:8088',
