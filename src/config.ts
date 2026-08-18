@@ -93,6 +93,28 @@ type ConfigPatch = {
   [K in keyof ApiConfig]?: ApiConfig[K] extends object ? Partial<ApiConfig[K]> : ApiConfig[K];
 };
 
+/**
+ * 공공데이터포털 인증키 정규화.
+ *
+ * data.go.kr은 키를 하나만 준다. "Encoding 키"와 "Decoding 키"는 별개의 키가
+ * 아니라 **같은 키의 다른 표기**다 — Encoding은 URL 인코딩한 것, Decoding은 그걸
+ * 디코딩한 것. 우리 코드는 `URLSearchParams`로 키를 다시 인코딩하므로 저장은
+ * **디코딩된 형태**여야 한다. 사용자가 어느 쪽을 붙여넣든 동작하도록, `%`가 섞인
+ * (= Encoding 표기) 키는 여기서 한 번 디코딩해 둔다.
+ * base64 키 자체에는 `%`가 없으므로 이 판별은 안전하다.
+ */
+export function normalizeServiceKey(key: string | null): string | null {
+  if (key == null || !key.includes('%')) {
+    return key;
+  }
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    // 깨진 퍼센트 시퀀스면 손대지 않고 원본을 둔다.
+    return key;
+  }
+}
+
 /** 앱 시작 시 한 번 호출한다. */
 export function configureApi(patch: ConfigPatch): void {
   for (const key of Object.keys(patch) as (keyof ApiConfig)[]) {
@@ -106,6 +128,8 @@ export function configureApi(patch: ConfigPatch): void {
       config.timeoutMs = value;
     }
   }
+  // 어떤 표기의 인증키가 들어와도 디코딩된 형태로 맞춰 둔다.
+  config.publicData.serviceKey = normalizeServiceKey(config.publicData.serviceKey);
 }
 
 export function getApiConfig(): Readonly<ApiConfig> {
