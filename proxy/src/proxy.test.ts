@@ -73,6 +73,28 @@ describe('populationUrl', () => {
 });
 
 describe('normalizePopulation', () => {
+  // 실제 응답으로 확인한 형태. PPLTN_TIME은 'YYYY-MM-DD HH:mm' (초·타임존 없음, KST).
+  it('실제 응답 형태를 읽는다', () => {
+    const result = normalizePopulation(
+      {
+        'SeoulRtd.citydata_ppltn': [
+          {
+            AREA_NM: '강남역',
+            AREA_CONGEST_LVL: '약간 붐빔',
+            PPLTN_TIME: '2026-08-18 17:20',
+          },
+        ],
+      },
+      '강남역'
+    );
+
+    expect(result).toEqual({
+      areaName: '강남역',
+      level: '약간 붐빔',
+      updatedAt: '2026-08-18 17:20',
+    });
+  });
+
   it('혼잡도 등급을 읽는다', () => {
     const result = normalizePopulation(
       {

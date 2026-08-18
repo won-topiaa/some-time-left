@@ -19,7 +19,7 @@
 | 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
 | 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — 응답 구조 1회 확인 필요 |
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
-| 혼잡도 프록시 | 구현 완료 — 배포 필요 (토큰 필수) |
+| 혼잡도 프록시 | **인증키 실측 확인 완료** — 배포만 남음 |
 | 앱인토스 배포 | 미등록 (콘솔에서 미니앱 생성 필요) |
 
 ## 명령어
@@ -283,7 +283,7 @@ TMAP_APP_KEY=... node scripts/probe-tmap.mjs
 | 도시공원 `apis.data.go.kr/openapi/tn_pubr_public_cty_park_info_api` | **확인** — 키 미등록 응답 |
 | 건축물대장 `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | **확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
 | TMAP `GET /tmap/geo/fullAddrGeo` | **확인** — `INVALID_API_KEY` |
-| 서울 실시간 인구데이터 | 경로 미확인 — 아래 참고 |
+| 서울 실시간 인구데이터 | **확인** — 실제 키로 4개 지역 조회 성공 |
 | 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 아래 참고 |
 
 찾은 오류 두 가지:
