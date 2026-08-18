@@ -59,6 +59,73 @@ const SAMPLE: TmapPedestrianResponse = {
   ],
 };
 
+describe('parsePedestrianResponse — 실제 문서 응답', () => {
+  // TMAP 보행자 경로안내 문서의 실제 예시(제주 광치기해변→온평포구)를 줄인 것.
+  // facilityName은 비어 있고, 신호는 facilityType/turnType 코드에 있다.
+  const DOC_SAMPLE = {
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [126.9244, 33.4524] as [number, number] },
+        properties: { totalDistance: 6337, totalTime: 4759, facilityType: '11', turnType: 200, pointType: 'SP' },
+      },
+      {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: [[126.9244, 33.4524], [126.9243, 33.4519]] as [number, number][],
+        },
+        properties: { name: '보행자도로', distance: 99, time: 83, facilityType: '11', facilityName: '' },
+      },
+      {
+        // 횡단보도 — description도 facilityName도 비었고 turnType=211만 있다
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [126.9243, 33.4519] as [number, number] },
+        properties: { turnType: 211, facilityType: '15', facilityName: '', pointType: 'GP' },
+      },
+      {
+        // 계단 구간 — facilityType "17"
+        type: 'Feature' as const,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: [[126.9243, 33.4519], [126.9242, 33.4518]] as [number, number][],
+        },
+        properties: { name: '', distance: 20, time: 30, facilityType: '17', facilityName: '' },
+      },
+      {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [126.9044, 33.4048] as [number, number] },
+        properties: { name: '온평포구', turnType: 201, pointType: 'EP' },
+      },
+    ],
+  };
+
+  it('SP 피처에서 총 거리·시간을 읽는다', () => {
+    const parsed = parsePedestrianResponse(DOC_SAMPLE);
+    expect(parsed.distanceM).toBe(6337);
+    expect(parsed.durationSec).toBe(4759);
+  });
+
+  it('facilityName이 비어 있어도 turnType/facilityType로 횡단보도를 잡는다', () => {
+    // 이게 이번 개선의 핵심 — 텍스트만 봤으면 0으로 놓쳤다
+    expect(parsePedestrianResponse(DOC_SAMPLE).crossings).toBe(1);
+  });
+
+  it('facilityType "17"로 계단을 잡는다', () => {
+    expect(parsePedestrianResponse(DOC_SAMPLE).stairs).toBe(1);
+  });
+
+  it('좌표 순서가 [경도, 위도]다', () => {
+    const parsed = parsePedestrianResponse(DOC_SAMPLE);
+    for (const p of parsed.path) {
+      expect(p.lat).toBeGreaterThan(30);
+      expect(p.lat).toBeLessThan(40);
+      expect(p.lng).toBeGreaterThan(120);
+    }
+  });
+});
+
 describe('parsePedestrianResponse', () => {
   it('총 거리와 소요 시간을 출발 지점 피처에서 읽는다', () => {
     const parsed = parsePedestrianResponse(SAMPLE);

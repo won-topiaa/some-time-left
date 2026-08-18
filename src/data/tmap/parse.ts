@@ -27,18 +27,41 @@ function toLatLng([lng, lat]: [number, number]): LatLng {
   return { lat, lng };
 }
 
+/**
+ * 횡단보도·계단 판별.
+ *
+ * 실제 응답에서 `facilityName`은 대개 빈 문자열이라, 텍스트만으로는 놓친다.
+ * 진짜 신호는 구조화된 코드다 (TMAP 보행자 경로안내 문서 확인):
+ *   facilityType — "15" 횡단보도, "17" 계단, "12" 육교, "14"/"18" 지하보도
+ *   turnType     — 211~217 횡단보도, 127 계단 진입, 129 계단+경사로
+ * 코드를 우선 보고, 텍스트는 보조로 둔다.
+ */
+
+const CROSSING_FACILITY = new Set(['15']); // 횡단보도
+const STAIRS_FACILITY = new Set(['12', '17']); // 육교·계단 (오르내림 대리 지표)
+
 function isCrossing(feature: TmapFeature): boolean {
-  const { description = '', facilityName = '' } = feature.properties;
-  return description.includes('횡단보도') || facilityName.includes('횡단보도');
+  const { description = '', facilityType, turnType } = feature.properties;
+  if (facilityType != null && CROSSING_FACILITY.has(facilityType)) {
+    return true;
+  }
+  // turnType 211~217은 전부 횡단보도 계열이다.
+  if (turnType != null && turnType >= 211 && turnType <= 217) {
+    return true;
+  }
+  return description.includes('횡단보도');
 }
 
 function isStairs(feature: TmapFeature): boolean {
-  const { description = '', facilityName = '' } = feature.properties;
-  return (
-    description.includes('계단') ||
-    facilityName.includes('계단') ||
-    facilityName.includes('육교')
-  );
+  const { description = '', facilityName = '', facilityType, turnType } = feature.properties;
+  if (facilityType != null && STAIRS_FACILITY.has(facilityType)) {
+    return true;
+  }
+  // 127 계단 진입, 129 계단+경사로 진입
+  if (turnType === 127 || turnType === 129) {
+    return true;
+  }
+  return description.includes('계단') || facilityName.includes('계단') || facilityName.includes('육교');
 }
 
 export function parsePedestrianResponse(response: TmapPedestrianResponse): ParsedRoute {
