@@ -31,9 +31,10 @@ export interface ApiConfig {
     token: string | null;
   };
 /**
-   * 공공데이터포털. 인증키 하나로 두 서비스를 쓴다.
-   * 둘 다 `apis.data.go.kr`에 있다 — `api.data.go.kr`(s 없음)이나
-   * `api.odcloud.kr`은 이 API들을 서빙하지 않는다(실측 확인).
+   * 공공데이터포털. 인증키 하나로 서비스를 쓴다.
+   * 표준데이터(전국도시공원)의 정식 End Point는 `api.data.go.kr`(s 없음)이다 —
+   * data.go.kr 활용신청 상세의 End Point 표기로 실측 확인. `apis.data.go.kr`(s 있음)로
+   * 부르면 같은 키라도 SERVICE_KEY_IS_NOT_REGISTERED가 난다(게이트웨이가 다르다).
    */
   publicData: {
     serviceKey: string | null;
@@ -82,8 +83,10 @@ const config: ApiConfig = {
   },
   publicData: {
     serviceKey: null,
-    baseUrl: 'https://apis.data.go.kr',
+    // 표준데이터 End Point는 api.data.go.kr (s 없음). apis(s 있음)면 키 미등록으로 뜬다.
+    baseUrl: 'https://api.data.go.kr',
     parkPath: '/openapi/tn_pubr_public_cty_park_info_api',
+    // 건축물대장(미사용)은 apis.data.go.kr의 다른 게이트웨이라, 되살릴 땐 호스트를 따로 둘 것.
     ledgerPath: '/1613000/BldRgstHubService/getBrTitleInfo',
   },
   vworld: {
