@@ -59,6 +59,12 @@ export interface ApiConfig {
     buildingLayer: string;
     /** 층수 속성 이름. 레이어에 따라 다르다. 함께 확인할 것. */
     floorField: string;
+    /**
+     * 등록 도메인. 브이월드 2.0은 요청에 이 값을 실어 보내야 인증을 통과한다.
+     * 모바일 앱은 Referer가 없어 브라우저 방식이 안 되므로 `domain` 파라미터가 필수다.
+     * 비밀값이 아니라 발급 시 등록한 도메인 문자열과 같아야 하는 공개 식별자다.
+     */
+    domain: string;
   };
   /** 네트워크 타임아웃 (ms). 길 찾는 화면에서 오래 기다리게 두지 않는다. */
   timeoutMs: number;
@@ -85,6 +91,8 @@ const config: ApiConfig = {
     key: null,
     buildingLayer: 'LT_C_SPBD',
     floorField: 'gro_flo_co',
+    // 브이월드 인증키 발급 시 이 도메인을 등록한다(프록시 주소로 통일).
+    domain: 'some-time-left-proxy.yangjuwon240.workers.dev',
   },
   timeoutMs: 7000,
 };

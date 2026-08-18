@@ -183,6 +183,7 @@ await probe(
           request: 'GetFeature',
           data: config.vworld.buildingLayer,
           key: vworldKey,
+          domain: config.vworld.domain,
           format: 'json',
           size: '1',
           geomFilter: 'BOX(127.025,37.496,127.030,37.500)',

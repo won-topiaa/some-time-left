@@ -115,6 +115,8 @@ export async function fetchBuildings(path: LatLng[]): Promise<Building[]> {
     request: 'GetFeature',
     data: vworld.buildingLayer,
     key: vworld.key,
+    // 등록 도메인. 모바일은 Referer가 없어 이 값으로 인증한다. 없으면 도메인 오류.
+    domain: vworld.domain,
     format: 'json',
     geometry: 'true',
     size: '1000',

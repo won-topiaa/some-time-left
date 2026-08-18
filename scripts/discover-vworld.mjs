@@ -9,10 +9,15 @@
  *
  * 레이어 아이디를 직접 주면 그 레이어만 조회해 속성을 보여준다.
  * 찾은 값은 src/config.ts의 vworld.buildingLayer / vworld.floorField에 넣는다.
+ *
+ * 브이월드는 등록 도메인을 요청에 실어야 한다. 기본은 config.ts의 프록시 도메인과
+ * 같은 값이며, 다른 도메인을 등록했다면 VWORLD_DOMAIN 환경변수로 바꾼다.
+ *   VWORLD_DOMAIN=localhost node scripts/discover-vworld.mjs <KEY>
  */
 
 const KEY = process.argv[2];
 const ONLY = process.argv[3];
+const DOMAIN = process.env.VWORLD_DOMAIN ?? 'some-time-left-proxy.yangjuwon240.workers.dev';
 
 if (KEY == null || KEY === '') {
   console.error('사용법: node scripts/discover-vworld.mjs <VWORLD_KEY> [레이어아이디]');
@@ -40,6 +45,7 @@ async function probe(layer) {
     request: 'GetFeature',
     data: layer,
     key: KEY,
+    domain: DOMAIN,
     format: 'json',
     geometry: 'true',
     size: '3',
