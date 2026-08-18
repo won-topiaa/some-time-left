@@ -71,12 +71,16 @@ npm run gen-token
 
 ```bash
 cd proxy
-cp .env.example .env       # 키를 여기 넣는다 (.env는 커밋되지 않는다)
-npm run gen-token          # PROXY_TOKEN 만들어 .env에 넣기
-npm run check              # 인증키가 살아 있는지 먼저 확인
+npm install                # 의존성은 없지만 스크립트를 쓰려면 한 번
+npm run setup              # 인증키를 물어보고 .env를 만들어 준다
+npm run check              # 인증키가 살아 있는지 확인
 npm run build
 npm start
 ```
+
+`npm run setup`이 인증키를 물어보고(화면에 찍히지 않는다) `PROXY_TOKEN`은 알아서
+만들어 `.env`에 쓴다. 파일을 직접 열 필요가 없다. 손으로 하고 싶으면
+`cp .env.example .env` 후 편집해도 된다.
 
 `npm run check`는 서버를 띄우지 않고 **프록시가 실제로 쓰는 코드 경로로** 네 곳을
 조회해 본다. 키가 유효한지, 응답이 우리 파서와 맞는지 한 번에 드러난다.

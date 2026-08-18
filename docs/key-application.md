@@ -44,14 +44,19 @@
 
 ```bash
 cd proxy
-npm run gen-token                    # PROXY_TOKEN 생성
-SEOUL_OPEN_DATA_KEY=<발급받은키> PROXY_TOKEN=<생성한토큰> npm run dev
-curl "http://localhost:8787/health"
-curl -H "Authorization: Bearer <토큰>" \
-  "http://localhost:8787/population?area=%EA%B0%95%EB%82%A8%EC%97%AD"
+npm run setup    # 인증키를 물어보고 .env를 만든다 (토큰은 자동 생성)
+npm run check    # 서버 없이 인증키가 살아 있는지 확인
+npm run dev      # 확인됐으면 프록시 실행
 ```
 
-`{"areas":[{"areaName":"강남역","level":"보통",...}]}` 가 나오면 성공이다.
+`npm run check`가 이렇게 나오면 성공이다.
+
+```
+  ✓ 광화문·덕수궁      보통 (2026-08-18 03:20)
+  ✓ 강남역            붐빔 (2026-08-18 03:20)
+```
+
+인증키는 어느 출력에도 찍히지 않는다.
 
 ---
 
