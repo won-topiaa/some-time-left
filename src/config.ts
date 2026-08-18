@@ -33,10 +33,14 @@ export interface ApiConfig {
    */
   publicData: {
     serviceKey: string | null;
-    /** 전국도시공원표준데이터 */
+    /** 전국도시공원표준데이터. 경로 미검증 — 키 발급 후 실측 필요. */
     standardDataBaseUrl: string;
     parkPath: string;
-    /** 국토교통부 건축물대장 (서비스 아이디 1613000) */
+    /**
+     * 국토교통부 건축물대장.
+     * 실측 확인: `BldRgstService_v2`는 폐기됐고(NO_OPENAPI_SERVICE_ERROR)
+     * `BldRgstHubService`가 살아 있다(SERVICE_KEY_IS_NOT_REGISTERED_ERROR).
+     */
     ledgerBaseUrl: string;
     ledgerPath: string;
   };
@@ -45,11 +49,11 @@ export interface ApiConfig {
     baseUrl: string;
     key: string | null;
     /**
-     * 건물 레이어 아이디.
-     * 브이월드 2D 데이터 레이어 목록에서 확인해 맞춰야 한다.
+     * 건물 레이어 아이디. **미검증** — 브이월드 2D 데이터 레이어 목록에서 확인할 것.
+     * (유효한 키 없이는 응답을 받을 수 없어 여기서 확인하지 못했다)
      */
     buildingLayer: string;
-    /** 층수 속성 이름. 레이어에 따라 다르다. */
+    /** 층수 속성 이름. 레이어에 따라 다르다. 함께 확인할 것. */
     floorField: string;
   };
   /** 네트워크 타임아웃 (ms). 길 찾는 화면에서 오래 기다리게 두지 않는다. */
@@ -75,7 +79,7 @@ const config: ApiConfig = {
     standardDataBaseUrl: 'https://api.odcloud.kr/api',
     parkPath: '/openapi/tn_pubr_public_cty_park_info_api',
     ledgerBaseUrl: 'https://apis.data.go.kr/1613000',
-    ledgerPath: '/BldRgstService_v2/getBrTitleInfo',
+    ledgerPath: '/BldRgstHubService/getBrTitleInfo',
   },
   vworld: {
     baseUrl: 'https://api.vworld.kr/req/data',
