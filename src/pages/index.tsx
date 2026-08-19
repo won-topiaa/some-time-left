@@ -13,10 +13,9 @@ export const Route = createRoute('/', {
 
 /** 약속 시각을 오늘 기준으로. 30분 단위 프리셋이 타이핑보다 빠르다. */
 function presetTimes(nowMs: number): number[] {
-  const base = new Date(nowMs);
-  base.setSeconds(0, 0);
   const step = 30 * 60 * 1000;
-  const firstSlot = Math.ceil((base.getTime() + 20 * 60 * 1000) / step) * step;
+  const baseMs = nowMs - (nowMs % 1000);
+  const firstSlot = Math.ceil((baseMs + 20 * 60 * 1000) / step) * step;
   return [0, 1, 2, 3].map((i) => firstSlot + i * step);
 }
 

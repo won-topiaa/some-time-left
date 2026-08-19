@@ -100,11 +100,20 @@ export function formatDuration(sec: number): string {
   return m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
 }
 
-/** 약속 시각을 "오후 2시 30분"으로. */
-export function formatClock(ms: number, timeZone = 'Asia/Seoul'): string {
-  return new Intl.DateTimeFormat('ko-KR', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-  }).format(new Date(ms));
+/**
+ * 약속 시각을 "오후 2시 30분"으로.
+ *
+ * Hermes에서 Intl.DateTimeFormat이 빠져 있거나 불완전한 빌드가 있다.
+ * trace.ts와 같은 방식으로 KST UTC+9 산술을 쓴다.
+ */
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+export function formatClock(ms: number): string {
+  const shifted = new Date(ms + KST_OFFSET_MS);
+  const h24 = shifted.getUTCHours();
+  const m = shifted.getUTCMinutes();
+
+  const period = h24 < 12 ? '오전' : '오후';
+  const h = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+  return m === 0 ? `${period} ${h}시` : `${period} ${h}시 ${String(m).padStart(2, '0')}분`;
 }

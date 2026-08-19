@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss/framework';
@@ -32,7 +32,7 @@ function Walk() {
   const samples = useRef<{ distanceFromPrevM: number; elapsedSec: number }[]>([]);
   const previous = useRef<{ at: LatLng; ms: number } | null>(null);
 
-  const path = trip.route?.candidate.path ?? [];
+  const path = useMemo(() => trip.route?.candidate.path ?? [], [trip.route]);
 
   // 걷는 내내 화면이 꺼지면 페이스 코칭이 무의미하다.
   useEffect(() => {

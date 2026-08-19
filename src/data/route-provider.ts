@@ -20,6 +20,8 @@ export interface RouteRequest {
   targetSec: number;
   /** 출발 시각 (epoch ms). 그늘 계산이 시각에 의존한다. */
   departAtMs: number;
+  /** 과거 걸은 경로 좌표. novelty 계산에 쓴다. 밖에서 한 번만 읽어 넘긴다. */
+  previousPaths?: LatLng[][];
 }
 
 export interface RouteProvider {

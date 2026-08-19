@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { loadRecords } from '../data/records';
@@ -70,15 +70,12 @@ function Trace() {
     );
   }
 
-  // 요약은 전부를 세고, 그리는 것만 끊는다.
-  // ScrollView는 화면 밖도 다 그리므로, 기록이 쌓일수록 SVG 수백 개를 한 번에 만들게 된다.
-  const summary = traceSummary(records);
-  const months = groupByMonth(records.slice(0, LIST_MAX));
+  const summary = useMemo(() => traceSummary(records), [records]);
+  const months = useMemo(() => groupByMonth(records.slice(0, LIST_MAX)), [records]);
   const hidden = Math.max(0, records.length - LIST_MAX);
 
-  // 한 줄이 덩그러니 남지 않도록 최소 한 줄은 채운다. 그 이상은 빈칸을 만들지 않는다.
   const emptyCount = Math.max(0, GRID_MIN - records.length);
-  const emptySlots = Array.from({ length: emptyCount }, (_, i) => i);
+  const emptySlots = useMemo(() => Array.from({ length: emptyCount }, (_, i) => i), [emptyCount]);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

@@ -11,7 +11,6 @@
  * 실제 소요 시간은 TMAP이 알려주고 우리는 랭킹만 한다.
  */
 
-import { loadRecords } from './records';
 import { deriveFeatures } from './features';
 import { fetchPedestrianRoute } from './tmap/client';
 import { toStreetSegments } from './tmap/parse';
@@ -57,11 +56,8 @@ export class TmapRouteProvider implements RouteProvider {
     destination,
     targetSec,
     departAtMs,
+    previousPaths = [],
   }: RouteRequest): Promise<RouteCandidate[]> {
-    const previousPaths = await loadRecords()
-      .then((records) => records.map((r) => r.path))
-      .catch(() => [] as LatLng[][]);
-
     const build = (scale: number, tag: string) =>
       this.fetchRound({
         origin,

@@ -27,7 +27,6 @@
     "@apps-in-toss/framework": "^2.10.10",
     "@granite-js/native": "^1.0.42",
     "@granite-js/react-native": "^1.0.42",
-    "@toss/tds-react-native": "^2.0.0",
     "react": "18.2.0",
     "react-native": "0.72.6"
   },

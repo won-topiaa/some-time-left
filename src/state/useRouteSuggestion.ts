@@ -3,7 +3,7 @@ import { Accuracy, getCurrentLocation, getServerTime } from '@apps-in-toss/frame
 import { MockRouteProvider, type RouteProvider } from '../data/route-provider';
 import { TmapRouteProvider } from '../data/tmap-route-provider';
 import { isTmapConfigured } from '../config';
-import { recentRouteIds } from '../data/records';
+import { loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
 import { nextRoute, rankRoutes } from '../domain/route-plan';
@@ -99,15 +99,17 @@ export function useRouteSuggestion({
           return;
         }
 
-        const [candidates, recent] = await Promise.all([
-          provider.candidates({
-            origin,
-            destination,
-            targetSec: walkPlan.targetWalkSec,
-            departAtMs: nowMs,
-          }),
-          recentRouteIds().catch(() => [] as string[]),
-        ]);
+        const records = await loadRecords().catch(() => []);
+        const recent = records.slice(0, 5).map((r) => r.routeId);
+        const previousPaths = records.slice(0, 20).map((r) => r.path);
+
+        const candidates = await provider.candidates({
+          origin,
+          destination,
+          targetSec: walkPlan.targetWalkSec,
+          departAtMs: nowMs,
+          previousPaths,
+        });
 
         if (cancelled) return;
 

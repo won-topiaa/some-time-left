@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARRIVE_EARLY_SEC, MAX_STRETCH_RATIO, formatDuration, planWalk } from '../time';
+import { ARRIVE_EARLY_SEC, MAX_STRETCH_RATIO, formatClock, formatDuration, planWalk } from '../time';
 
 const MIN = 60;
 
@@ -71,6 +71,32 @@ describe('planWalk', () => {
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
     expect(plan.targetWalkSec).toBe(47 * MIN);
+  });
+});
+
+describe('formatClock', () => {
+  it('오후 시각을 표시한다', () => {
+    // KST 오후 2시 30분 = UTC 05:30
+    expect(formatClock(Date.UTC(2026, 7, 18, 5, 30))).toBe('오후 2시 30분');
+  });
+
+  it('오전 시각을 표시한다', () => {
+    // KST 오전 9시 = UTC 00:00
+    expect(formatClock(Date.UTC(2026, 7, 18, 0, 0))).toBe('오전 9시');
+  });
+
+  it('정오를 표시한다', () => {
+    // KST 12시 = UTC 03:00
+    expect(formatClock(Date.UTC(2026, 7, 18, 3, 0))).toBe('오후 12시');
+  });
+
+  it('자정을 표시한다', () => {
+    // KST 0시 = UTC 15:00 (전날)
+    expect(formatClock(Date.UTC(2026, 7, 17, 15, 0))).toBe('오전 12시');
+  });
+
+  it('분이 0이면 분을 생략한다', () => {
+    expect(formatClock(Date.UTC(2026, 7, 18, 6, 0))).toBe('오후 3시');
   });
 });
 

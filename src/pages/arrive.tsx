@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
@@ -71,15 +71,16 @@ function Arrive() {
   const mm = Math.floor(leftSec / 60);
   const ss = String(leftSec % 60).padStart(2, '0');
 
-  const finish = async () => {
+  const finish = useCallback(async () => {
     setSaving(true);
     if (trip.mood != null && trip.route != null) {
+      const now = Date.now();
       await saveRecord({
-        id: `${Date.now()}`,
+        id: `${now}`,
         companion: trip.companion,
         mood: trip.mood,
         note: note.trim(),
-        arrivedAt: Date.now(),
+        arrivedAt: now,
         destinationName: trip.destinationName,
         path: trip.route.candidate.path,
         routeId: trip.route.candidate.id,
@@ -87,7 +88,7 @@ function Arrive() {
     }
     reset();
     navigation.navigate('/');
-  };
+  }, [trip, note, reset, navigation]);
 
   return (
     <View style={styles.screen}>
