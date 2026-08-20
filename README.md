@@ -27,6 +27,9 @@
 
 ## 명령어
 
+모든 명령은 저장소 폴더 안에서 친다. `ait`은 전역 명령이 아니라
+`node_modules/.bin`에만 있으므로 직접 부를 때는 `npx ait`이다.
+
 ```bash
 npm install
 npm test          # 도메인·파싱 테스트 (네이티브 런타임·네트워크 불필요)

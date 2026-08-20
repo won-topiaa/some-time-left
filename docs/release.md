@@ -5,6 +5,19 @@
 직접 읽고 돌려서 확인했다. 콘솔 화면은 볼 수 없어서, 거기서 해야 하는 일은
 "무엇이 필요한지"까지만 적고 화면 순서는 지어내지 않는다.
 
+## 먼저 — 어디서 치는가
+
+아래 명령은 **전부 저장소 폴더 안에서** 친다. 홈 디렉터리에서 치면
+`package.json`을 못 찾고 전부 ENOENT로 떨어진다.
+
+```bash
+cd ~/some-time-left     # 클론해 둔 곳
+```
+
+`ait`은 전역 명령이 아니다. 이 프로젝트의 `node_modules/.bin`에만 있으므로
+**`npx ait`**으로 부른다(`ait token add`는 `zsh: command not found: ait`이 된다).
+`npm run ...`은 npm이 알아서 그 경로를 잡아 주므로 그대로 쓰면 된다.
+
 ## 한눈에
 
 ```
@@ -190,7 +203,7 @@ npm run check-config
 ## 2. 키를 등록한다 — 한 번만
 
 ```bash
-ait token add
+npx ait token add
 ```
 
 `--api-key` 없이 그냥 치면 **가려진 입력**으로 물어본다. 화면에도 명령 기록에도
@@ -199,14 +212,14 @@ ait token add
 
 키는 `~/.ait/credentials`에 프로필 이름별 JSON으로 **평문 저장**된다.
 저장소 밖이라 커밋될 일은 없지만, 공용 컴퓨터라면 알고 있어야 한다.
-지울 때는 `ait token remove`.
+지울 때는 `npx ait token remove`.
 
-프로필을 나누고 싶으면 이름을 준다: `ait token add dev` → `npm run deploy -- --profile dev`.
+프로필을 나누고 싶으면 이름을 준다: `npx ait token add dev` → `npm run deploy -- --profile dev`.
 아무것도 안 주면 `default`.
 
 > **주의.** 키를 고르는 순서가 `저장된 프로필 → --api-key`다.
 > 즉 프로필에 옛날 키가 남아 있으면 `--api-key`로 새 키를 줘도 **조용히 무시된다.**
-> 키를 바꿀 때는 `ait token remove` 먼저.
+> 키를 바꿀 때는 `npx ait token remove` 먼저.
 
 ## 3. 배포한다
 
@@ -317,8 +330,8 @@ _.__appsInToss = {
 
 | 문서 | 실제 |
 |---|---|
-| `ait token add [워크스페이스명] [API 키]` | `ait token add [--api-key <키>] [프로필]` |
-| `ait deploy [워크스페이스명] [API 키]` | `ait deploy [--api-key <키>] [--profile <프로필>]` |
+| `ait token add [워크스페이스명] [API 키]` | `npx ait token add [--api-key <키>] [프로필]` |
+| `ait deploy [워크스페이스명] [API 키]` | `npx ait deploy [--api-key <키>] [--profile <프로필>]` |
 
 ```
 $ npx ait token add myworkspace MYKEY
