@@ -135,6 +135,20 @@ if (target.name === 'publicdata' && /%2[FB]|%3D/i.test(value)) {
   }
 }
 
+/*
+ * 잘린 붙여넣기를 잡는다.
+ *
+ * 입력이 화면에 안 찍히므로 한두 글자가 빠져도 눈으로는 모른다. 그러면
+ * "등록되지 않은 키"로 돌아오는데, 키를 잘못 받은 줄 알고 포털만 다시 뒤지게 된다.
+ * data.go.kr 일반 인증키는 64바이트를 base64로 담아 88자다 — 다르면 말해 준다.
+ * 막지는 않는다. 포털이 형식을 바꿀 수도 있고, 그때 못 넣게 되는 게 더 나쁘다.
+ */
+if (target.name === 'publicdata' && value.length !== 88) {
+  console.log(`⚠ 보통 88자인데 ${value.length}자예요. 붙여넣다 잘렸을 수 있어요.`);
+  console.log('  그대로 넣습니다. 안 되면 npm run check-config가 알려줘요.');
+  console.log('');
+}
+
 const source = readFileSync(configPath, 'utf8');
 const line = new RegExp(`${target.field}:.*,`);
 
