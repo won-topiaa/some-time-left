@@ -19,6 +19,7 @@
     "pretypecheck": "node scripts/ensure-local-config.mjs",
     "pretest": "node scripts/ensure-local-config.mjs",
     "link-proxy": "node scripts/link-proxy-token.mjs",
+    "store-shots": "node --import ./scripts/ts-resolve.mjs --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-store-shots.mjs",
     "check-config": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-app-config.mjs",
     "precheck-config": "node scripts/ensure-local-config.mjs",
     "set-key": "node scripts/set-key.mjs",

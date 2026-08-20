@@ -22,6 +22,7 @@
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
 | 혼잡도 프록시 | **배포 완료** (Cloudflare Workers) — 서울까지 실측 확인 |
 | 앱 아이콘 | `assets/icon.png` (1024×1024) — `python3 scripts/make-icon.py`로 생성 |
+| 콘솔 노출 자료 | 로고 600×600 라이트/다크, 스크린샷 세로 6장·가로 1장 — `assets/store/` |
 | 앱인토스 배포 | `ait build` 성공 — 콘솔에 미니앱 생성과 API 키만 남음 ([`docs/release.md`](docs/release.md)) |
 
 ## 명령어
@@ -34,7 +35,8 @@ npm run dev       # granite dev — 토스 앱에서 열어 확인
 npm run build     # granite build — iOS/Android 번들만 빠르게 확인
 npm run build:ait # ait build — 배포용 some-time-left.ait 생성
 npm run deploy    # ait build + ait deploy. 콘솔 등록과 ait token add가 먼저다
-npm run check-config  # 키·아이콘 주소를 실제로 불러서 확인
+npm run store-shots   # 콘솔에 올릴 스크린샷 (assets/store/)
+npm run check-config  # 키·아이콘 주소·스토어 그림 규격을 실제로 확인
 ```
 
 배포 절차는 [`docs/release.md`](docs/release.md)에 있다.

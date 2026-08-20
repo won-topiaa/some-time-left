@@ -10,7 +10,7 @@
  * 비밀값은 출력하지 않는다. 들어갔는지와 길이만 보여준다.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { requireNode } from '../proxy/scripts/require-node.mjs';
 
 requireNode();
@@ -45,6 +45,75 @@ if (iconIsPath) {
 } else if (!iconIsUrl) {
   console.log('  → 배포 전에 앱인토스 콘솔에 아이콘을 올리고 그 주소를 넣으세요.');
 }
+/**
+ * 콘솔 '노출 정보'에 올릴 그림들이 요구한 크기 그대로인가.
+ *
+ * 크기가 1px만 달라도 업로드에서 되돌려 보낸다. 콘솔 앞에서 알게 되는 것보다
+ * 여기서 아는 편이 낫다. PNG 헤더만 읽으면 되므로 의존성은 필요 없다.
+ */
+function pngSize(file) {
+  const head = readFileSync(file).subarray(0, 24);
+  // 8바이트 시그니처 + 길이(4) + 'IHDR'(4) 다음이 가로·세로.
+  return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+}
+
+/**
+ * 터미널에서 한글은 두 칸을 차지한다. `padEnd`는 글자 수만 세므로
+ * 한글이 섞인 라벨끼리는 줄이 안 맞는다 — 폭으로 세서 맞춘다.
+ */
+function pad(label, width = 18) {
+  const cols = [...label].reduce((n, c) => n + (c.charCodeAt(0) > 0x1100 ? 2 : 1), 0);
+  return label + ' '.repeat(Math.max(1, width - cols));
+}
+
+function checkImage(label, relative, want) {
+  const file = new URL(`../${relative}`, import.meta.url);
+  if (!existsSync(file)) {
+    console.log(`${pad(label)} ✗ ${relative} 없음`);
+    return false;
+  }
+  const { width, height } = pngSize(file);
+  const ok = width === want.width && height === want.height;
+  console.log(
+    `${pad(label)} ${ok ? '✓' : '✗'} ${width}x${height}` +
+      (ok ? '' : ` (${want.width}x${want.height}이어야 해요)`)
+  );
+  return ok;
+}
+
+console.log('');
+console.log('콘솔에 올릴 그림\n');
+
+const storeChecks = [
+  checkImage('  앱 로고', 'assets/logo-600.png', { width: 600, height: 600 }),
+  checkImage('  다크모드 로고', 'assets/logo-600-dark.png', { width: 600, height: 600 }),
+];
+
+// 세로형 최소 3장, 가로형 최소 1장.
+const storeDir = new URL('../assets/store/', import.meta.url);
+const shots = existsSync(storeDir)
+  ? readdirSync(storeDir)
+      .filter((f) => f.endsWith('.png'))
+      .map((f) => ({ name: f, ...pngSize(new URL(f, storeDir)) }))
+  : [];
+const portrait = shots.filter((s) => s.width === 636 && s.height === 1048).length;
+const landscape = shots.filter((s) => s.width === 1504 && s.height === 741).length;
+
+console.log(`${pad('  세로 스크린샷')} ${portrait >= 3 ? '✓' : '✗'} ${portrait}장 (636x1048, 최소 3장)`);
+console.log(`${pad('  가로 스크린샷')} ${landscape >= 1 ? '✓' : '✗'} ${landscape}장 (1504x741, 최소 1장)`);
+
+const odd = shots.filter(
+  (s) => !(s.width === 636 && s.height === 1048) && !(s.width === 1504 && s.height === 741)
+);
+for (const s of odd) {
+  console.log(`  ${s.name.padEnd(16)} ◦ ${s.width}x${s.height} — 규격 밖이라 안 세었어요`);
+}
+
+const storeOk = storeChecks.every(Boolean) && portrait >= 3 && landscape >= 1;
+if (!storeOk) {
+  console.log('  → python3 scripts/make-icon.py && npm run store-shots');
+}
+
 console.log('');
 
 const { getApiConfig, configureApi } = await import('../src/config.ts');
@@ -81,6 +150,9 @@ if (!hasIcon) {
 }
 if (iconIsPath) {
   failures.push('granite.config.ts의 brand.icon이 파일 경로예요 — 이미지 주소여야 렌더링됩니다');
+}
+if (!storeOk) {
+  failures.push('콘솔에 올릴 로고나 스크린샷이 규격에 안 맞아요');
 }
 
 /**

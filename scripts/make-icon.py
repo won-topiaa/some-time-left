@@ -19,6 +19,14 @@ BG = (250, 249, 246)  # colors.bg — 흰색보다 조금 따뜻한 종이빛
 INK = (63, 90, 138)  # brand primaryColor #3F5A8A
 SURFACE = (255, 255, 255)
 
+# 다크모드 로고.
+#
+# 밝은 종이빛 정사각형을 어두운 목록에 얹으면 로고가 아니라 조명처럼 보인다.
+# 바탕을 먹색으로 뒤집되, 남색 #3F5A8A는 그 위에서 거의 안 보이므로
+# 같은 색상각을 유지한 채 명도만 올린다 — 색을 바꾸는 게 아니라 켜는 것에 가깝다.
+DARK_BG = (28, 30, 34)
+DARK_INK = (157, 178, 214)
+
 # 길의 모양. 0~1 좌표로 두고 아래에서 캔버스 크기에 맞춘다.
 #
 # 오른쪽 위로 곧게 오르면 성장 그래프로 읽힌다. 이 앱이 권하는 건 그 반대다 —
@@ -71,9 +79,14 @@ def smooth(points, steps=24):
     return out
 
 
-def draw_icon() -> Image.Image:
-    n = SIZE * SUPER
-    img = Image.new("RGB", (n, n), BG)
+def draw_icon(size: int = SIZE, dark: bool = False) -> Image.Image:
+    bg, ink = (DARK_BG, DARK_INK) if dark else (BG, INK)
+    # 출발점 안쪽은 '비어 있음'이라 바탕과 같은 색이어야 한다.
+    # 어두운 배경에 흰 점을 찍으면 비어 있는 게 아니라 켜진 점이 된다.
+    hole = bg if dark else SURFACE
+
+    n = size * SUPER
+    img = Image.new("RGB", (n, n), bg)
     d = ImageDraw.Draw(img)
 
     curve = smooth(PATH)
@@ -81,25 +94,25 @@ def draw_icon() -> Image.Image:
     stroke = int(n * 0.055)
 
     # 리본. 촘촘한 점을 잇고 이음매마다 원을 얹어 선 끝이 각지지 않게 한다.
-    d.line(pts, fill=INK, width=stroke, joint="curve")
+    d.line(pts, fill=ink, width=stroke, joint="curve")
     r = stroke / 2
     for x, y in pts:
-        d.ellipse([x - r, y - r, x + r, y + r], fill=INK)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=ink)
 
     # 출발점 — 비어 있다.
     sx, sy = pts[0]
     outer = int(n * 0.044)
     ring = int(n * 0.014)
-    d.ellipse([sx - outer, sy - outer, sx + outer, sy + outer], fill=INK)
+    d.ellipse([sx - outer, sy - outer, sx + outer, sy + outer], fill=ink)
     inner = outer - ring
-    d.ellipse([sx - inner, sy - inner, sx + inner, sy + inner], fill=SURFACE)
+    d.ellipse([sx - inner, sy - inner, sx + inner, sy + inner], fill=hole)
 
     # 도착점 — 차 있다. 3분 전에 닿는 그 지점.
     ex, ey = pts[-1]
     er = int(n * 0.062)
-    d.ellipse([ex - er, ey - er, ex + er, ey + er], fill=INK)
+    d.ellipse([ex - er, ey - er, ex + er, ey + er], fill=ink)
 
-    return img.resize((SIZE, SIZE), Image.LANCZOS)
+    return img.resize((size, size), Image.LANCZOS)
 
 
 def write_proxy_copy(png_path: str) -> str:
@@ -141,13 +154,24 @@ def write_proxy_copy(png_path: str) -> str:
 if __name__ == "__main__":
     import os
 
-    out = os.path.join(os.path.dirname(__file__), "..", "assets", "icon.png")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    icon = draw_icon()
-    # 앱 아이콘에 알파가 있으면 스토어 검수에서 걸린다. RGB로만 저장한다.
-    icon.save(out, "PNG", optimize=True)
-    print(f"{os.path.normpath(out)} — {icon.size[0]}x{icon.size[1]}")
+    root = os.path.join(os.path.dirname(__file__), "..")
+    assets = os.path.join(root, "assets")
+    os.makedirs(assets, exist_ok=True)
+
+    def save(name: str, size: int, dark: bool = False) -> str:
+        out = os.path.join(assets, name)
+        # 앱 아이콘에 알파가 있으면 스토어 검수에서 걸린다. RGB로만 저장한다.
+        draw_icon(size, dark).save(out, "PNG", optimize=True)
+        print(f"{os.path.normpath(out)} — {size}x{size}")
+        return out
+
+    # brand.icon이 가리키는 원본. 프록시가 이걸 base64로 품고 내보낸다.
+    icon = save("icon.png", SIZE)
+
+    # 앱인토스 콘솔 '노출 정보'가 요구하는 크기. 라이트/다크 두 벌.
+    save("logo-600.png", 600)
+    save("logo-600-dark.png", 600, dark=True)
 
     # 그림을 바꾸면 프록시가 내보내는 것도 함께 바뀌어야 한다.
-    print(f"{write_proxy_copy(out)} — 프록시용 base64 갱신")
+    print(f"{write_proxy_copy(icon)} — 프록시용 base64 갱신")
     print("\n프록시를 다시 배포해야 새 아이콘이 보여요:  cd proxy && npm run deploy")
