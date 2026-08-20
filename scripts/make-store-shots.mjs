@@ -180,13 +180,10 @@ const screen = (inner, { style = '', back = true, fade = false } = {}) =>
   </div>`;
 
 function home() {
-  const chip = (label, on) => `<div style="padding:${spacing.sm + 2}px ${spacing.md}px;
-      border-radius:${radius.pill}px;background:${on ? colors.ink : colors.surface};
-      ${font(type.body)};color:${on ? colors.surface : colors.inkSoft};
-      ${on ? 'font-weight:600' : ''}">${label}</div>`;
-
   return screen(`
     <div style="margin-bottom:${spacing.xl}px">
+      <!-- 편지의 첫 줄. 가장 작고 가장 옅게. -->
+      <div style="${font(type.caption)};color:${colors.inkFaint};margin-bottom:${spacing.sm}px">지금 28도, 맑아요</div>
       <div style="${font(type.display)};color:${colors.ink}">시간이 좀 남았네요.</div>
       <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.sm}px">약속 3분 전에 도착하게 해드릴게요.</div>
     </div>
@@ -195,18 +192,30 @@ function home() {
     <div style="background:${colors.surface};border-radius:${radius.md}px;
         padding:${spacing.md}px;margin-bottom:${spacing.lg}px;display:flex;
         align-items:center;justify-content:space-between">
-      <span style="${font(type.body)};color:${colors.ink}">서울숲</span>
+      <span style="${font(type.body)};color:${colors.ink}">성수역 3번 출구</span>
       <span style="${font(type.caption)};color:${colors.accent}">변경</span>
     </div>
 
     <div style="${font(type.caption)};color:${colors.inkSoft};margin-bottom:${spacing.sm}px">몇 시 약속이에요?</div>
-    <div style="display:flex;flex-wrap:wrap;gap:${spacing.sm}px;margin-bottom:${spacing.lg}px">
-      ${chip('6:00')}${chip('6:30', true)}${chip('7:00')}${chip('7:30')}
+    <div style="display:flex;align-items:center;gap:${spacing.md}px">
+      <div style="display:flex;gap:${spacing.sm}px">
+        <div style="padding:${spacing.sm + 2}px ${spacing.md}px;border-radius:${radius.pill}px;
+            background:${colors.surface};${font(type.body)};color:${colors.inkSoft}">오전</div>
+        <div style="padding:${spacing.sm + 2}px ${spacing.md}px;border-radius:${radius.pill}px;
+            background:${colors.ink};${font(type.body)};color:${colors.surface};font-weight:600">오후</div>
+      </div>
+      <div style="display:flex;align-items:center;background:${colors.surface};
+          border-radius:${radius.md}px;padding:0 ${spacing.sm}px">
+        <div style="${font(type.title)};color:${colors.ink};width:44px;
+            padding:${spacing.sm + 2}px 0;text-align:center">6</div>
+        <div style="${font(type.title)};color:${colors.inkFaint};margin:0 2px">:</div>
+        <div style="${font(type.title)};color:${colors.ink};width:44px;
+            padding:${spacing.sm + 2}px 0;text-align:center">30</div>
+      </div>
     </div>
-    <div style="display:flex;gap:${spacing.lg}px;margin-bottom:${spacing.lg}px">
-      <span style="${font(type.caption)};color:${colors.inkSoft};text-decoration:underline">5분 일찍</span>
-      <span style="${font(type.caption)};color:${colors.inkSoft};text-decoration:underline">5분 늦게</span>
-    </div>
+    <!-- 적은 것이 언제로 읽혔는지 되돌려 준다. -->
+    <div style="${font(type.caption)};color:${colors.inkSoft};
+        margin-top:${spacing.sm}px;margin-bottom:${spacing.lg}px">오늘 오후 6시 30분</div>
 
     <div style="${font(type.caption)};color:${colors.inkSoft};margin-bottom:${spacing.sm}px">누구를 만나요?</div>
     <div style="background:${colors.surface};border-radius:${radius.md}px;padding:${spacing.md}px">
@@ -285,7 +294,7 @@ function walk() {
         ${font(type.title)};color:${colors.ink}">조금 천천히 걸어도 돼요</div>
 
     <div style="${font(type.caption)};color:${colors.inkFaint};text-align:center;
-        margin-top:${spacing.xl}px">서울숲까지 3분 전에 도착하도록 맞추고 있어요.</div>
+        margin-top:${spacing.xl}px">성수역 3번 출구까지 3분 전에 도착하도록 맞추고 있어요.</div>
 
     <div style="flex:1"></div>
 
@@ -300,7 +309,7 @@ function arrive() {
     <div style="${font(type.numeral, { fontSize: 64, lineHeight: 72 })};color:${colors.ink}">2:47</div>
 
     <div style="${font(type.title)};color:${colors.ink};margin-top:${spacing.md}px">${arrivalPrompt('지우').replace('\n', '<br/>')}</div>
-    <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.sm}px">서울숲, 지금 보통이에요</div>
+    <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.sm}px">성수역, 지금 보통이에요</div>
 
     <div style="background:${colors.surface};border-radius:${radius.md}px;
         padding:${spacing.md}px;margin-top:${spacing.xl}px;min-height:120px;box-sizing:border-box">
@@ -420,7 +429,7 @@ const SHOTS = [
     ...PORTRAIT,
     html: portrait({
       headline: '20분 거리에 30분이 남았을 때',
-      sub: '장소와 약속 시각만 정하면 돼요.',
+      sub: '장소를 찾고, 약속 시각을 적으면 돼요.',
       body: home(),
     }),
   },

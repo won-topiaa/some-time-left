@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createRoute, useKeyboardHeight, useNavigation } from '@granite-js/react-native';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
-import { formatClock } from '../domain/time';
+import { useWeather } from '../state/useWeather';
+import { dayLabel, formatClock, resolveAppointment } from '../domain/time';
 import { NO_CARRIED, loadCarried, loadRecords } from '../data/records';
 import { formatTotalDistance, traceSummary } from '../domain/trace';
 import type { Place } from '../data/places';
@@ -14,20 +15,19 @@ export const Route = createRoute('/', {
   component: Home,
 });
 
-/** 프리셋 한 칸의 간격 (ms). */
-const SLOT_MS = 30 * 60 * 1000;
+/**
+ * 시각을 적는 칸.
+ *
+ * 30분 격자 프리셋을 네 칸 놓아 봤는데, 실제 약속은 2시 45분이나 7시 10분처럼
+ * 격자에 안 걸리는 쪽이 더 많았다. 격자에 맞추려고 '5분 일찍/늦게'를 붙이자
+ * 한 번에 고르던 것이 세 번 누르는 일이 됐다 — 그럴 바에는 적는 편이 빠르다.
+ */
+const HOUR_PLACEHOLDER = '6';
+const MINUTE_PLACEHOLDER = '30';
 
-/** 미세 조정 한 번의 크기 (ms). 30분 격자에 안 걸리는 약속을 위해. */
-const NUDGE_MS = 5 * 60 * 1000;
-
-/** 지금부터 이만큼은 지나야 걸어갈 수 있다 (ms). */
-const LEAD_MS = 20 * 60 * 1000;
-
-/** 약속 시각을 오늘 기준으로. 30분 단위 프리셋이 타이핑보다 빠르다. */
-function presetTimes(nowMs: number): number[] {
-  const baseMs = nowMs - (nowMs % 1000);
-  const firstSlot = Math.ceil((baseMs + LEAD_MS) / SLOT_MS) * SLOT_MS;
-  return [0, 1, 2, 3].map((i) => firstSlot + i * SLOT_MS);
+/** 숫자만 남긴다. 한글 자판이 켜져 있어도 칸이 더러워지지 않게. */
+function digitsOnly(text: string, max: number): string {
+  return text.replace(/[^0-9]/g, '').slice(0, max);
 }
 
 function Home() {
@@ -37,11 +37,16 @@ function Home() {
   const keyboardHeight = useKeyboardHeight();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [query, setQuery] = useState('');
+  const [hourText, setHourText] = useState('');
+  const [minuteText, setMinuteText] = useState('');
+  /** null이면 앱이 다가오는 쪽으로 읽는다. 고르면 그 뜻이 이긴다. */
+  const [period, setPeriod] = useState<'am' | 'pm' | null>(null);
+  const minuteRef = useRef<TextInput>(null);
   const { results, searching, available } = usePlaceSearch(query);
+  // 편지의 첫 줄. 못 읽으면 null이고, 그러면 그 줄은 없다.
+  const weather = useWeather();
   // 지금까지 걸은 거리. 없으면 null이라 아무것도 덧붙이지 않는다.
   const [walkedKm, setWalkedKm] = useState<string | null>(null);
-
-  const slots = useMemo(() => presetTimes(nowMs), [nowMs]);
 
   /**
    * 쌓인 걸 첫 화면에서도 보이게 한다.
@@ -66,20 +71,15 @@ function Home() {
 
   /**
    * 이 화면은 스택 맨 아래에 계속 살아 있다. 한 번 걷고 돌아오거나 잠깐 딴짓을 하면
-   * 처음 켤 때 만든 시각들이 그대로 남아, 앱이 제안한 시각이 이미 지난 시각이 된다.
-   * 다시 보일 때마다 시각을 새로 잡고, 지나 버린 선택은 조용히 비운다.
+   * 처음 켤 때 잡은 '지금'이 그대로 남는다. 다시 보일 때마다 새로 잡는다.
+   *
+   * 고른 것을 지우지는 않는다. 적어 둔 "6:30"은 시각이 지나면 사라질 게 아니라
+   * 내일 6:30으로 읽히면 되는 것이고, `resolveAppointment`가 그렇게 한다.
+   * 촉박한 약속은 길 찾기 화면이 "지금 나서는 게 최선이에요"라고 정직하게 말한다.
    */
   const refreshNow = useCallback(() => {
-    const fresh = Date.now();
-    setNowMs(fresh);
-    // 이미 지난 시각만 비운다. 20분(프리셋 여유)을 기준으로 잡으면, 첫 칸이
-    // 21분 뒤인 순간에 고르고 기분 화면에 다녀오기만 해도 선택이 사라진다.
-    // 촉박한 약속은 길 찾기 화면이 "지금 나서는 게 최선이에요"라고 정직하게 말한다 —
-    // 제안을 넉넉하게 만드는 것과 고른 것을 지우는 것은 다른 일이다.
-    if (trip.arriveAtMs != null && trip.arriveAtMs <= fresh) {
-      update({ arriveAtMs: null });
-    }
-  }, [trip.arriveAtMs, update]);
+    setNowMs(Date.now());
+  }, []);
 
   // 첫 진입에도 한 번 읽는다 — 'focus'는 이미 보이고 있는 첫 화면에는 안 올 수 있다.
   useEffect(refreshWalked, [refreshWalked]);
@@ -92,23 +92,42 @@ function Home() {
     return unsubscribe;
   }, [navigation, refreshNow, refreshWalked]);
 
+  /**
+   * 적은 시각을 실제 시각으로. 못 읽으면 null이고, 그때는 다음 버튼이 잠긴다.
+   * 두 글자를 적는 중인 사람에게 빨간 글씨를 띄우지는 않는다.
+   */
+  const arriveAtMs = useMemo(
+    () =>
+      hourText === '' || minuteText === ''
+        ? null
+        : resolveAppointment(
+            { hour12: Number(hourText), minute: Number(minuteText), period },
+            nowMs
+          ),
+    [hourText, minuteText, period, nowMs]
+  );
+
+  // 읽어낸 시각을 이동에 싣는다. 화면이 계산한 것과 길 찾기가 쓰는 것이 하나여야 한다.
+  useEffect(() => {
+    if (trip.arriveAtMs !== arriveAtMs) {
+      update({ arriveAtMs });
+    }
+  }, [arriveAtMs, trip.arriveAtMs, update]);
+
   // 검색 결과에서 고르기 전에는 좌표가 없다. 좌표 없이는 경로를 찾을 수 없다.
-  const canProceed = trip.destination != null && trip.arriveAtMs != null;
+  const canProceed = trip.destination != null && arriveAtMs != null;
 
-  // 프리셋 격자에 딱 맞지 않는 시각(2시 45분 같은)을 고른 상태인가.
-  const nudged = trip.arriveAtMs != null && !slots.includes(trip.arriveAtMs);
-
-  const nudge = (deltaMs: number) => {
-    if (trip.arriveAtMs == null) {
-      return;
+  /**
+   * 시를 두 자리까지 적었으면 분으로 넘겨준다.
+   * 한 손으로 적는 화면이라 칸을 손가락으로 옮기게 하지 않는다.
+   */
+  const onHour = (text: string) => {
+    const next = digitsOnly(text, 2);
+    setHourText(next);
+    // '1'은 1시일 수도 12시일 수도 있어 기다린다. 2~9는 한 자리로 끝난다.
+    if (next.length === 2 || (next.length === 1 && Number(next) >= 2)) {
+      minuteRef.current?.focus();
     }
-    const next = trip.arriveAtMs + deltaMs;
-    // 이미 지난 시각으로는 못 내린다. 그 위로는 막지 않는다 —
-    // 15분 뒤 약속도 사람에겐 실재하고, 늦는지 아닌지는 길 찾기 화면이 말해 준다.
-    if (next <= Date.now()) {
-      return;
-    }
-    update({ arriveAtMs: next });
   };
 
   const pick = (place: Place) => {
@@ -128,6 +147,11 @@ function Home() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
+          {/*
+            편지가 날씨 이야기로 시작하듯 맨 위에 한 줄.
+            가장 작고 가장 옅게 둔다 — 주인공은 아래 인사말 하나다.
+          */}
+          {weather != null && <Text style={styles.weather}>{weather}</Text>}
           <Text style={styles.hello}>시간이 좀 남았네요.</Text>
           <Text style={styles.sub}>약속 3분 전에 도착하게 해드릴게요.</Text>
         </View>
@@ -188,53 +212,65 @@ function Home() {
         )}
 
         <Text style={styles.label}>몇 시 약속이에요?</Text>
-        <View style={styles.chips}>
-          {slots.map((ms) => {
-            const selected = trip.arriveAtMs === ms;
-            return (
-              <Pressable
-                key={ms}
-                style={({ pressed }) => [
-                  styles.chip,
-                  selected && styles.chipOn,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => update({ arriveAtMs: ms })}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextOn]}>
-                  {formatClock(ms)}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={styles.clockRow}>
           {/*
-            30분 격자에 안 걸리는 약속(2시 45분)이 더 많다. 격자만 주면
-            18분 일찍 가거나 12분 늦게 가는 수밖에 없어 이 앱의 존재 이유가 흔들린다.
-            고른 뒤에만 조용히 나타나는 미세 조정이라 처음 화면은 그대로 단순하다.
+            오전/오후는 안 골라도 된다. 안 고르면 다가오는 쪽으로 읽고, 그 결과를
+            바로 아래 줄에 적어 둔다 — 조용히 정해 버리면 약속에 늦는 친절이 된다.
           */}
-          {nudged && (
-            <View style={styles.nudgedChip}>
-              <Text style={styles.chipTextOn}>{formatClock(trip.arriveAtMs as number)}</Text>
-            </View>
-          )}
+          <View style={styles.periods}>
+            {(['am', 'pm'] as const).map((p) => {
+              const on = period === p;
+              return (
+                <Pressable
+                  key={p}
+                  style={({ pressed }) => [styles.period, on && styles.periodOn, pressed && styles.pressed]}
+                  onPress={() => setPeriod(on ? null : p)}
+                >
+                  <Text style={[styles.periodText, on && styles.periodTextOn]}>
+                    {p === 'am' ? '오전' : '오후'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.clock}>
+            <TextInput
+              style={styles.clockField}
+              value={hourText}
+              onChangeText={onHour}
+              placeholder={HOUR_PLACEHOLDER}
+              placeholderTextColor={colors.inkGhost}
+              keyboardType="number-pad"
+              maxLength={2}
+              textAlign="center"
+              returnKeyType="next"
+            />
+            <Text style={styles.colon}>:</Text>
+            <TextInput
+              ref={minuteRef}
+              style={styles.clockField}
+              value={minuteText}
+              onChangeText={(text) => setMinuteText(digitsOnly(text, 2))}
+              placeholder={MINUTE_PLACEHOLDER}
+              placeholderTextColor={colors.inkGhost}
+              keyboardType="number-pad"
+              maxLength={2}
+              textAlign="center"
+              returnKeyType="done"
+            />
+          </View>
         </View>
 
-        {trip.arriveAtMs != null && (
-          <View style={styles.nudgeRow}>
-            <Pressable
-              style={({ pressed }) => [styles.nudge, pressed && styles.pressed]}
-              onPress={() => nudge(-NUDGE_MS)}
-            >
-              <Text style={styles.nudgeText}>5분 일찍</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.nudge, pressed && styles.pressed]}
-              onPress={() => nudge(NUDGE_MS)}
-            >
-              <Text style={styles.nudgeText}>5분 늦게</Text>
-            </Pressable>
-          </View>
-        )}
+        {/*
+          적은 것이 언제로 읽혔는지 되돌려 준다. "6:30"은 오늘 저녁일 수도
+          내일 아침일 수도 있어서, 이 한 줄이 없으면 앱만 알고 사람은 모른다.
+        */}
+        <Text style={styles.reading}>
+          {arriveAtMs != null
+            ? `${dayLabel(arriveAtMs, nowMs)} ${formatClock(arriveAtMs)}`
+            : ' '}
+        </Text>
 
         <Text style={styles.label}>누구를 만나요?</Text>
         <TextInput
@@ -281,6 +317,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
   content: { paddingBottom: spacing.lg },
   header: { marginBottom: spacing.xl },
+  weather: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.sm },
   hello: { ...type.display, color: colors.ink },
   sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
   label: { ...type.caption, color: colors.inkSoft, marginBottom: spacing.sm },
@@ -293,28 +330,44 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
-  chip: {
+  /** 오전/오후와 시각이 한 줄. 두 덩어리 사이는 여백으로만 나눈다. */
+  clockRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  periods: { flexDirection: 'row', gap: spacing.sm },
+  period: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
   },
-  chipOn: { backgroundColor: colors.ink },
-  chipText: { ...type.body, color: colors.inkSoft },
-  chipTextOn: { ...type.body, color: colors.surface, fontWeight: '600' },
-  // 미세 조정으로 격자를 벗어난 시각. 고른 칩과 같은 모습이되 누를 수는 없다 —
-  // 조정은 아래 두 링크가 맡는다.
-  nudgedChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.ink,
+  periodOn: { backgroundColor: colors.ink },
+  periodText: { ...type.body, color: colors.inkSoft },
+  periodTextOn: { ...type.body, color: colors.surface, fontWeight: '600' },
+  /** 시각 두 칸. 목적지·상대 칸과 같은 흰 면이라 적는 자리로 읽힌다. */
+  clock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
   },
-  nudgeRow: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.lg },
-  // 조정은 조용해야 한다. 버튼이 아니라 곁말처럼.
-  nudge: { paddingVertical: spacing.xs },
-  nudgeText: { ...type.caption, color: colors.inkSoft, textDecorationLine: 'underline' },
+  clockField: {
+    ...type.title,
+    color: colors.ink,
+    // 두 자리가 들어갈 만큼만. 넓으면 숫자가 칸 안에서 떠다닌다.
+    width: 44,
+    paddingVertical: spacing.sm + 2,
+  },
+  colon: { ...type.title, color: colors.inkFaint, marginHorizontal: 2 },
+  /**
+   * 적은 것이 언제로 읽혔는지. 비어 있어도 자리는 지킨다 —
+   * 이 줄이 생겼다 사라지면 아래 칸들이 그때마다 들썩인다.
+   */
+  reading: {
+    ...type.caption,
+    color: colors.inkSoft,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
   picked: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

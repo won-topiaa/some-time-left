@@ -117,3 +117,69 @@ export function formatClock(ms: number): string {
   const h = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
   return m === 0 ? `${period} ${h}시` : `${period} ${h}시 ${String(m).padStart(2, '0')}분`;
 }
+
+/** 하루 (ms). 한국은 서머타임이 없어 이 산술이 그대로 맞는다. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface ClockInput {
+  /** 1~12. 사람이 적는 대로. */
+  hour12: number;
+  /** 0~59 */
+  minute: number;
+  /**
+   * 오전/오후를 사람이 직접 정했으면 그것을 쓴다.
+   * null이면 앱이 고른다 — 아래 `resolveAppointment` 참고.
+   */
+  period: 'am' | 'pm' | null;
+}
+
+/** 오늘(한국 기준)의 그 시각. */
+function atKstClock(nowMs: number, hour24: number, minute: number): number {
+  const dayStart = Math.floor((nowMs + KST_OFFSET_MS) / DAY_MS) * DAY_MS;
+  return dayStart + hour24 * 60 * 60 * 1000 + minute * 60 * 1000 - KST_OFFSET_MS;
+}
+
+/**
+ * 사람이 적은 시각을 실제 시각으로.
+ *
+ * 두 가지를 앱이 메운다. 둘 다 화면에 결과를 보여 주고 고칠 수 있게 두는 것이 전제다 —
+ * 조용히 정해 버리면 약속에 늦는 종류의 친절이 된다.
+ *
+ * 1. **오전/오후를 안 골랐으면 다가오는 쪽으로 읽는다.** 오후 3시에 "6:30"을 적은
+ *    사람이 뜻한 건 거의 언제나 오늘 저녁이지 내일 아침이 아니다.
+ * 2. **이미 지난 시각이면 내일로 넘긴다.** 밤 11시에 "8:00"은 내일 아침이다.
+ *
+ * 범위를 벗어나면 null. 화면은 이때 아무 말도 하지 않고 다음 버튼만 잠근다 —
+ * 두 글자 적는 중인 사람에게 빨간 글씨를 띄울 이유가 없다.
+ */
+export function resolveAppointment(input: ClockInput, nowMs: number): number | null {
+  const { hour12, minute, period } = input;
+
+  if (!Number.isInteger(hour12) || !Number.isInteger(minute)) {
+    return null;
+  }
+  if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  const base = hour12 % 12;
+
+  if (period != null) {
+    const at = atKstClock(nowMs, period === 'pm' ? base + 12 : base, minute);
+    return at > nowMs ? at : at + DAY_MS;
+  }
+
+  // 오전/오후 둘 다 뒤에 오는 쪽이 있으면 가까운 쪽. 하나뿐이면 그것.
+  const candidates = [base, base + 12]
+    .map((h24) => atKstClock(nowMs, h24, minute))
+    .map((at) => (at > nowMs ? at : at + DAY_MS));
+
+  return Math.min(...candidates);
+}
+
+/** 오늘인가 내일인가. 적은 시각이 언제로 읽혔는지 화면에서 보이게 하려고. */
+export function dayLabel(ms: number, nowMs: number): '오늘' | '내일' | '그 뒤' {
+  const day = (t: number) => Math.floor((t + KST_OFFSET_MS) / DAY_MS);
+  const diff = day(ms) - day(nowMs);
+  return diff <= 0 ? '오늘' : diff === 1 ? '내일' : '그 뒤';
+}

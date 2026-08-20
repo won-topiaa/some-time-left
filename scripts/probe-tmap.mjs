@@ -30,6 +30,47 @@ if (KEY === '') {
 
 const BASE = 'https://apis.openapi.sk.com';
 
+/**
+ * 검색어를 주면 그것만 찾아 본다.
+ *
+ *   npm run probe-tmap -- "성수역 3번 출구"
+ *
+ * "이렇게 적어도 찾아지나?"는 추측할 게 아니라 한 번 불러 보면 끝난다.
+ * 구조 덤프 대신 사람이 읽을 이름과 주소만 보여 준다.
+ */
+const QUERY = process.argv.slice(2).join(' ').trim();
+
+if (QUERY !== '') {
+  const url =
+    `${BASE}/tmap/pois?version=1&searchKeyword=${encodeURIComponent(QUERY)}` +
+    `&count=8&resCoordType=WGS84GEO&searchType=all`;
+  const response = await fetch(url, { headers: { appKey: KEY, Accept: 'application/json' } });
+  const body = await response.json().catch(() => null);
+
+  const code = body?.error?.code;
+  if (code != null) {
+    console.error(`불러오지 못했어요: ${code}`);
+    process.exit(1);
+  }
+
+  const pois = body?.searchPoiInfo?.pois?.poi ?? [];
+  console.log(`"${QUERY}" — ${pois.length}건\n`);
+
+  if (pois.length === 0) {
+    console.log('  못 찾았어요. 다르게 적으면 나올 수 있어요.');
+  }
+  for (const poi of pois) {
+    // 앱의 parsePoi와 같은 조합. 화면에 뜰 이름 그대로 보여 준다.
+    const name = [poi.name, poi.bizName].filter((v) => v != null && v !== '').join(' ');
+    const addr = [poi.upperAddrName, poi.middleAddrName, poi.lowerAddrName, poi.detailAddrName]
+      .filter((v) => v != null && v !== '')
+      .join(' ');
+    console.log(`  ${name}`);
+    console.log(`    ${addr}  (${poi.frontLat}, ${poi.frontLon})`);
+  }
+  process.exit(0);
+}
+
 /** 값을 구조로 요약한다. 실제 값은 형태만 남기고 자른다. */
 function describe(value, depth = 0, maxDepth = 4) {
   if (value === null) return 'null';

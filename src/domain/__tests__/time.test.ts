@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ARRIVE_EARLY_SEC, MAX_STRETCH_RATIO, formatClock, formatDuration, planWalk } from '../time';
+import {
+  ARRIVE_EARLY_SEC,
+  MAX_STRETCH_RATIO,
+  dayLabel,
+  formatClock,
+  formatDuration,
+  planWalk,
+  resolveAppointment,
+} from '../time';
 
 const MIN = 60;
 
@@ -109,5 +117,92 @@ describe('formatDuration', () => {
     [65 * MIN, '1시간 5분'],
   ])('%i초 → %s', (sec, expected) => {
     expect(formatDuration(sec)).toBe(expected);
+  });
+});
+
+/** 한국 시간으로 만든 epoch ms. 테스트가 실행 환경 시간대에 흔들리지 않게. */
+function kst(y: number, mo: number, d: number, h: number, mi: number): number {
+  return Date.UTC(y, mo - 1, d, h - 9, mi, 0, 0);
+}
+
+describe('resolveAppointment — 사람이 적은 시각', () => {
+  /** 2026-08-20(목) 한국 시간 오후 3시. */
+  const AT_3PM = kst(2026, 8, 20, 15, 0);
+
+  it('오전/오후를 안 고르면 다가오는 쪽으로 읽는다', () => {
+    // 오후 3시에 "6:30"이면 오늘 저녁이지 내일 아침이 아니다.
+    const at = resolveAppointment({ hour12: 6, minute: 30, period: null }, AT_3PM);
+    expect(at).toBe(kst(2026, 8, 20, 18, 30));
+  });
+
+  it('오늘 남은 게 오전뿐이면 오전으로 읽는다', () => {
+    // 새벽 5시에 "8:00"이면 오늘 아침.
+    const at = resolveAppointment({ hour12: 8, minute: 0, period: null }, kst(2026, 8, 20, 5, 0));
+    expect(at).toBe(kst(2026, 8, 20, 8, 0));
+  });
+
+  it('둘 다 지났으면 내일 가까운 쪽으로 넘긴다', () => {
+    // 밤 11시에 "8:00"이면 내일 아침.
+    const at = resolveAppointment({ hour12: 8, minute: 0, period: null }, kst(2026, 8, 20, 23, 0));
+    expect(at).toBe(kst(2026, 8, 21, 8, 0));
+  });
+
+  it('사람이 고른 오전/오후는 앱이 뒤집지 않는다', () => {
+    // 오후 3시에 굳이 '오전 6:30'을 골랐다면 내일 아침을 뜻한다.
+    const at = resolveAppointment({ hour12: 6, minute: 30, period: 'am' }, AT_3PM);
+    expect(at).toBe(kst(2026, 8, 21, 6, 30));
+  });
+
+  it('12시를 0시로 접지 않는다', () => {
+    expect(resolveAppointment({ hour12: 12, minute: 0, period: 'pm' }, kst(2026, 8, 20, 9, 0))).toBe(
+      kst(2026, 8, 20, 12, 0)
+    );
+    expect(resolveAppointment({ hour12: 12, minute: 0, period: 'am' }, kst(2026, 8, 20, 9, 0))).toBe(
+      kst(2026, 8, 21, 0, 0)
+    );
+  });
+
+  it('지금과 같은 시각은 지난 것으로 본다', () => {
+    // 딱 지금으로 약속을 잡을 수는 없다. 걸어갈 시간이 0이다.
+    const at = resolveAppointment({ hour12: 3, minute: 0, period: 'pm' }, AT_3PM);
+    expect(at).toBe(kst(2026, 8, 21, 15, 0));
+  });
+
+  it('범위를 벗어나면 null', () => {
+    for (const bad of [
+      { hour12: 0, minute: 0 },
+      { hour12: 13, minute: 0 },
+      { hour12: 6, minute: 60 },
+      { hour12: 6, minute: -1 },
+      { hour12: 6.5, minute: 0 },
+      { hour12: NaN, minute: 0 },
+    ]) {
+      expect(resolveAppointment({ ...bad, period: null }, AT_3PM)).toBeNull();
+    }
+  });
+
+  it('자정을 넘겨도 날짜 산술이 맞는다', () => {
+    // UTC로는 이미 다음 날이지만 한국은 아직 오늘 밤이다.
+    const lateNight = kst(2026, 8, 20, 23, 50);
+    expect(resolveAppointment({ hour12: 11, minute: 55, period: 'pm' }, lateNight)).toBe(
+      kst(2026, 8, 20, 23, 55)
+    );
+  });
+});
+
+describe('dayLabel — 언제로 읽혔는지 보여 준다', () => {
+  const now = kst(2026, 8, 20, 15, 0);
+
+  it('같은 날은 오늘', () => {
+    expect(dayLabel(kst(2026, 8, 20, 18, 30), now)).toBe('오늘');
+  });
+
+  it('하루 뒤는 내일', () => {
+    expect(dayLabel(kst(2026, 8, 21, 6, 30), now)).toBe('내일');
+  });
+
+  it('자정 직후도 한국 기준으로 센다', () => {
+    // UTC 날짜로 세면 오후 3시(UTC 06:00)와 밤 11시가 같은 날로 보이지 않는다.
+    expect(dayLabel(kst(2026, 8, 21, 0, 10), kst(2026, 8, 20, 23, 50))).toBe('내일');
   });
 });

@@ -42,6 +42,15 @@ export interface ApiConfig {
     /** 전국도시공원표준데이터. 실측 확인 — 서비스 존재, 키만 필요. */
     parkPath: string;
     /**
+     * 기상청 초단기예보. 첫 화면 맨 위 한 줄에만 쓴다.
+     *
+     * 호스트가 표준데이터(`api.data.go.kr`)와 다르다 — 이쪽은 `apis`(s 있음)다.
+     * 실측 확인: 이 경로로 부르면 SERVICE_KEY_IS_NOT_REGISTERED_ERROR가 오고
+     * (경로는 살아 있고 키만 없는 상태), 경로가 틀리면 NO_OPENAPI_SERVICE_ERROR가 온다.
+     */
+    weatherBaseUrl: string;
+    weatherPath: string;
+    /**
      * 국토교통부 건축물대장.
      * 실측 확인: `BldRgstService_v2`는 폐기됐고(NO_OPENAPI_SERVICE_ERROR)
      * `BldRgstHubService`가 살아 있다(SERVICE_KEY_IS_NOT_REGISTERED_ERROR).
@@ -86,6 +95,8 @@ const config: ApiConfig = {
     // 표준데이터 End Point는 api.data.go.kr (s 없음). apis(s 있음)면 키 미등록으로 뜬다.
     baseUrl: 'https://api.data.go.kr',
     parkPath: '/openapi/tn_pubr_public_cty_park_info_api',
+    weatherBaseUrl: 'https://apis.data.go.kr',
+    weatherPath: '/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst',
     // 건축물대장(미사용)은 apis.data.go.kr의 다른 게이트웨이라, 되살릴 땐 호스트를 따로 둘 것.
     ledgerPath: '/1613000/BldRgstHubService/getBrTitleInfo',
   },
