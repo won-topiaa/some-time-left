@@ -90,6 +90,8 @@ function Arrive() {
         destinationName: trip.destinationName,
         path: trip.route.candidate.path,
         routeId: trip.route.candidate.id,
+        // 경로가 알려준 실제 거리. 저장할 때 좌표를 솎으므로 참값을 함께 남긴다.
+        distanceM: trip.route.candidate.distanceM,
       }).catch(() => {});
     }
     reset();

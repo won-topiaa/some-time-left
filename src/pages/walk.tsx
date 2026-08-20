@@ -43,7 +43,8 @@ function Walk() {
   const [nowMs, setNowMs] = useState(() => Date.now() + offset);
   // 위치를 놓쳤는가. 놓친 채로 페이스를 코칭하면 잘 걷는 사람에게 서두르라고 한다.
   const [locationLost, setLocationLost] = useState(false);
-  const [startedAtMs] = useState(() => Date.now());
+  // nowMs와 같은(보정된) 시계로 찍어 둔다. 한쪽만 보정하면 뺄셈이 흐른 시간이 아니게 된다.
+  const [startedAtMs] = useState(() => Date.now() + offset);
 
   const samples = useRef<{ distanceFromPrevM: number; elapsedSec: number }[]>([]);
   const previous = useRef<{ at: LatLng; ms: number } | null>(null);
@@ -130,7 +131,7 @@ function Walk() {
   // 위치를 못 잡고 있으면 페이스는 추측일 뿐이다. 추측으로 재촉하지 않는다.
   // 첫 측정을 기다리는 정상 구간은 지나 보내고, 그 뒤로도 없으면 그렇다고 말한다.
   const blind =
-    locationLost || (remainingM == null && nowMs - offset - startedAtMs > LOCATION_GRACE_MS);
+    locationLost || (remainingM == null && nowMs - startedAtMs > LOCATION_GRACE_MS);
 
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>

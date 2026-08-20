@@ -27,6 +27,44 @@ export function bearingDeg(a: LatLng, b: LatLng): number {
   return (((Math.atan2(y, x) * 180) / Math.PI) % 360 + 360) % 360;
 }
 
+/**
+ * 저장할 때 좌표를 솎는 기본 간격 (m).
+ *
+ * "가본 길인가"를 60m 반경으로 판정하므로(`data/features.ts`) 그보다 촘촘하면
+ * 판정이 달라지지 않는다. 25m면 넉넉히 안쪽이라 안전하고, TMAP이 주는
+ * 6m 간격 좌표를 네 개 중 하나로 줄인다.
+ */
+export const COMPACT_SPACING_M = 25;
+
+/**
+ * 좌표를 성기게 솎는다.
+ *
+ * TMAP 경로 하나가 300점쯤 되어 기록 한 건이 12KB씩 붙는다. 기록은 지우지 않고
+ * 쌓이기만 하는 것이라(그게 '지나온 길'의 존재 이유다) 그대로 두면 백 번쯤 걸었을 때
+ * 길 찾을 때마다 1MB를 파싱하게 된다 — 가장 열심히 쓴 사람이 가장 오래 기다린다.
+ *
+ * 꺾인 각도를 보지 않고 거리만 본다. 리본은 작게 그려지고 판정 반경은 25m보다
+ * 넓어서 이 정도로 모양도 판정도 그대로다. 처음과 끝은 언제나 남긴다.
+ */
+export function compactPath(path: LatLng[], spacingM = COMPACT_SPACING_M): LatLng[] {
+  if (path.length <= 2) {
+    return [...path];
+  }
+
+  const out: LatLng[] = [path[0]];
+  let anchor = path[0];
+
+  for (let i = 1; i < path.length - 1; i += 1) {
+    if (distanceM(anchor, path[i]) >= spacingM) {
+      out.push(path[i]);
+      anchor = path[i];
+    }
+  }
+
+  out.push(path[path.length - 1]);
+  return out;
+}
+
 /** 경로 전체 길이 (m). */
 export function pathLengthM(path: LatLng[]): number {
   let total = 0;

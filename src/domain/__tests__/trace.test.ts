@@ -45,6 +45,20 @@ describe('traceSummary', () => {
     expect(summary.totalDistanceM).toBeLessThan(240);
   });
 
+  it('적어 둔 참값이 있으면 그걸 쓴다 — 좌표는 솎여 있어 다시 재면 짧다', () => {
+    const summary = traceSummary([record({ distanceM: 1834 }), record({ distanceM: 900 })]);
+    expect(summary.totalDistanceM).toBe(2734);
+  });
+
+  it('참값이 없는 옛 기록은 좌표에서 잰다', () => {
+    const withValue = traceSummary([record({ distanceM: 5000 })]);
+    const withoutValue = traceSummary([record()]);
+    expect(withValue.totalDistanceM).toBe(5000);
+    // 좌표에서 잰 값은 대략 111m
+    expect(withoutValue.totalDistanceM).toBeGreaterThan(100);
+    expect(withoutValue.totalDistanceM).toBeLessThan(120);
+  });
+
   it('한 줄을 남긴 것만 센다 — 공백만 있는 건 기록이 아니다', () => {
     const summary = traceSummary([
       record({ note: '오늘은 좀 걸었다' }),

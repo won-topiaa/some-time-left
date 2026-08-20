@@ -30,7 +30,10 @@ export function traceSummary(records: WalkRecord[]): TraceSummary {
   let firstAt: number | null = null;
 
   for (const record of records) {
-    totalDistanceM += pathLengthM(record.path);
+    // 저장할 때 적어 둔 참값을 쓴다. 좌표는 성기게 솎여 있어 다시 재면 조금 짧다 —
+    // 누적 거리는 이 화면의 주인공 숫자라 그 오차를 허용하지 않는다.
+    // 옛 기록에는 이 값이 없으므로 그때만 좌표에서 잰다.
+    totalDistanceM += record.distanceM ?? pathLengthM(record.path);
     if (record.note.trim() !== '') {
       noteCount += 1;
     }

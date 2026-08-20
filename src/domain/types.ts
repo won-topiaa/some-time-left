@@ -89,6 +89,22 @@ export interface WalkRecord {
   /** 도착 시각 (epoch ms) */
   arrivedAt: number;
   destinationName: string;
+  /**
+   * 걸은 길의 좌표.
+   *
+   * 저장할 때 성기게 솎는다(`compactPath`). 이 좌표가 하는 일은 두 가지 —
+   * 기록 화면의 리본 모양과 "가본 길인가" 판정 — 인데 둘 다 촘촘할 필요가 없고,
+   * 원본 그대로 두면 기록 하나가 12KB씩 쌓여 나중엔 길 찾을 때마다
+   * 메가바이트를 파싱하게 된다.
+   */
   path: LatLng[];
   routeId: string;
+  /**
+   * 실제 걸은 거리 (m).
+   *
+   * 좌표를 솎으면 길이가 미세하게 줄어드는데, 누적 거리는 '지나온 길' 화면의
+   * 주인공 숫자라 흔들리면 안 된다. 그래서 솎기 전 참값을 따로 적어 둔다.
+   * 이 값이 없는 옛 기록은 좌표에서 계산한다.
+   */
+  distanceM?: number;
 }

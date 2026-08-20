@@ -6,6 +6,7 @@
  */
 
 import { Storage } from '@apps-in-toss/framework';
+import { compactPath, pathLengthM } from '../domain/geo';
 import type { WalkRecord } from '../domain/types';
 
 const RECORDS_KEY = 'stl:records:v1';
@@ -37,8 +38,17 @@ export async function loadRecords(): Promise<WalkRecord[]> {
 }
 
 export async function saveRecord(record: WalkRecord): Promise<void> {
-  const records = await readJson<WalkRecord[]>(RECORDS_KEY, []);
-  await writeJson(RECORDS_KEY, [record, ...records]);
+  const existing = await readJson<WalkRecord[]>(RECORDS_KEY, []);
+  const records = Array.isArray(existing) ? existing : [];
+
+  // 좌표는 솎아서 넣되, 누적 거리는 솎기 전 참값으로 적어 둔다.
+  const stored: WalkRecord = {
+    ...record,
+    distanceM: record.distanceM ?? pathLengthM(record.path),
+    path: compactPath(record.path),
+  };
+
+  await writeJson(RECORDS_KEY, [stored, ...records]);
   if (record.companion.trim() !== '') {
     await rememberCompanion(record.companion);
   }
