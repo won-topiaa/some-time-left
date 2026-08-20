@@ -10,25 +10,42 @@
  * 비밀값은 출력하지 않는다. 들어갔는지와 길이만 보여준다.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { requireNode } from '../proxy/scripts/require-node.mjs';
 
 requireNode();
 
 /**
- * 출시에 필요한 파일이 실제로 있는가.
+ * 출시에 필요한 것이 실제로 준비됐는가.
  *
- * `granite.config.ts`가 가리키는 아이콘이 없어도 typecheck와 테스트는 모두 통과한다 —
- * 배포 직전에야 드러나는 종류의 구멍이라, 네트워크 확인보다 먼저 본다.
+ * typecheck와 테스트는 둘 다 통과해도 배포 직전에야 드러나는 구멍들이라
+ * 네트워크 확인보다 먼저 본다.
  */
 const iconPath = new URL('../assets/icon.png', import.meta.url);
 const hasIcon = existsSync(iconPath);
-console.log(`앱 아이콘            ${hasIcon ? '✓ 있음' : '✗ 없음 (assets/icon.png)'}`);
+console.log(`아이콘 그림          ${hasIcon ? '✓ assets/icon.png 있음' : '✗ 없음'}`);
 if (!hasIcon) {
-  console.log('  → python3 scripts/make-icon.py 로 만들고 커밋하세요.\n');
-} else {
-  console.log('');
+  console.log('  → python3 scripts/make-icon.py 로 만드세요.');
 }
+
+// brand.icon은 파일 경로가 아니라 이미지 **주소**다. 프레임워크가 그대로
+// <Image source={{ uri }} />에 넘기므로 상대 경로를 넣으면 영영 안 뜬다.
+const graniteConfig = readFileSync(new URL('../granite.config.ts', import.meta.url), 'utf8');
+const iconValue = graniteConfig.match(/icon:\s*'([^']*)'/)?.[1] ?? '';
+const iconIsUrl = /^https?:\/\//.test(iconValue);
+const iconIsPath = iconValue !== '' && !iconIsUrl;
+
+console.log(
+  `brand.icon           ${
+    iconIsUrl ? '✓ 주소 들어감' : iconIsPath ? '✗ 파일 경로 (주소여야 함)' : '– 아직 비어 있음'
+  }`
+);
+if (iconIsPath) {
+  console.log("  → 상대 경로는 렌더링되지 않아요. 콘솔에 올린 이미지 주소를 넣으세요.");
+} else if (!iconIsUrl) {
+  console.log('  → 배포 전에 앱인토스 콘솔에 아이콘을 올리고 그 주소를 넣으세요.');
+}
+console.log('');
 
 const { getApiConfig, configureApi } = await import('../src/config.ts');
 const { localSecrets } = await import('../src/config.local.ts');
@@ -60,7 +77,10 @@ console.log('\n실제로 불러봅니다\n');
 const failures = [];
 
 if (!hasIcon) {
-  failures.push('앱 아이콘 assets/icon.png이 없어요 — ait deploy 전에 만들어 커밋하세요');
+  failures.push('아이콘 그림 assets/icon.png이 없어요 — python3 scripts/make-icon.py');
+}
+if (iconIsPath) {
+  failures.push('granite.config.ts의 brand.icon이 파일 경로예요 — 이미지 주소여야 렌더링됩니다');
 }
 
 /**
@@ -230,5 +250,26 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('설정한 것은 모두 실제로 동작합니다.');
+/*
+ * 키가 하나도 없으면 "실패 0건"이 되어 전부 통과한 것처럼 보인다.
+ * 확인할 게 없었던 것과 확인해서 괜찮은 것은 다르다 — 배포 전 점검이
+ * 아무것도 설정 안 된 상태를 초록불로 알려 주면 그게 제일 나쁘다.
+ */
+const configured = [
+  config.tmap.appKey,
+  config.congestionProxy.token,
+  config.publicData.serviceKey,
+  config.vworld.key,
+].filter((value) => value != null && value !== '').length;
+
+if (configured === 0) {
+  console.log('키가 하나도 없어요 — 확인한 게 없습니다.');
+  console.log('  → npm run set-key 로 넣고 다시 실행하세요.');
+  process.exit(1);
+}
+
+console.log(`설정한 ${configured}개는 모두 실제로 동작합니다.`);
 console.log('◦ 표시는 선택 기능이라 없어도 앱은 완전합니다.');
+if (!iconIsUrl) {
+  console.log('※ brand.icon은 아직 비어 있어요. 배포 전에 아이콘 주소를 넣으세요.');
+}
