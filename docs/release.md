@@ -325,10 +325,35 @@ intoss-private://some-time-left?_deploymentId=01a01e5a-bf94-7adf-9ab1-95f8c03be4
    걸은 건 일어난 일이라 버튼을 눌러야 인정되는 게 아니다.
 6. 첫 화면 맨 아래 **'지나온 길'**에 방금 걸은 길의 모양이 색을 갖고 들어와 있다.
 
+### 흰 화면 — 대개 토스 앱 버전이다
+
+에러도 로그도 없이 새하얀 화면만 나오면 **먼저 토스 앱 버전을 본다.**
+프레임워크가 기준 미만이면 우리 앱을 아예 그리지 않는다.
+
+```js
+// @apps-in-toss/framework — AppsInTossContainer
+if (!isMinVersionSupported({ android: "5.220.0", ios: "5.221.0" })) {
+  return <><AppEvent.System /><AppUpdate /></>;   // Container를 건너뛴다
+}
+
+function AppUpdate() {
+  useEffect(() => { openURL(`supertoss://closePage?url=${UPDATE_SCHEME}`); }, []);
+  return <></>;                                    // 아무것도 그리지 않는다
+}
+```
+
+업데이트 안내 스킴을 띄우려 시도하지만, 그게 안 먹으면 남는 건 흰 화면뿐이다.
+**최소 버전: Android 5.220.0 / iOS 5.221.0.**
+
+우리 코드는 한 줄도 실행되지 않으므로, 이 경우 진입 파일의 오류 화면도 안 뜬다.
+반나절을 target·React 버전·번들 구조를 뒤지며 보냈다 — 흰 화면을 보면
+**앱 버전부터** 확인할 것.
+
 ### 안 보이면 여기부터
 
 | 증상 | 원인 |
 |---|---|
+| **아무것도 없는 흰 화면** | 토스 앱 버전이 낮다. 아래 참고 |
 | 첫 줄에 날씨가 없다 | 위치 거절이거나 네트워크. 날씨는 없으면 그 줄을 안 그린다 |
 | 아이콘이 안 뜬다 | 프록시 재배포 (`cd proxy && npm run deploy`) |
 | 고친 게 그대로다 | 옛 `_deploymentId`로 열었다. 새로 배포한 주소로 |
