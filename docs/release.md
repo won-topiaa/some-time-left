@@ -8,9 +8,12 @@
 ## 한눈에
 
 ```
-콘솔에서 미니앱 만들기 → API 키 받기 →  ait token add  →  npm run deploy
-        (사람이 하는 일)                      (한 번)         (그 뒤로는 이것만)
+콘솔에서 미니앱 만들기 → API 키 받기 → ait token add → npm run deploy → 폰에서 테스트 → 검토 요청
+      (사람이 하는 일)      (키 메뉴)      (한 번)       (그 뒤로는 이것만)   (최소 1번 필수)
 ```
+
+**테스트를 한 번도 안 하면 검토를 요청할 수 없다.** 공식 문서에 못 박혀 있다 —
+"테스트를 최소 1번 이상 완료해야 검토를 요청할 수 있어요."
 
 ## 1. 콘솔에서 미니앱 만들기 — 여기서만 사람이 필요하다
 
@@ -36,12 +39,17 @@ appName: 'some-time-left',
 그 오류만 봐서는 이름이 어긋난 줄 알기 어렵다. 콘솔에서 다른 이름으로
 만들었다면 `granite.config.ts`를 그 이름으로 고치고 다시 빌드하면 된다.
 
-**둘, 배포용 API 키.** `ait deploy`가 쓰는 키다. 콘솔의 어느 메뉴에서 발급되는지는
-직접 보지 못해 적지 않는다 — 콘솔에서 "API 키" 또는 "배포 키"를 찾으면 된다.
+**둘, 배포용 API 키.** `ait deploy`가 쓰는 키다.
 
-> 심사·검수 절차가 있는지, 있다면 무엇을 요구하는지는 확인하지 못했다.
+```
+워크스페이스 선택 → 왼쪽 메뉴 '키'
+```
+
+전체 앱 단위로도, 특정 앱 단위로도 권한을 줄 수 있다.
+
 > 아래 배포는 `intoss-private` 스킴으로 **내 토스에서만 열리는 배포**라
-> 심사와 무관하게 지금 바로 할 수 있다.
+> 검토와 무관하게 지금 바로 할 수 있다. 오히려 이 테스트를 최소 한 번 해야
+> 검토를 요청할 수 있다.
 
 ## 1-1. 기본 정보 (콘솔 1단계)
 
@@ -206,15 +214,20 @@ ait token add
 npm run deploy
 ```
 
-`predeploy`가 `ait build`를 먼저 돌린다. `ait deploy`는 **빌드를 하지 않고**
-이미 만들어진 `.ait` 파일을 올리기만 하기 때문이다. 둘을 묶어 두지 않으면
-소스를 고쳐도 지난번 번들이 그대로 올라간다.
+`predeploy`가 `npm run build`(= `ait build`)를 먼저 돌린다. `ait deploy`는
+**빌드를 하지 않고** 이미 만들어진 `.ait` 파일을 올리기만 하기 때문이다.
+둘을 묶어 두지 않으면 소스를 고쳐도 지난번 번들이 그대로 올라간다.
 
 빌드가 만드는 것:
 
 ```
-some-time-left.ait      3.3MB — RN 0.84.0 / 0.72.6 각각의 iOS·Android 번들과 소스맵
+some-time-left.ait   파일 3.3MB / 압축 해제 14.9MB   (한도: 압축 해제 100MB)
+                     RN 0.84.0 · 0.72.6 각각의 iOS·Android 번들과 소스맵
 ```
+
+한도의 15%다. 소스맵이 그중 9.5MB(64%)를 차지하는데, 지금은 줄일 이유가 없다 —
+용량이 문제가 되는 날은 이미지·사운드를 번들에 넣기 시작할 때이고, 그때는
+번들이 아니라 프록시나 CDN에서 내려받게 하는 것이 문서의 권고이자 맞는 길이다.
 
 (`.gitignore`에 있다. 빌드할 때마다 새로 나오는 것이라 커밋하지 않는다.)
 
@@ -225,6 +238,25 @@ intoss-private://some-time-left?_deploymentId=01a01dd5-...
 ```
 
 **이 주소를 내 폰의 토스에서 열면 방금 올린 앱이 뜬다.** 이것이 실기기 확인이다.
+콘솔에서 '테스트하기'를 누르면 같은 것을 QR로도 준다.
+
+QR로 열려면 세 가지를 다 만족해야 한다.
+
+- 토스 앱에 로그인돼 있을 것
+- 그 워크스페이스의 멤버일 것
+- 만 19세 이상일 것
+
+`intoss://`(슬래시 두 개, private 없음)는 **정식 출시 뒤에만** 열린다.
+출시 전 테스트는 반드시 `intoss-private://` 쪽이다.
+
+하위 경로나 쿼리를 붙여서 특정 화면부터 열어 볼 수도 있다.
+
+```
+intoss-private://some-time-left/trace?_deploymentId=<id>
+```
+
+`_deploymentId`는 선택이 아니라 **필수**다. 배포할 때마다 새로 발급되므로,
+어제 쓰던 링크로 오늘 올린 것을 확인할 수는 없다.
 
 쓸 만한 옵션 몇 가지:
 
@@ -240,7 +272,7 @@ intoss-private://some-time-left?_deploymentId=01a01dd5-...
 ## 4. 배포 전에 보는 것
 
 ```bash
-npm test          # 308개
+npm test          # 337개
 npm run typecheck
 npm run check-config   # 키가 실제로 응답하는지 — 아이콘 주소 포함
 ```
@@ -278,14 +310,35 @@ _.__appsInToss = {
 `.ait` 안의 `app.json`에는 `appName`·`permissions`·`appType`만 들어간다.
 위치 권한이 콘솔에 알려지는 경로가 이것이다.
 
+## 공식 문서와 설치된 CLI가 다른 곳
+
+문서의 명령어 표는 이렇게 적혀 있는데, 설치된 CLI(2.10.10)에서는 **둘 다 에러가 난다.**
+그대로 따라 하면 막히므로 적어 둔다.
+
+| 문서 | 실제 |
+|---|---|
+| `ait token add [워크스페이스명] [API 키]` | `ait token add [--api-key <키>] [프로필]` |
+| `ait deploy [워크스페이스명] [API 키]` | `ait deploy [--api-key <키>] [--profile <프로필>]` |
+
+```
+$ npx ait token add myworkspace MYKEY
+Unknown Syntax Error: Command not found; did you mean one of:
+  0. ait token add [--api-key #0] [profile]
+
+$ npx ait deploy myworkspace MYKEY
+Unknown Syntax Error: Extraneous positional argument ("myworkspace").
+```
+
+`ait deploy`는 위치 인자를 아예 받지 않는다. `--workspace`는 남아 있지만
+deprecated이고, CLI가 직접 "이 옵션 대신 --profile을 사용해주세요"라고 말한다.
+
 ## 확인하지 못한 것
 
 정직하게 남겨 둔다.
 
-- API 키가 발급되는 정확한 위치
 - 카테고리 선택지 목록
-- 공개(심사) 절차의 존재 여부와 요구 사항
-- `intoss-private` 배포와 공개 배포가 콘솔에서 어떻게 구분되는지
+- 검토에 걸리는 시간과 반려됐을 때의 재제출 조건
+- 검토 **중인** 버전을 회수하거나 고칠 수 있는지
+- 승인 후 스크린샷·설명만 바꿀 때 재검토가 걸리는지
 
-이 넷은 콘솔에 들어가 봐야 알 수 있다. 화면을 보고 막히는 지점을 알려주면
-그 지점부터 다시 맞춰 볼 수 있다.
+콘솔 화면을 보고 막히는 지점을 알려주면 그 지점부터 다시 맞춰 볼 수 있다.

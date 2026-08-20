@@ -15,7 +15,7 @@
 |---|---|
 | 도메인 로직 (시간 예산·그늘·기분 매핑·경로 랭킹·페이스) | 구현 완료 |
 | 화면 6개 (입력 → 기분 → 경로 → 걷기 → 도착, 그리고 지나온 길) | 구현 완료, iOS/Android 번들 빌드 성공 |
-| 테스트 | 308개 통과 (앱 + 프록시) |
+| 테스트 | 337개 통과 (앱 + 프록시) |
 | 도보 경로 (TMAP 보행자 경로안내) | 연동 완료, **응답 구조 문서 대조 완료** |
 | 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
 | 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — 응답 구조 1회 확인 필요 |
@@ -23,7 +23,7 @@
 | 혼잡도 프록시 | **배포 완료** (Cloudflare Workers) — 서울까지 실측 확인 |
 | 앱 아이콘 | `assets/icon.png` (1024×1024) — `python3 scripts/make-icon.py`로 생성 |
 | 콘솔 노출 자료 | 로고 600×600 라이트/다크, 스크린샷 세로 6장·가로 1장 — `assets/store/` |
-| 앱인토스 배포 | `ait build` 성공 — 콘솔에 미니앱 생성과 API 키만 남음 ([`docs/release.md`](docs/release.md)) |
+| 앱인토스 배포 | `ait build` 성공 (압축 해제 14.9MB / 한도 100MB) — 콘솔 등록 진행 중 ([`docs/release.md`](docs/release.md)) |
 
 ## 명령어
 
@@ -32,9 +32,9 @@ npm install
 npm test          # 도메인·파싱 테스트 (네이티브 런타임·네트워크 불필요)
 npm run typecheck
 npm run dev       # granite dev — 토스 앱에서 열어 확인
-npm run build     # granite build — iOS/Android 번들만 빠르게 확인
-npm run build:ait # ait build — 배포용 some-time-left.ait 생성
-npm run deploy    # ait build + ait deploy. 콘솔 등록과 ait token add가 먼저다
+npm run build        # ait build — 배포용 some-time-left.ait 생성
+npm run build:bundle # granite build — 번들만 빠르게 확인 (.ait은 안 나옴)
+npm run deploy       # ait build + ait deploy. 콘솔 등록과 ait token add가 먼저다
 npm run store-shots   # 콘솔에 올릴 스크린샷 (assets/store/)
 npm run check-config  # 키·아이콘 주소·스토어 그림 규격을 실제로 확인
 ```
