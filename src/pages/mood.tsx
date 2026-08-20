@@ -35,16 +35,21 @@ function Mood() {
           : `${trip.companion} 만나러 가는 길,\n지금 기분이 어때요?`}
       </Text>
 
+      {/*
+        면을 채우지 않는다. 흰 카드 여섯 장을 쌓으면 종이 위가 아니라 목록 화면이 된다 —
+        이 앱이 스스로 정한 "선과 여백으로만 나눈다"를 가장 크게 어기는 자리였다.
+        헤어라인만 두면 색을 가진 건 기분 점 여섯 개뿐이 되고, 그게 원래 의도다.
+      */}
       <View style={styles.cards}>
         {MOODS.map((mood) => (
           <Pressable
             key={mood.id}
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             onPress={() => choose(mood.id)}
           >
             {/* 기분마다 제 색을 가진 점. 여기서 고른 색이 길에 입혀지고 기록에 남는다. */}
             <View style={[styles.dot, { backgroundColor: moodTint(mood.id) }]} />
-            <Text style={styles.cardText}>{mood.label}</Text>
+            <Text style={styles.rowText}>{mood.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -67,18 +72,19 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginBottom: spacing.xl,
   },
-  cards: { gap: spacing.sm },
-  card: {
+  // 맨 윗줄에도 선을 둬서 여섯 줄이 한 덩어리로 보이게 한다.
+  cards: { borderTopWidth: 1, borderTopColor: colors.line },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    // 손가락이 닿는 자리는 넉넉히. 줄로 나눠도 누르기 편해야 한다.
     paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
   },
   dot: { width: 10, height: 10, borderRadius: radius.pill },
-  cardText: { ...type.title, color: colors.ink },
+  rowText: { ...type.title, color: colors.ink },
   footnote: {
     ...type.caption,
     color: colors.inkFaint,

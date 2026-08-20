@@ -48,10 +48,16 @@ describe('arrivalPrompt', () => {
 });
 
 describe('planHeadline', () => {
-  it('늘리는 계획은 목표 시간을 말한다', () => {
-    expect(
-      planHeadline({ kind: 'stretch', targetWalkSec: 27 * 60, slackSec: 420, capped: false })
-    ).toContain('27분');
+  it('늘리는 계획은 약속을 말한다 — 시간은 아래 큰 숫자가 말하므로 되풀이하지 않는다', () => {
+    const headline = planHeadline({
+      kind: 'stretch',
+      targetWalkSec: 27 * 60,
+      slackSec: 420,
+      capped: false,
+    });
+    expect(headline).toContain('3분 전');
+    // 같은 화면에 27분이 두 번 나오면 주인공이 둘이 된다.
+    expect(headline).not.toContain('27분');
   });
 
   it('여유가 과하면 다른 말을 한다', () => {

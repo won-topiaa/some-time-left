@@ -32,13 +32,20 @@ export function routeReason(mood: MoodId, feature: FeatureKey): string {
   return `${moodById(mood).quoted} 하셔서, ${FEATURE_REASON[feature]}.`;
 }
 
-/** 계획 종류에 따른 첫 화면 문구. 여유가 없을 때도 빈 화면을 보여주지 않는다. */
+/**
+ * 계획 종류에 따른 첫 화면 문구. 여유가 없을 때도 빈 화면을 보여주지 않는다.
+ *
+ * 걷는 시간은 바로 아래 큰 숫자가 이미 말한다. 여기서 또 "27분짜리"라고 하면
+ * 한 화면에 같은 숫자가 두 번 나오고, 주인공이 둘이 된다.
+ * 그래서 이 줄은 **약속**을 말하고, 숫자는 아래가 말하고, 이유는 그 아래가 말한다.
+ * "찾아볼게요"도 아니다 — 길은 이미 찾아서 밑에 그려져 있다.
+ */
 export function planHeadline(plan: WalkPlan): string {
   switch (plan.kind) {
     case 'stretch':
       return plan.capped
-        ? '시간이 꽤 남았어요. 넉넉히 걸어볼까요?'
-        : `${formatDuration(plan.targetWalkSec)}짜리 길을 찾아볼게요.`;
+        ? '시간이 꽤 남았어요.\n넉넉히 걸어볼까요?'
+        : '3분 전에 닿는 길이에요.';
     case 'straight':
       return plan.reason === 'no-early'
         ? '3분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.'
