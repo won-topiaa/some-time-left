@@ -23,12 +23,21 @@ function RouteScreen() {
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
-  const { loading, error, plan, route, hasAlternative, showAnother, retry, clockOffsetMs } =
-    useRouteSuggestion({
-      destination: trip.destination,
-      arriveAtMs: trip.arriveAtMs,
-      mood: trip.mood,
-    });
+  const {
+    loading,
+    error,
+    plan,
+    route,
+    hasAlternative,
+    showAnother,
+    retry,
+    stretched,
+    clockOffsetMs,
+  } = useRouteSuggestion({
+    destination: trip.destination,
+    arriveAtMs: trip.arriveAtMs,
+    mood: trip.mood,
+  });
 
   // 가는 길에 스치는 가게 한 곳. 목적이 아니라 곁에 있다고 알려주는 정도.
   // 경로가 바뀌면(다른 길) 다시 찾고, 없으면 없는 채로 둔다.
@@ -101,8 +110,9 @@ function RouteScreen() {
       route,
       clockOffsetMs,
       walkedDistanceM: null,
-      // 상한에서 잘린 계획이면 3분 전 도착을 약속할 수 없다. 걷는 화면이 알아야 한다.
-      capped: plan.kind === 'stretch' && plan.capped,
+      // 상한에서 잘렸거나 아예 못 늘렸으면 3분 전 도착을 약속할 수 없다.
+      // 걷는 화면이 알아야 같은 말을 하지 않는다.
+      arrivesEarly: plan.kind === 'stretch' && (plan.capped || !stretched),
     });
     navigation.navigate('/walk');
   };
@@ -118,7 +128,21 @@ function RouteScreen() {
         contentContainerStyle={styles.flow}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.headline}>{planHeadline(plan)}</Text>
+        {/*
+          늘리지 못했으면 늘렸다고 하지 않는다.
+          경유지가 하나도 도로망에 안 붙는 날이 있는데(전부 물 위나 건물 안으로 떨어진다),
+          그때는 최단 경로로 물러선다. 그 길에 "3분 전에 닿는 길이에요"를 붙이면
+          15분에서 두 시간까지 일찍 도착하는 길에 지키지 못할 약속을 얹는 셈이다.
+        */}
+        <Text style={styles.headline}>
+          {plan.kind === 'stretch' && !stretched
+            ? '오늘은 돌아갈 길을 못 찾았어요.'
+            : planHeadline(plan)}
+        </Text>
+
+        {plan.kind === 'stretch' && !stretched && (
+          <Text style={styles.sub}>곧장 가는 길로 보여드릴게요.</Text>
+        )}
 
         {route != null && (
           <View style={styles.card}>
@@ -177,7 +201,7 @@ function RouteScreen() {
           onPress={startWalking}
         >
           <Text style={styles.ctaText}>
-            {plan.kind === 'straight' ? '곧장 갈게요' : '이 길로 갈게요'}
+            {plan.kind === 'straight' || !stretched ? '곧장 갈게요' : '이 길로 갈게요'}
           </Text>
         </Pressable>
       ) : (

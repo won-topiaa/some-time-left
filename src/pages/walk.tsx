@@ -192,7 +192,7 @@ function Walk() {
    * 무엇까지 세는가.
    *
    * 보통은 약속 3분 전이다 — 길이 그 시각에 닿도록 골라졌으니 그게 곧 도착 시각이다.
-   * 다만 여유가 너무 많아 길이 상한에서 잘렸다면(`capped`) 둘이 갈라진다.
+   * 다만 약속보다 눈에 띄게 일찍 닿게 되는 계획이면(`arrivesEarly`) 둘이 갈라진다.
    * 87분이 남았는데 44분짜리 길을 걷는다면 약속 3분 전까지 세는 건 43분을 부풀리는 것이고,
    * 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다. 그럴 땐 실제로 닿을 시각을 센다.
    */
@@ -200,7 +200,7 @@ function Walk() {
     trip.route != null ? startedAtMs + trip.route.candidate.durationSec * 1000 : null;
   const promiseMs =
     trip.arriveAtMs != null ? trip.arriveAtMs - ARRIVE_EARLY_SEC * 1000 : null;
-  const targetMs = trip.capped ? plannedArrivalMs : (promiseMs ?? plannedArrivalMs);
+  const targetMs = trip.arrivesEarly ? plannedArrivalMs : (promiseMs ?? plannedArrivalMs);
 
   const remainingSec = targetMs != null ? Math.max(0, (targetMs - nowMs) / 1000) : 0;
 
@@ -245,12 +245,12 @@ function Walk() {
       )}
 
       {/*
-        지킬 수 있는 말만 한다. 상한에서 잘린 계획은 3분 전에 맞추는 게 아니라
+        지킬 수 있는 말만 한다. 일찍 닿게 되는 계획은 3분 전에 맞추는 게 아니라
         그냥 넉넉히 걷는 것이므로, 그때는 그렇게 말한다.
       */}
       <Text style={styles.footnote}>
         {trip.destinationName !== '' ? `${trip.destinationName}까지 ` : ''}
-        {trip.capped ? '넉넉히 걷고 있어요.' : '3분 전에 도착하도록 맞추고 있어요.'}
+        {trip.arrivesEarly ? '넉넉히 걷고 있어요.' : '3분 전에 도착하도록 맞추고 있어요.'}
       </Text>
 
       <View style={styles.spacer} />

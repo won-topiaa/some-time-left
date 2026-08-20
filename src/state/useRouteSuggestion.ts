@@ -29,6 +29,13 @@ export interface Suggestion {
   /** 다시 찾아본다. 네트워크가 한 번 흔들린 게 막다른 길이 될 이유는 없다. */
   retry: () => void;
   /**
+   * 계획대로 길을 늘렸는가.
+   *
+   * 경유지가 하나도 안 붙어 최단 경로로 물러섰으면 false다. 그때는 3분 전 도착을
+   * 지킬 수 없으므로 화면이 그렇게 말하면 안 된다.
+   */
+  stretched: boolean;
+  /**
    * 서버 시각 − 기기 시각 (ms). 걷는 화면·도착 화면이 같은 시계로 세도록 넘긴다.
    * 서버 시각을 못 받았으면 0.
    */
@@ -67,6 +74,7 @@ export function useRouteSuggestion({
   const [ranked, setRanked] = useState<ScoredRoute[]>([]);
   const [shownIds, setShownIds] = useState<string[]>([]);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  const [stretched, setStretched] = useState(true);
   // 다시 찾기. 값이 바뀌면 아래 effect가 처음부터 다시 돈다.
   const [attempt, setAttempt] = useState(0);
 
@@ -84,6 +92,7 @@ export function useRouteSuggestion({
 
       setLoading(true);
       setError(null);
+      setStretched(true);
 
       // 위치 실패와 길 찾기 실패는 원인이 다르다. 한 덩어리로 잡아 "위치를 확인하지
       // 못했어요"라고 하면, 네트워크가 흔들렸을 뿐인데 권한을 의심하게 만든다.
@@ -151,6 +160,9 @@ export function useRouteSuggestion({
         // 그때 빈 손으로 두면 걷기 화면이 좌표 없이 열려 도착을 영영 못 잡는다.
         // 늘리진 못해도 최단 경로는 있으니, 그걸로라도 걷게 한다.
         const usable = candidates.length > 0 ? candidates : [shortest];
+        // 물러선 사실을 화면에 알린다. 늘리지 못했는데 "3분 전에 닿는 길"이라고 하면
+        // 15분에서 두 시간까지 일찍 도착하는 길에 그 약속을 붙이게 된다.
+        setStretched(candidates.length > 0);
 
         setRanked(
           rankRoutes(usable, {
@@ -200,6 +212,7 @@ export function useRouteSuggestion({
       current != null && nextRoute(ranked, [...shownIds, current.candidate.id]) != null,
     showAnother,
     retry,
+    stretched,
     clockOffsetMs,
   };
 }
