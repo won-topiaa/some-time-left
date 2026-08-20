@@ -48,9 +48,20 @@ function Walk() {
 
   const samples = useRef<{ distanceFromPrevM: number; elapsedSec: number }[]>([]);
   const previous = useRef<{ at: LatLng; ms: number } | null>(null);
-  // 도착 화면으로는 한 번만 넘어간다. 40m 안쪽 측정이 연달아 들어오면
-  // navigate가 여러 번 불리고, 수동 버튼과도 겹칠 수 있다.
-  const arrived = useRef(false);
+  /**
+   * 지금 넘어가는 중인가. 40m 안쪽 측정이 연달아 들어와도 navigate는 한 번만.
+   * 화면이 다시 보이면 풀어 준다 — 안 풀면 '이미 도착했어요'가 영영 먹통이 된다.
+   */
+  const navigating = useRef(false);
+  /**
+   * 자동으로 도착 처리를 한 적이 있는가. **이건 풀지 않는다.**
+   *
+   * 도착 화면에서 뒤로 나온 사람은 일부러 나온 것이다. 목적지 코앞이라 위치는
+   * 여전히 40m 안쪽이므로, 다시 켜진 GPS가 측정을 하나 주는 순간 곧바로 도착 화면으로
+   * 되돌려 보내게 된다 — 나올 수 없는 화면이 된다. 자동은 한 번이면 족하고,
+   * 그 뒤로는 본인이 누를 때만 넘어간다.
+   */
+  const autoArrived = useRef(false);
 
   const path = useMemo(() => trip.route?.candidate.path ?? [], [trip.route]);
 
@@ -67,9 +78,12 @@ function Walk() {
     const onFocus = navigation.addListener('focus', () => {
       setFocused(true);
       // 도착 화면에서 뒤로 나오면 이 화면이 다시 보인다 — 스택 아래에 살아 있어서
-      // 컴포넌트가 다시 만들어지지 않고, 래치도 켜진 채 남는다. 그대로 두면
-      // 자동 도착도 '이미 도착했어요'도 먹통이 되어 걷는 화면에 영영 갇힌다.
-      arrived.current = false;
+      // 컴포넌트가 다시 만들어지지 않는다. 넘어가는 중 표시를 풀지 않으면
+      // '이미 도착했어요'가 영영 먹통이 되어 걷는 화면에 갇힌다.
+      navigating.current = false;
+      // 위치 표본은 이어 붙이지 않는다. 화면이 가려진 동안 GPS가 꺼져 있었으므로
+      // 다음 측정과의 간격이 몇 분씩 벌어져, 그대로 speed를 내면 거의 0이 된다.
+      previous.current = null;
     });
     const onBlur = navigation.addListener('blur', () => setFocused(false));
     return () => {
@@ -132,10 +146,10 @@ function Walk() {
   }, [path, focused]);
 
   const goToArrival = useCallback(() => {
-    if (arrived.current) {
+    if (navigating.current) {
       return;
     }
-    arrived.current = true;
+    navigating.current = true;
 
     // 기록에는 계획한 거리가 아니라 실제로 걸은 만큼을 남긴다.
     // 중간에 '이미 도착했어요'를 눌렀다면 나머지는 걷지 않은 길이다.
@@ -148,11 +162,13 @@ function Walk() {
     navigation.navigate('/arrive');
   }, [navigation, update, trip.route, remainingM]);
 
-  // 도착하면 바로 3분 화면으로.
+  // 도착하면 바로 3분 화면으로. 자동은 딱 한 번이다.
   useEffect(() => {
-    if (remainingM != null && remainingM <= ARRIVED_RADIUS_M) {
-      goToArrival();
+    if (autoArrived.current || remainingM == null || remainingM > ARRIVED_RADIUS_M) {
+      return;
     }
+    autoArrived.current = true;
+    goToArrival();
   }, [remainingM, goToArrival]);
 
   const targetMs =
