@@ -33,7 +33,7 @@ const LOCATION_GRACE_MS = 20_000;
  */
 function Walk() {
   const navigation = useNavigation();
-  const { trip } = useTrip();
+  const { trip, update } = useTrip();
   const screen = useScreenInsets();
   const [remainingM, setRemainingM] = useState<number | null>(null);
   const [speedMps, setSpeedMps] = useState(DEFAULT_WALK_SPEED_MPS);
@@ -54,13 +54,39 @@ function Walk() {
 
   const path = useMemo(() => trip.route?.candidate.path ?? [], [trip.route]);
 
-  // 걷는 내내 화면이 꺼지면 페이스 코칭이 무의미하다.
+  /**
+   * 화면이 보이는 동안만 잠들지 않게 한다.
+   *
+   * 도착 화면으로 넘어가도 이 화면은 스택 아래에 그대로 살아 있어서, unmount에만
+   * 걸어 두면 한 줄을 적는 3분 내내 화면이 안 꺼지고 고정밀 GPS도 계속 돈다.
+   * 그래서 사라질 때(blur) 놓고, 다시 보일 때(focus) 잡는다.
+   */
+  const [focused, setFocused] = useState(true);
+
   useEffect(() => {
+    const onFocus = navigation.addListener('focus', () => {
+      setFocused(true);
+      // 도착 화면에서 뒤로 나오면 이 화면이 다시 보인다 — 스택 아래에 살아 있어서
+      // 컴포넌트가 다시 만들어지지 않고, 래치도 켜진 채 남는다. 그대로 두면
+      // 자동 도착도 '이미 도착했어요'도 먹통이 되어 걷는 화면에 영영 갇힌다.
+      arrived.current = false;
+    });
+    const onBlur = navigation.addListener('blur', () => setFocused(false));
+    return () => {
+      onFocus();
+      onBlur();
+    };
+  }, [navigation]);
+
+  useEffect(() => {
+    if (!focused) {
+      return;
+    }
     setScreenAwakeMode({ enabled: true }).catch(() => {});
     return () => {
       setScreenAwakeMode({ enabled: false }).catch(() => {});
     };
-  }, []);
+  }, [focused]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now() + offset), 1000);
@@ -68,7 +94,9 @@ function Walk() {
   }, [offset]);
 
   useEffect(() => {
-    if (path.length === 0) {
+    // 화면이 가려져 있으면 위치를 받을 이유가 없다. 3분 동안 고정밀 GPS를
+    // 켜 둔 채로 두면 배터리만 먹고, 안 보이는 화면을 몇 초마다 다시 그린다.
+    if (path.length === 0 || !focused) {
       return;
     }
 
@@ -101,15 +129,24 @@ function Walk() {
     });
 
     return stop;
-  }, [path]);
+  }, [path, focused]);
 
   const goToArrival = useCallback(() => {
     if (arrived.current) {
       return;
     }
     arrived.current = true;
+
+    // 기록에는 계획한 거리가 아니라 실제로 걸은 만큼을 남긴다.
+    // 중간에 '이미 도착했어요'를 눌렀다면 나머지는 걷지 않은 길이다.
+    // 위치를 한 번도 못 잡았다면 알 길이 없으니 null로 두고, 그때는 계획한 거리를 쓴다.
+    const total = trip.route?.candidate.distanceM;
+    const walked =
+      total != null && remainingM != null ? Math.max(0, total - remainingM) : null;
+    update({ walkedDistanceM: walked });
+
     navigation.navigate('/arrive');
-  }, [navigation]);
+  }, [navigation, update, trip.route, remainingM]);
 
   // 도착하면 바로 3분 화면으로.
   useEffect(() => {
@@ -141,9 +178,14 @@ function Walk() {
       <View style={styles.top}>
         <Text style={styles.remainingLabel}>도착까지</Text>
         <Text style={styles.remaining}>{formatDuration(remainingSec)}</Text>
-        {remainingM != null && (
-          <Text style={styles.distance}>{Math.round(remainingM)}m 남았어요</Text>
-        )}
+        {/*
+          자리를 늘 잡아 둔다. 첫 측정이 들어올 때 이 줄이 생기면 위의 큰 숫자가
+          아래로 밀리는데, 걷는 내내 위치는 끊겼다 붙었다 한다 —
+          가장 조용해야 할 화면이 그때마다 들썩이면 안 된다.
+        */}
+        <Text style={styles.distance}>
+          {remainingM != null ? `${Math.round(remainingM)}m 남았어요` : ' '}
+        </Text>
       </View>
 
       {blind ? (
@@ -206,11 +248,14 @@ const styles = StyleSheet.create({
   remaining: { ...type.numeral, color: colors.ink },
   // 걸으면서 흘깃 보는 화면이다. 여기서는 작게 만들지 않는다.
   distance: { ...type.body, color: colors.inkSoft, marginTop: spacing.xs },
+  // 안내가 한 줄이든 두 줄이든 높이가 같아야 위의 큰 숫자가 움직이지 않는다.
   advice: {
     borderRadius: radius.lg,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 96,
   },
   adviceText: { ...type.title, color: colors.ink },
   adviceSub: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },

@@ -47,7 +47,11 @@ function Home() {
   const refreshNow = useCallback(() => {
     const fresh = Date.now();
     setNowMs(fresh);
-    if (trip.arriveAtMs != null && trip.arriveAtMs < fresh + LEAD_MS) {
+    // 이미 지난 시각만 비운다. 20분(프리셋 여유)을 기준으로 잡으면, 첫 칸이
+    // 21분 뒤인 순간에 고르고 기분 화면에 다녀오기만 해도 선택이 사라진다.
+    // 촉박한 약속은 길 찾기 화면이 "지금 나서는 게 최선이에요"라고 정직하게 말한다 —
+    // 제안을 넉넉하게 만드는 것과 고른 것을 지우는 것은 다른 일이다.
+    if (trip.arriveAtMs != null && trip.arriveAtMs <= fresh) {
       update({ arriveAtMs: null });
     }
   }, [trip.arriveAtMs, update]);
@@ -68,8 +72,9 @@ function Home() {
       return;
     }
     const next = trip.arriveAtMs + deltaMs;
-    // 지금 걸어서 닿을 수 없는 시각으로는 못 내린다.
-    if (next < Date.now() + LEAD_MS) {
+    // 이미 지난 시각으로는 못 내린다. 그 위로는 막지 않는다 —
+    // 15분 뒤 약속도 사람에겐 실재하고, 늦는지 아닌지는 길 찾기 화면이 말해 준다.
+    if (next <= Date.now()) {
       return;
     }
     update({ arriveAtMs: next });
@@ -111,7 +116,9 @@ function Home() {
           <>
             <TextInput
               style={styles.input}
-              placeholder={available ? '약속 장소' : '약속 장소 (검색 키 미설정)'}
+              // 키가 없다는 건 우리 사정이지 쓰는 사람 사정이 아니다.
+              // "검색 키 미설정" 같은 말이 화면에 나오면 안 된다.
+              placeholder={available ? '약속 장소' : '지금은 장소를 찾을 수 없어요'}
               placeholderTextColor={colors.inkFaint}
               value={query}
               onChangeText={setQuery}

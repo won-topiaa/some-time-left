@@ -7,7 +7,6 @@ import {
   type PropsWithChildren,
 } from 'react';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
-import type { WalkPlan } from '../domain/time';
 
 /**
  * 한 번의 이동에 대한 상태.
@@ -22,13 +21,16 @@ export interface Trip {
   arriveAtMs: number | null;
   companion: string;
   mood: MoodId | null;
-  plan: WalkPlan | null;
   /** 지금 제안 중인 경로 */
   route: ScoredRoute | null;
-  /** 이미 보여준 경로들 — "다른 길"을 누를 때 건너뛴다 */
-  shownRouteIds: string[];
-  /** 걷기 시작한 시각 */
-  startedAtMs: number | null;
+  /**
+   * 실제로 걸은 거리 (m). 위치를 한 번도 못 잡았으면 null.
+   *
+   * '이미 도착했어요'를 눌러 중간에 끝낼 수 있으니, 계획한 거리를 그대로 기록하면
+   * 걷지 않은 길이 '지나온 길'의 누적 거리에 얹힌다. 그 숫자가 그 화면의 주인공이라
+   * 부풀면 안 된다 — 걷는 화면이 마지막으로 안 만큼만 넘긴다.
+   */
+  walkedDistanceM: number | null;
   /**
    * 서버 시각 − 기기 시각 (ms).
    *
@@ -47,10 +49,8 @@ const EMPTY: Trip = {
   arriveAtMs: null,
   companion: '',
   mood: null,
-  plan: null,
   route: null,
-  shownRouteIds: [],
-  startedAtMs: null,
+  walkedDistanceM: null,
   clockOffsetMs: 0,
 };
 

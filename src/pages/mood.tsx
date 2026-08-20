@@ -23,7 +23,7 @@ function Mood() {
 
   const choose = (mood: MoodId) => {
     generateHapticFeedback({ type: 'tickWeak' }).catch(() => {});
-    update({ mood, shownRouteIds: [] });
+    update({ mood });
     navigation.navigate('/route');
   };
 

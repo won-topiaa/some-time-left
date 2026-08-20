@@ -100,8 +100,14 @@ function Trace() {
         <Text style={styles.numeral}>{formatTotalDistance(summary.totalDistanceM)}</Text>
         <Text style={styles.unit}>km</Text>
       </View>
+      {/*
+        한 줄을 안 남긴 사람에게 "0번 남겼어요"라고 하지 않는다. 비문이기도 하고,
+        쌓인 걸 보러 온 화면의 첫 문장이 안 한 일을 세는 문장이 되면 안 된다.
+      */}
       <Text style={styles.micro}>
-        {summary.count}번 걸었고, {summary.noteCount}번 한 줄을 남겼어요
+        {summary.noteCount === 0
+          ? `${summary.count}번 걸었어요`
+          : `${summary.count}번 걸었고, ${summary.noteCount}번 한 줄을 남겼어요`}
       </Text>
 
       {/*

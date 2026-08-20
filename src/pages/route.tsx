@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
@@ -96,16 +96,25 @@ function RouteScreen() {
   const startWalking = () => {
     // 시계 차이를 함께 실어 보낸다. 걷는 화면·도착 화면이 계획과 같은 시계로 세야
     // "3분 전 도착"이 화면마다 다른 숫자가 되지 않는다.
-    update({ plan, route, startedAtMs: Date.now() + clockOffsetMs, clockOffsetMs });
+    // 걸은 거리는 아직 0이 아니라 '모름'이다 — 걷는 화면이 채운다.
+    update({ route, clockOffsetMs, walkedDistanceM: null });
     navigation.navigate('/walk');
   };
 
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
-      <Text style={styles.headline}>{planHeadline(plan)}</Text>
+      {/*
+        작은 기기에서는 헤드라인·리본·시간·이유·가게 한 줄이 화면보다 길어진다.
+        고정 높이로 두면 맨 아래 걷기 버튼이 화면 밖으로 밀려 아무것도 못 하게 되므로,
+        위쪽은 스크롤로 흐르게 하고 버튼만 아래에 붙여 둔다.
+      */}
+      <ScrollView
+        contentContainerStyle={styles.flow}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.headline}>{planHeadline(plan)}</Text>
 
-      {route != null && (
-        <>
+        {route != null && (
           <View style={styles.card}>
             {/* 길에 그날의 기분 색을 입힌다. 이 색 그대로 기록에 남는다. */}
             <RoutePreview
@@ -123,7 +132,13 @@ function RouteScreen() {
               </Text>
             </View>
 
-            {trip.mood != null && (
+            {/*
+              고르지 않은 길에는 고른 이유를 붙이지 않는다.
+              여유가 없어 곧장 가는 계획(straight)은 후보가 하나뿐이라 이 문장이
+              "골랐다"고 말하게 되는데, 바로 위 헤드라인은 "그냥 곧장 가요"라고 한다.
+              둘이 어긋나면 이 앱이 신뢰를 얻는 유일한 문장이 흠집이 된다.
+            */}
+            {trip.mood != null && plan.kind === 'stretch' && (
               <Text style={styles.reason}>
                 {routeReason(trip.mood, route.dominantFeature)}
               </Text>
@@ -133,20 +148,18 @@ function RouteScreen() {
               <Text style={styles.nearby}>{alongRouteHint(nearbyPlace.name)}</Text>
             )}
           </View>
+        )}
 
-          {/* 조건 버튼은 입구가 아니라 출구에 둔다. 자동 추천이 틀렸을 때의 도망갈 곳. */}
-          {hasAlternative && (
-            <Pressable
-              style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
-              onPress={showAnother}
-            >
-              <Text style={styles.ghostText}>다른 길로 보여주세요</Text>
-            </Pressable>
-          )}
-        </>
-      )}
-
-      <View style={styles.spacer} />
+        {/* 조건 버튼은 입구가 아니라 출구에 둔다. 자동 추천이 틀렸을 때의 도망갈 곳. */}
+        {route != null && hasAlternative && (
+          <Pressable
+            style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
+            onPress={showAnother}
+          >
+            <Text style={styles.ghostText}>다른 길로 보여주세요</Text>
+          </Pressable>
+        )}
+      </ScrollView>
 
       {/*
         길이 없으면 걷기 버튼도 없다. 좌표 없이 걷기 화면에 들어가면
@@ -205,7 +218,8 @@ const styles = StyleSheet.create({
   // 자동 추천이 틀렸을 때의 도망갈 곳이다. 눌러진다는 게 보여야 한다.
   ghost: { paddingVertical: spacing.md, alignItems: 'center' },
   ghostText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
-  spacer: { flex: 1 },
+  // 위쪽은 흐르고, 버튼만 아래에 붙는다.
+  flow: { flexGrow: 1 },
   cta: {
     backgroundColor: colors.ink,
     borderRadius: radius.md,

@@ -48,12 +48,18 @@ export function planHeadline(plan: WalkPlan): string {
   }
 }
 
-/** 도착 3분 전 화면. 이 앱의 시그니처 순간. */
+/**
+ * 도착 3분 전 화면. 이 앱의 시그니처 순간.
+ *
+ * 숫자는 말하지 않는다. 바로 위에 남은 시간이 큰 숫자로 떠 있는데 여기서 또
+ * "3분 남았어요"라고 하면, 빨리 걸어 8분 일찍 닿은 사람에게는 두 값이 어긋난다.
+ * 화면의 주인공은 그 숫자 하나이고, 이 문장은 그다음에 무엇을 할지만 건넨다.
+ */
 export function arrivalPrompt(companion: string | null): string {
   if (companion == null || companion.trim() === '') {
-    return '3분 남았어요.\n숨 고르고, 첫 마디를 생각해요.';
+    return '숨 고르고,\n첫 마디를 생각해요.';
   }
-  return `3분 남았어요.\n${companion}에게 무슨 말부터 할까요?`;
+  return `${companion}에게\n무슨 말부터 할까요?`;
 }
 
 /** 한 줄 기록을 청하는 말. 강요하지 않는 톤으로. */
