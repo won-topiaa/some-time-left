@@ -18,7 +18,12 @@ export default defineConfig({
       // 빌드는 통과하고 기기에서만 깨지는 종류의 문제가 된다.
       target: '0.72.6',
       brand: {
-        displayName: '썸타임레프트',
+        /**
+         * 토스 앱 목록과 앱 안에서 함께 보이는 이름이라
+         * 앱인토스 콘솔의 '한국어 앱 이름'과 **같아야 한다**.
+         * 저장소·appName·영어 이름은 `some-time-left` / `Some Time Left` 그대로다.
+         */
+        displayName: '자투리 시간',
         primaryColor: '#3F5A8A',
         /**
          * **이미지 주소**다. 번들에 넣는 파일 경로가 아니다 —
