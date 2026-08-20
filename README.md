@@ -18,7 +18,7 @@
 | 테스트 | 337개 통과 (앱 + 프록시) |
 | 도보 경로 (TMAP 보행자 경로안내) | 연동 완료, **응답 구조 문서 대조 완료** |
 | 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
-| 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — 응답 구조 1회 확인 필요 |
+| 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — **실측 확인** (제공 장소 33,768곳) |
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
 | 혼잡도 프록시 | **배포 완료** (Cloudflare Workers) — 서울까지 실측 확인 |
 | 앱 아이콘 | `assets/icon.png` (1024×1024) — `python3 scripts/make-icon.py`로 생성 |
@@ -30,17 +30,20 @@
 모든 명령은 저장소 폴더 안에서 친다. `ait`은 전역 명령이 아니라
 `node_modules/.bin`에만 있으므로 직접 부를 때는 `npx ait`이다.
 
-```bash
-npm install
-npm test          # 도메인·파싱 테스트 (네이티브 런타임·네트워크 불필요)
-npm run typecheck
-npm run dev       # granite dev — 토스 앱에서 열어 확인
-npm run build        # ait build — 배포용 some-time-left.ait 생성
-npm run build:bundle # granite build — 번들만 빠르게 확인 (.ait은 안 나옴)
-npm run deploy       # ait build + ait deploy. 콘솔 등록과 ait token add가 먼저다
-npm run store-shots   # 콘솔에 올릴 스크린샷 (assets/store/)
-npm run check-config  # 키·아이콘 주소·스토어 그림 규격을 실제로 확인
-```
+| 명령 | 하는 일 |
+|---|---|
+| `npm install` | |
+| `npm test` | 도메인·파싱 테스트 (네이티브 런타임·네트워크 불필요) |
+| `npm run typecheck` | |
+| `npm run dev` | `granite dev` — 토스 앱에서 열어 확인 |
+| `npm run build` | `ait build` — 배포용 `some-time-left.ait` 생성 |
+| `npm run build:bundle` | `granite build` — 번들만 빠르게 확인 (`.ait`은 안 나옴) |
+| `npm run deploy` | `ait build` + `ait deploy`. 콘솔 등록과 `npx ait token add`가 먼저다 |
+| `npm run store-shots` | 콘솔에 올릴 스크린샷 (`assets/store/`) |
+| `npm run check-config` | 키·아이콘 주소·스토어 그림 규격을 **실제로 불러서** 확인 |
+
+명령 블록에 `#` 주석을 달지 않는 이유: macOS 기본 zsh는 `interactive_comments`가
+꺼져 있어서 `npm run deploy  # 설명`을 붙여넣으면 설명이 **인자로 넘어간다.**
 
 배포 절차는 [`docs/release.md`](docs/release.md)에 있다.
 `ait deploy`는 빌드를 하지 않고 이미 있는 `.ait`을 올리기만 해서,
@@ -157,11 +160,11 @@ export const localSecrets = {
 
 파일을 직접 열 필요는 없다. 물어보고 대신 써 준다 (입력은 화면에 안 찍힌다):
 
-```bash
-npm run set-key tmap        # 또는 publicdata / vworld
-npm run set-key             # 목록에서 고르기
-npm run link-proxy          # 프록시 토큰은 proxy/.env에서 자동으로
-```
+| 명령 | 하는 일 |
+|---|---|
+| `npm run set-key tmap` | 키 하나를 넣는다 (`publicdata` / `vworld`도 같은 방식) |
+| `npm run set-key` | 목록에서 고르기 |
+| `npm run link-proxy` | 프록시 토큰은 `proxy/.env`에서 자동으로 |
 
 **잘 들어갔는지는 `typecheck`로 알 수 없다** — 값이 `null`이어도 통과한다.
 설정한 키를 **실제로 호출해서** 확인하려면:

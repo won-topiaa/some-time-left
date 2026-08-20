@@ -11,12 +11,16 @@
 `package.json`을 못 찾고 전부 ENOENT로 떨어진다.
 
 ```bash
-cd ~/some-time-left     # 클론해 둔 곳
+cd ~/some-time-left
 ```
 
 `ait`은 전역 명령이 아니다. 이 프로젝트의 `node_modules/.bin`에만 있으므로
 **`npx ait`**으로 부른다(`ait token add`는 `zsh: command not found: ait`이 된다).
 `npm run ...`은 npm이 알아서 그 경로를 잡아 주므로 그대로 쓰면 된다.
+
+> 이 문서의 명령 블록에는 `#` 주석을 달지 않는다. macOS 기본 zsh는
+> `interactive_comments`가 꺼져 있어서 `npx ait token add  # 설명`을 붙여넣으면
+> 설명이 **인자로 넘어가** `Unknown Syntax Error`가 난다. 설명은 블록 밖에 적는다.
 
 ## 한눈에
 
@@ -285,9 +289,9 @@ intoss-private://some-time-left/trace?_deploymentId=<id>
 ## 4. 배포 전에 보는 것
 
 ```bash
-npm test          # 337개
+npm test
 npm run typecheck
-npm run check-config   # 키가 실제로 응답하는지 — 아이콘 주소 포함
+npm run check-config
 ```
 
 `check-config`는 값이 들어갔는지만 보지 않고 **실제로 불러본다.** 아이콘 주소가
