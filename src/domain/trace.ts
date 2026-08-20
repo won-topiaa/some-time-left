@@ -24,9 +24,24 @@ export interface TraceSummary {
   firstAt: number | null;
 }
 
-export function traceSummary(records: WalkRecord[]): TraceSummary {
-  let totalDistanceM = 0;
-  let noteCount = 0;
+/**
+ * 목록에서 밀려난 옛 기록들의 합.
+ *
+ * 저장은 최근 것만 낱낱이 들고 있지만, 누적 숫자까지 줄면 이 화면이 거짓말을 한다.
+ * 그래서 밀려난 것들의 합을 함께 받아 더한다.
+ */
+export interface CarriedTotals {
+  count: number;
+  distanceM: number;
+  noteCount: number;
+}
+
+export function traceSummary(
+  records: WalkRecord[],
+  carried: CarriedTotals = { count: 0, distanceM: 0, noteCount: 0 }
+): TraceSummary {
+  let totalDistanceM = carried.distanceM;
+  let noteCount = carried.noteCount;
   let firstAt: number | null = null;
 
   for (const record of records) {
@@ -42,7 +57,7 @@ export function traceSummary(records: WalkRecord[]): TraceSummary {
     }
   }
 
-  return { count: records.length, totalDistanceM, noteCount, firstAt };
+  return { count: records.length + carried.count, totalDistanceM, noteCount, firstAt };
 }
 
 /** 누적 거리 표기. 발자취처럼 소수 둘째 자리까지 — 반올림하면 쌓이는 맛이 사라진다. */

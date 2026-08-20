@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { loadRecords } from '../data/records';
+import { NO_CARRIED, loadCarried, loadRecords, type CarriedTotals } from '../data/records';
 import { formatRecordDate, formatTotalDistance, groupByMonth, traceSummary } from '../domain/trace';
 import { moodById } from '../domain/mood';
 import { colors, spacing, type } from '../ui/theme';
@@ -36,18 +36,22 @@ function Trace() {
   const navigation = useNavigation();
   const screen = useScreenInsets();
   const [records, setRecords] = useState<WalkRecord[] | null>(null);
+  // 목록에서 밀려난 옛 기록들의 합. 낱낱은 없어도 누적 숫자에는 남아 있어야 한다.
+  const [carried, setCarried] = useState<CarriedTotals>(NO_CARRIED);
 
   useEffect(() => {
     let cancelled = false;
-    loadRecords()
+    Promise.all([
       // 저장된 값이 배열이 아니면 정렬에서 터진다. 기록을 못 읽는 것이
       // 영영 빈 화면이 될 이유는 없으니 없는 셈 치고 화면은 살려 둔다.
-      .catch(() => [])
-      .then((loaded) => {
-        if (!cancelled) {
-          setRecords(Array.isArray(loaded) ? loaded : []);
-        }
-      });
+      loadRecords().catch(() => []),
+      loadCarried().catch(() => NO_CARRIED),
+    ]).then(([loaded, totals]) => {
+      if (!cancelled) {
+        setRecords(Array.isArray(loaded) ? loaded : []);
+        setCarried(totals);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -57,18 +61,19 @@ function Trace() {
   // 기록이 실린 렌더의 훅 개수가 달라져 "Rendered more hooks than during the previous
   // render"로 화면이 죽는다 — 기록이 한 건이라도 생기는 순간부터 이 화면 전체가 못 열린다.
   const loaded = records ?? [];
-  const summary = useMemo(() => traceSummary(loaded), [loaded]);
+  const summary = useMemo(() => traceSummary(loaded, carried), [loaded, carried]);
   const months = useMemo(() => groupByMonth(loaded.slice(0, LIST_MAX)), [loaded]);
   const emptyCount = Math.max(0, GRID_MIN - loaded.length);
   const emptySlots = useMemo(() => Array.from({ length: emptyCount }, (_, i) => i), [emptyCount]);
-  const hidden = Math.max(0, loaded.length - LIST_MAX);
+  // 아래 목록에 안 그린 것 + 목록에서 아예 밀려난 것. 둘 다 위 숫자에는 들어 있다.
+  const hidden = Math.max(0, loaded.length - LIST_MAX) + carried.count;
 
   // 불러오는 사이 빈 화면을 '기록 없음'으로 잘못 보여주지 않는다.
   if (records == null) {
     return <View style={styles.screen} />;
   }
 
-  if (records.length === 0) {
+  if (records.length === 0 && carried.count === 0) {
     return (
       <View style={[styles.screen, styles.center, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
         <Text style={styles.emptyTitle}>아직 걸은 길이 없어요.</Text>

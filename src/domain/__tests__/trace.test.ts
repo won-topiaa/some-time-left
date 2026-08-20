@@ -68,6 +68,26 @@ describe('traceSummary', () => {
     expect(summary.noteCount).toBe(1);
   });
 
+  it('목록에서 밀려난 옛 기록도 누적에 함께 센다', () => {
+    // 저장은 최근 것만 낱낱이 들고 있지만 누적 숫자가 줄면 이 화면이 거짓말이 된다.
+    const summary = traceSummary([record({ distanceM: 1000 })], {
+      count: 30,
+      distanceM: 42000,
+      noteCount: 12,
+    });
+
+    expect(summary.count).toBe(31);
+    expect(summary.totalDistanceM).toBe(43000);
+    expect(summary.noteCount).toBe(12);
+  });
+
+  it('밀려난 것만 있고 최근 기록이 없어도 숫자는 남는다', () => {
+    const summary = traceSummary([], { count: 5, distanceM: 8000, noteCount: 2 });
+    expect(summary.count).toBe(5);
+    expect(summary.totalDistanceM).toBe(8000);
+    expect(summary.firstAt).toBeNull();
+  });
+
   it('가장 오래된 시각을 찾는다 (입력 순서와 무관하게)', () => {
     const older = Date.UTC(2026, 0, 1);
     const summary = traceSummary([record({ arrivedAt: Date.UTC(2026, 5, 1) }), record({ arrivedAt: older })]);

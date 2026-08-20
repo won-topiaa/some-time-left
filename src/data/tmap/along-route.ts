@@ -12,7 +12,7 @@
 
 import { getApiConfig } from '../../config';
 import { requestJson } from '../http';
-import { interpolate, projectToPath } from '../../domain/geo';
+import { projectToPath } from '../../domain/geo';
 import type { LatLng } from '../../domain/types';
 import type { TmapPoiResponse } from './types';
 import { parsePoi, type Place } from './parse';
@@ -127,8 +127,15 @@ export async function fetchPlaceAlongRoute(path: LatLng[]): Promise<AlongRoutePl
     return null;
   }
 
-  // 경로 한복판을 검색 중심으로. 반경은 경로가 그 안에 들 만큼만.
-  const center = interpolate(path[0], path[path.length - 1], 0.5);
+  /*
+   * 검색 중심은 **길 위의 한복판**이다.
+   *
+   * 출발점과 도착점의 중점으로 잡으면 곧은 길에서만 맞는다. 이 앱이 주로 만드는
+   * 건 일부러 늘린 길이라 한가운데가 옆으로 크게 부풀어 있어, 그 중점은 사용자가
+   * 지나지도 않는 자리다 — 거기서 1km를 뒤지면 정작 걷는 구간이 반경 밖으로 빠지고,
+   * 찾아온 가게는 전부 45m 필터에 걸러져 힌트가 조용히 사라진다.
+   */
+  const center = path[Math.floor(path.length / 2)];
 
   try {
     const results = await Promise.all(

@@ -74,7 +74,11 @@ export function useRouteSuggestion({
     let cancelled = false;
 
     async function run() {
+      // 앱 안에서는 여기까지 빈 손으로 올 수 없지만, 스킴 링크는 어느 화면으로든
+      // 바로 들어온다. 그때 로딩만 켜 두면 영영 도는 화면이 되므로 사실대로 말한다.
       if (destination == null || arriveAtMs == null || mood == null) {
+        setLoading(false);
+        setError('어디로, 몇 시에 가는지부터 알려주세요.');
         return;
       }
 
@@ -87,7 +91,9 @@ export function useRouteSuggestion({
       let nowMs: number;
       try {
         const [position, clock] = await Promise.all([
-          getCurrentLocation({ accuracy: Accuracy.Balanced }),
+          // 이 좌표가 최단 시간의 기준점이 되고, 거기서 "3분 전 도착"이 계산된다.
+          // 수백 미터 어긋나면 그만큼(도보로 몇 분) 계획이 통째로 밀린다.
+          getCurrentLocation({ accuracy: Accuracy.High }),
           now(),
         ]);
         origin = { lat: position.coords.latitude, lng: position.coords.longitude };

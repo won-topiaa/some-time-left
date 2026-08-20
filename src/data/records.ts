@@ -11,9 +11,33 @@ import type { WalkRecord } from '../domain/types';
 
 const RECORDS_KEY = 'stl:records:v1';
 const COMPANIONS_KEY = 'stl:companions:v1';
+const CARRIED_KEY = 'stl:carried:v1';
 
 /** 최근 걸은 길을 다시 추천하지 않기 위해 참조하는 개수. */
 const RECENT_WINDOW = 5;
+
+/**
+ * 낱낱이 들고 있을 기록의 최대 개수.
+ *
+ * 매일 걸어도 1년이 넘는 양이다. 다만 무제한으로 두면 길 찾을 때마다 파싱하는
+ * JSON이 계속 커지므로 어딘가에서 끊어야 한다. 끊더라도 **누적 숫자는 줄지 않는다** —
+ * 밀려난 기록은 아래 `CarriedTotals`로 옮겨 담는다.
+ */
+const MAX_RECORDS = 400;
+
+/**
+ * 목록에서 밀려난 기록들의 합.
+ *
+ * '지나온 길'의 주인공은 누적 거리라서, 오래된 걸 지웠다고 그 숫자가 줄면
+ * 이 앱이 기록이라고 말할 수 없게 된다. 낱낱은 버리되 합은 남긴다.
+ */
+export interface CarriedTotals {
+  count: number;
+  distanceM: number;
+  noteCount: number;
+}
+
+export const NO_CARRIED: CarriedTotals = { count: 0, distanceM: 0, noteCount: 0 };
 
 /**
  * 읽기에 관대한 버전. 못 읽으면 없는 셈 친다.
@@ -69,13 +93,45 @@ export async function saveRecord(record: WalkRecord): Promise<void> {
     path: compactPath(record.path),
   };
 
-  await writeJson(RECORDS_KEY, [stored, ...records]);
+  const next = [stored, ...records];
+
+  // 넘치는 만큼은 합으로 옮겨 담는다. 낱낱은 사라져도 누적 숫자는 그대로다.
+  if (next.length > MAX_RECORDS) {
+    const dropped = next.slice(MAX_RECORDS);
+    await carryOver(dropped);
+    await writeJson(RECORDS_KEY, next.slice(0, MAX_RECORDS));
+  } else {
+    await writeJson(RECORDS_KEY, next);
+  }
 
   // 기록은 이미 남았다. 이름 목록은 편의 기능일 뿐이라 여기서 실패해도
   // 위 저장까지 실패한 것처럼 보이게 하지 않는다.
   if (record.companion.trim() !== '') {
     await rememberCompanion(record.companion).catch(() => {});
   }
+}
+
+/** 목록에서 밀려난 기록들을 합에 더한다. */
+async function carryOver(dropped: WalkRecord[]): Promise<void> {
+  const existing = await readJsonStrict<CarriedTotals>(CARRIED_KEY, NO_CARRIED);
+  const base =
+    existing != null && typeof existing.count === 'number' ? existing : NO_CARRIED;
+
+  const next: CarriedTotals = {
+    count: base.count + dropped.length,
+    distanceM:
+      base.distanceM +
+      dropped.reduce((sum, r) => sum + (r.distanceM ?? pathLengthM(r.path)), 0),
+    noteCount: base.noteCount + dropped.filter((r) => r.note.trim() !== '').length,
+  };
+
+  await writeJson(CARRIED_KEY, next);
+}
+
+/** 목록에서 밀려난 기록들의 합. 없으면 0. */
+export async function loadCarried(): Promise<CarriedTotals> {
+  const carried = await readJson<CarriedTotals>(CARRIED_KEY, NO_CARRIED);
+  return carried != null && typeof carried.count === 'number' ? carried : NO_CARRIED;
 }
 
 /** 최근에 걸은 경로 id들. 같은 길을 반복 추천하지 않기 위해. */
