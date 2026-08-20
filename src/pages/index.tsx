@@ -174,8 +174,15 @@ function Home() {
                 ))}
               </ScrollView>
             )}
+            {/*
+              찾다가 아무것도 없으면 화면이 그냥 조용해져서, 검색이 도는 중인지
+              결과가 없는 건지 알 수 없었다. 모르는 채로 두지 않는다.
+            */}
             {searching && results.length === 0 && (
               <Text style={styles.searching}>찾는 중...</Text>
+            )}
+            {!searching && results.length === 0 && query.trim().length >= 2 && (
+              <Text style={styles.searching}>찾는 곳이 없어요. 다르게 적어 볼까요?</Text>
             )}
           </>
         )}

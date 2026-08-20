@@ -24,6 +24,14 @@ export interface Trip {
   /** 지금 제안 중인 경로 */
   route: ScoredRoute | null;
   /**
+   * 여유가 너무 많아 길이 상한에서 잘렸는가 (`WalkPlan.capped`).
+   *
+   * 잘리면 "3분 전 도착"을 지킬 수 없다 — 최단의 2.2배까지만 늘리므로 그보다 남는
+   * 시간은 그냥 일찍 도착하는 시간이 된다. 걷는 화면이 이걸 모르면 약속 시각까지를
+   * 세면서 "3분 전에 맞추고 있어요"라고 지키지 못할 말을 하게 된다.
+   */
+  capped: boolean;
+  /**
    * 이번 이동을 이미 기록에 남겼는가.
    *
    * 도착 화면 안의 ref로는 부족하다 — 뒤로 나갔다가 다시 들어오면 화면이 새로 만들어져
@@ -58,6 +66,7 @@ const EMPTY: Trip = {
   companion: '',
   mood: null,
   route: null,
+  capped: false,
   recordSaved: false,
   walkedDistanceM: null,
   clockOffsetMs: 0,

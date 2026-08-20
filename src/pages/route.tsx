@@ -97,7 +97,13 @@ function RouteScreen() {
     // 시계 차이를 함께 실어 보낸다. 걷는 화면·도착 화면이 계획과 같은 시계로 세야
     // "3분 전 도착"이 화면마다 다른 숫자가 되지 않는다.
     // 걸은 거리는 아직 0이 아니라 '모름'이다 — 걷는 화면이 채운다.
-    update({ route, clockOffsetMs, walkedDistanceM: null });
+    update({
+      route,
+      clockOffsetMs,
+      walkedDistanceM: null,
+      // 상한에서 잘린 계획이면 3분 전 도착을 약속할 수 없다. 걷는 화면이 알아야 한다.
+      capped: plan.kind === 'stretch' && plan.capped,
+    });
     navigation.navigate('/walk');
   };
 
