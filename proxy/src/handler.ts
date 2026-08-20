@@ -5,8 +5,8 @@
  * Cloudflare Workers(`worker.ts`)가 같은 함수를 공유한다.
  */
 
-import { TtlCache } from './cache';
-import { fetchPopulation, isValidAreaName, type AreaPopulation } from './seoul';
+import { TtlCache } from './cache.ts';
+import { fetchPopulation, isValidAreaName, type AreaPopulation } from './seoul.ts';
 
 export interface ProxyConfig {
   seoulBaseUrl: string;

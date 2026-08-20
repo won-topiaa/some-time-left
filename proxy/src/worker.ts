@@ -9,7 +9,7 @@
  * 설정 오류를 예외로 던지지 않는 이유는 `createWorkerFetch` 주석 참고.
  */
 
-import { createWorkerFetch } from './handler';
+import { createWorkerFetch } from './handler.ts';
 
 type Env = Record<string, string | undefined>;
 

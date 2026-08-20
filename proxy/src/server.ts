@@ -10,7 +10,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { configFromEnv, createHandler } from './handler';
+import { configFromEnv, createHandler } from './handler.ts';
 
 const config = configFromEnv(process.env);
 const handle = createHandler(config);

@@ -15,12 +15,20 @@ export interface CacheEntry<T> {
 
 export class TtlCache<T> {
   private readonly entries = new Map<string, CacheEntry<T>>();
+  private readonly ttlMs: number;
+  /** 이 개수를 넘으면 오래된 것부터 버린다. 메모리가 무한정 늘지 않도록. */
+  private readonly maxEntries: number;
 
-  constructor(
-    private readonly ttlMs: number,
-    /** 이 개수를 넘으면 오래된 것부터 버린다. 메모리가 무한정 늘지 않도록. */
-    private readonly maxEntries = 500
-  ) {}
+  /*
+   * 생성자 매개변수 프로퍼티(`constructor(private readonly ttlMs: number)`)를 쓰지 않는다.
+   * 그 문법은 타입만 지우는 걸로는 못 없애고 런타임 코드를 만들어 내야 해서,
+   * `node --experimental-strip-types`가 통째로 거부한다 — 이 프록시의 `npm run dev`가
+   * 바로 그 방식으로 도는데, 그때 서버가 아예 안 떴다.
+   */
+  constructor(ttlMs: number, maxEntries = 500) {
+    this.ttlMs = ttlMs;
+    this.maxEntries = maxEntries;
+  }
 
   get(key: string, nowMs: number): T | null {
     const entry = this.entries.get(key);
