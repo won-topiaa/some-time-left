@@ -27,6 +27,8 @@ import { colors, radius, spacing, type } from '../src/ui/theme.ts';
 import { MOOD_TINT } from '../src/ui/moodTint.ts';
 import { MOODS } from '../src/domain/mood.ts';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../src/domain/copy.ts';
+import { dayLabel, formatClock, formatDuration } from '../src/domain/time.ts';
+import { formatTotalDistance } from '../src/domain/trace.ts';
 import { VIEWBOX, projectPath, toSvgPath } from '../src/ui/routeShape.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +106,16 @@ const RECORD_PATHS = [
   [[37.573, 126.977], [37.5749, 126.9799], [37.5726, 126.9827], [37.5741, 126.9859], [37.5771, 126.9851], [37.5788, 126.9878]],
   [[37.5401, 127.07], [37.5427, 127.0711], [37.5441, 127.0682], [37.547, 127.0691], [37.5483, 127.0723], [37.5509, 127.0716]],
 ].map((p) => smooth(p, 8));
+
+/**
+ * 화면에 뜨는 시각·거리는 손으로 적지 않는다.
+ *
+ * "6:30 약속"이라고 적어 뒀다가 실제 앱이 `formatClock`으로 "오후 6시 30분"을
+ * 그리는 걸 뒤늦게 봤다. 스토어 이미지가 앱과 어긋나는 건 늘 이런 자리다 —
+ * 앱이 쓰는 함수를 그대로 부르면 어긋날 수가 없다.
+ */
+const APPOINTMENT_MS = Date.UTC(2026, 7, 20, 9, 30); // 한국 시간 오후 6시 30분
+const NOW_MS = Date.UTC(2026, 7, 20, 6, 0); // 한국 시간 오후 3시
 
 const RECORDS = [
   { path: RECORD_PATHS[0], mood: 'pensive', title: '서울숲', meta: '8월 18일 · 지우 · 생각이 많아요', note: '오랜만에 만나는 거라 무슨 말부터 할지 계속 골랐다.' },
@@ -215,7 +227,7 @@ function home() {
     </div>
     <!-- 적은 것이 언제로 읽혔는지 되돌려 준다. -->
     <div style="${font(type.caption)};color:${colors.inkSoft};
-        margin-top:${spacing.sm}px;margin-bottom:${spacing.lg}px">오늘 오후 6시 30분</div>
+        margin-top:${spacing.sm}px;margin-bottom:${spacing.lg}px">${dayLabel(APPOINTMENT_MS, NOW_MS)} ${formatClock(APPOINTMENT_MS)}</div>
 
     <div style="${font(type.caption)};color:${colors.inkSoft};margin-bottom:${spacing.sm}px">누구를 만나요?</div>
     <div style="background:${colors.surface};border-radius:${radius.md}px;padding:${spacing.md}px">
@@ -228,7 +240,7 @@ function home() {
         padding:${spacing.md + 2}px 0;text-align:center;
         ${font(type.title)};color:${colors.surface}">다음</div>
     <div style="padding:${spacing.md}px 0;text-align:center;
-        ${font(type.caption)};color:${colors.inkFaint}">지나온 길 · 12.4km</div>
+        ${font(type.caption)};color:${colors.inkFaint}">지나온 길 · ${formatTotalDistance(12_430)}km</div>
   `, { back: false });
 }
 
@@ -257,8 +269,8 @@ function route() {
       <div style="height:180px">${ribbon(WALK_PATH, MOOD_TINT.pensive)}</div>
 
       <div style="margin-top:${spacing.md}px">
-        <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">27분</div>
-        <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:${spacing.xs}px">2.1km · 6:30 약속</div>
+        <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(27 * 60)}</div>
+        <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:${spacing.xs}px">2.1km · ${formatClock(APPOINTMENT_MS)} 약속</div>
       </div>
 
       <div style="${font(type.body)};color:${colors.ink};margin-top:${spacing.md}px;
@@ -283,7 +295,7 @@ function walk() {
 
     <div style="text-align:center;margin-bottom:${spacing.xl}px">
       <div style="${font(type.caption)};color:${colors.inkSoft}">도착까지</div>
-      <div style="${font(type.numeral)};color:${colors.ink}">18분</div>
+      <div style="${font(type.numeral)};color:${colors.ink}">${formatDuration(18 * 60)}</div>
       <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.xs}px">1,240m 남았어요</div>
     </div>
 
@@ -343,7 +355,7 @@ function trace() {
   return screen(`
     <div style="${font(type.caption)};color:${colors.inkSoft}">지금까지 걸은 길</div>
     <div style="display:flex;align-items:flex-end">
-      <div style="${font(type.numeral)};color:${colors.ink}">12.4</div>
+      <div style="${font(type.numeral)};color:${colors.ink}">${formatTotalDistance(12_430)}</div>
       <div style="${font(type.caption)};color:${colors.inkFaint};margin-left:${spacing.xs}px;margin-bottom:${spacing.sm}px">km</div>
     </div>
     <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:${spacing.xs}px">9번 걸었고, 5번 한 줄을 남겼어요</div>
