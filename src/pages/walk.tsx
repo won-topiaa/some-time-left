@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss/framework';
-import { distanceM, remainingDistanceM } from '../domain/geo';
+import { distanceM, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
 import { ARRIVE_EARLY_SEC, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
@@ -62,6 +62,12 @@ function Walk() {
    * 그 뒤로는 본인이 누를 때만 넘어간다.
    */
   const autoArrived = useRef(false);
+  /**
+   * 지금까지 온 만큼(0~1). 뒤로 미끄러지지 않게 들고 있는다.
+   * 일부러 늘린 길은 제 옆을 스치기도 해서, 이걸 안 넘기면 위치가 십몇 미터 흔들릴 때
+   * 반대편 구간으로 옮겨 붙어 남은 거리가 절반으로 튄다.
+   */
+  const progress = useRef(0);
 
   const path = useMemo(() => trip.route?.candidate.path ?? [], [trip.route]);
 
@@ -126,9 +132,13 @@ function Walk() {
         // 기기 시각보다 측정 시각이 정확하다
         const ms = location.timestamp;
 
-        if (previous.current != null) {
+        // 직전 측정과의 거리는 속도에도 쓰고, 진행이 껑충 뛰는 것도 막는다.
+        const movedM =
+          previous.current != null ? distanceM(previous.current.at, at) : null;
+
+        if (previous.current != null && movedM != null) {
           samples.current.push({
-            distanceFromPrevM: distanceM(previous.current.at, at),
+            distanceFromPrevM: movedM,
             elapsedSec: (ms - previous.current.ms) / 1000,
           });
           setSpeedMps(estimateSpeedMps(samples.current));
@@ -136,7 +146,14 @@ function Walk() {
         previous.current = { at, ms };
 
         setLocationLost(false);
-        setRemainingM(remainingDistanceM(path, at));
+        const walked = walkProgress(path, at, {
+          since: progress.current,
+          // 길이 굽어 있으므로 직선 거리보다 조금 더 갔을 수 있다. 여유를 둔다.
+          // 첫 측정은 비교할 앞이 없어 제한하지 않는다.
+          ...(movedM != null ? { maxAdvanceM: movedM * 1.5 + 20 } : {}),
+        });
+        progress.current = Math.max(progress.current, walked.alongRatio);
+        setRemainingM(walked.remainingM);
       },
       // 조용히 삼키면 잘 걷는 사람에게 서두르라고 재촉하게 된다. 모르면 모른다고 한다.
       onError: () => setLocationLost(true),

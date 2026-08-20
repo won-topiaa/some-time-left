@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { alongRouteHint, arrivalPrompt, memoryRecall, planHeadline, routeReason } from '../copy';
-import { MOODS } from '../mood';
+import { MOODS, dominantFeature, weightsFor } from '../mood';
 import { FEATURE_KEYS } from '../types';
 
 /**
@@ -95,5 +95,36 @@ describe('alongRouteHint', () => {
     expect(hint).toContain('연희동 커피');
     // 느낌표로 재촉하지 않는다.
     expect(hint).not.toContain('!');
+  });
+});
+
+/**
+ * 추천 이유는 이 길이 **실제로 가진** 성질이어야 한다.
+ *
+ * 데이터를 못 받은 성질은 중립값 0.5로 두는데, 가중치가 큰 기분에서는 그 0.5가
+ * 그대로 최대 기여가 되어 "모르는 것"을 이유로 내세우게 됐다 —
+ * 건물 높이가 하나도 없는데 '햇볕이 싫어요'에 그늘을 이유로 대던 경우다.
+ */
+describe('dominantFeature — 모르는 걸 이유로 대지 않는다', () => {
+  const unknown = { quiet: 0.5, flat: 0.8, shade: 0.5, scenic: 0.5, novelty: 1, unbroken: 0.9 };
+
+  it('중립값뿐인 성질은 이유가 되지 않는다', () => {
+    expect(dominantFeature(unknown, weightsFor('hot'))).not.toBe('shade');
+  });
+
+  it('진짜로 그늘진 길이면 그늘을 이유로 댄다', () => {
+    const shady = { ...unknown, shade: 0.9 };
+    expect(dominantFeature(shady, weightsFor('hot'))).toBe('shade');
+  });
+
+  it('두드러진 게 하나도 없으면 그래도 하나는 고른다', () => {
+    const flat = { quiet: 0.5, flat: 0.5, shade: 0.5, scenic: 0.5, novelty: 0.5, unbroken: 0.5 };
+    expect(FEATURE_KEYS).toContain(dominantFeature(flat, weightsFor('pensive')));
+  });
+
+  it('여섯 기분 모두 이유를 하나씩 낸다', () => {
+    for (const mood of MOODS) {
+      expect(FEATURE_KEYS).toContain(dominantFeature(unknown, weightsFor(mood.id)));
+    }
   });
 });

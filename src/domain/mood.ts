@@ -100,23 +100,41 @@ export function scoreFeatures(features: RouteFeatures, weights: FeatureWeights):
 }
 
 /**
+ * 이 성질을 "이 길이 실제로 가진 것"이라고 말하려면 이 정도는 돼야 한다.
+ *
+ * 데이터를 못 받은 성질은 중립값 0.5로 둔다(`features.ts`). 그런데 가중치가 큰
+ * 기분에서는 그 0.5가 그대로 최대 기여가 되어, 모르는 걸 이유로 내세우게 된다 —
+ * 건물 높이를 하나도 못 받았는데 '햇볕이 싫어요'에 "그늘이 이어지는 길이에요"라고
+ * 말하던 것이 그 경우다. 중립값보다 뚜렷하게 높은 것만 이유가 될 수 있다.
+ */
+const NOTABLE = 0.6;
+
+/**
  * 이 경로를 고르게 만든 성질 하나.
  * 추천 이유 한 줄을 쓰기 위해 필요하다 — 자동 추천의 생명줄.
+ *
+ * 가중치를 곱한 기여가 가장 큰 것을 고르되, **이 길이 실제로 두드러진 성질** 중에서
+ * 고른다. 아무것도 두드러지지 않으면 그때는 기여가 가장 큰 것을 그대로 쓴다.
  */
 export function dominantFeature(
   features: RouteFeatures,
   weights: FeatureWeights
 ): FeatureKey {
-  let best: FeatureKey = FEATURE_KEYS[0];
-  let bestValue = -Infinity;
-  for (const k of FEATURE_KEYS) {
-    const contribution = features[k] * weights[k];
-    if (contribution > bestValue) {
-      bestValue = contribution;
-      best = k;
+  const pick = (keys: FeatureKey[]): FeatureKey | null => {
+    let best: FeatureKey | null = null;
+    let bestValue = -Infinity;
+    for (const k of keys) {
+      const contribution = features[k] * weights[k];
+      if (contribution > bestValue) {
+        bestValue = contribution;
+        best = k;
+      }
     }
-  }
-  return best;
+    return best;
+  };
+
+  const notable = FEATURE_KEYS.filter((k) => features[k] >= NOTABLE);
+  return pick(notable) ?? pick(FEATURE_KEYS) ?? FEATURE_KEYS[0];
 }
 
 export function moodById(id: MoodId): Mood {

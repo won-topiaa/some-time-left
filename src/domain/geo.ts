@@ -89,14 +89,68 @@ export function pathLengthM(path: LatLng[]): number {
  *   - 걸은 거리(전체 − 남은)를 0으로 만들어 기록을 0m로 남긴다.
  * 세 가지 모두 "숫자가 흔들리면 안 된다"는 이 앱의 약속을 정면으로 깬다.
  */
-export function remainingDistanceM(path: LatLng[], current: LatLng): number {
+export function remainingDistanceM(
+  path: LatLng[],
+  current: LatLng,
+  minAlongRatio = 0
+): number {
+  return walkProgress(path, current, minAlongRatio).remainingM;
+}
+
+export interface WalkProgress {
+  /** 남은 거리 (m) */
+  remainingM: number;
+  /** 경로 위 진행 비율 (0~1). 다음 호출에 그대로 넘기면 뒤로 미끄러지지 않는다. */
+  alongRatio: number;
+}
+
+export interface WalkProgressOptions {
+  /** 직전까지 온 만큼 (0~1). 넘기면 진행이 뒤로 가지 않는다. */
+  since?: number;
+  /**
+   * 직전 측정 이후 실제로 움직일 수 있었던 최대 거리 (m).
+   *
+   * 뒤로 못 가게 막는 것만으로는 부족하다. 나갔다 되짚어 오는 길에서 두 갈래가
+   * 20m쯤 떨어져 있으면, 위치가 십몇 미터 흔들렸을 때 아직 걷지도 않은 **앞쪽**
+   * 구간이 더 가까워져 진행이 껑충 뛴다 — 남은 거리가 639m에서 224m로 줄고,
+   * 심하면 도착으로 잘못 판정한다. 사람이 그새 갈 수 있었던 만큼까지만 나아간다.
+   */
+  maxAdvanceM?: number;
+}
+
+/**
+ * 지금 어디쯤 왔고 얼마나 남았는가.
+ *
+ * 앞 호출의 `alongRatio`와 그새 움직인 거리를 넘기면, 진행이 뒤로도 앞으로도
+ * 튀지 않는다. 일부러 늘린 길은 제 옆을 스치거나 왔던 길을 되짚기 때문에
+ * 이 두 가지가 없으면 남은 거리가 한 번에 절반씩 뛴다.
+ */
+export function walkProgress(
+  path: LatLng[],
+  current: LatLng,
+  options: number | WalkProgressOptions = {}
+): WalkProgress {
   if (path.length === 0) {
-    return 0;
+    return { remainingM: 0, alongRatio: 0 };
   }
 
+  const { since = 0, maxAdvanceM } =
+    typeof options === 'number' ? { since: options } : options;
+
+  const total = pathLengthM(path);
   // 경로에서 벗어나 있으면 되돌아갈 거리도 남은 거리다.
-  const projection = projectToPath(path, current);
-  return projection.distanceM + pathLengthM(path) * (1 - projection.alongRatio);
+  const projection = projectToPath(path, current, since);
+
+  let alongRatio = projection.alongRatio;
+  if (maxAdvanceM != null && total > 0) {
+    const ceiling = since + Math.max(0, maxAdvanceM) / total;
+    alongRatio = Math.min(alongRatio, ceiling);
+  }
+
+  return {
+    remainingM: projection.distanceM + total * (1 - alongRatio),
+    alongRatio,
+  };
 }
 
 /**
@@ -173,7 +227,19 @@ export interface PathProjection {
  * 경로 전체에서의 진행 비율을 돌려준다. "경로 곁에 있는 가게인가,
  * 있다면 길 중간쯤인가"를 판단하는 데 쓴다.
  */
-export function projectToPath(path: LatLng[], point: LatLng): PathProjection {
+export function projectToPath(
+  path: LatLng[],
+  point: LatLng,
+  /**
+   * 이 지점보다 앞은 보지 않는다 (0~1).
+   *
+   * 일부러 늘린 길은 제 옆을 스치거나 왔던 길을 되짚기도 한다. 그런 길에서는
+   * 경로 전체에서 가장 가까운 곳을 찾으면, 위치가 십몇 미터만 흔들려도 반대편
+   * 구간으로 옮겨 붙는다 — 남은 거리가 837m에서 413m로 튀고, 심하면 도착으로
+   * 잘못 판정한다. 이미 지나온 만큼을 넘겨주면 그 뒤에서만 찾는다.
+   */
+  minAlongRatio = 0
+): PathProjection {
   if (path.length === 0) {
     return { distanceM: Infinity, alongRatio: 0 };
   }
@@ -192,7 +258,20 @@ export function projectToPath(path: LatLng[], point: LatLng): PathProjection {
     const side = signedSideOf(from, to, point);
 
     // 구간 밖으로 투영되면 가까운 끝점으로 잘라낸다.
-    const clamped = Math.min(1, Math.max(0, side.alongRatio));
+    let clamped = Math.min(1, Math.max(0, side.alongRatio));
+
+    // 이미 지나온 지점보다 앞이면, 이 구간에서 볼 수 있는 가장 이른 자리로 당긴다.
+    if (minAlongRatio > 0 && total > 0) {
+      const floorM = minAlongRatio * total;
+      if (travelled + segLen <= floorM) {
+        travelled += segLen;
+        continue;
+      }
+      if (segLen > 0) {
+        clamped = Math.max(clamped, Math.min(1, (floorM - travelled) / segLen));
+      }
+    }
+
     const foot = interpolate(from, to, clamped);
     const d = distanceM(foot, point);
 
