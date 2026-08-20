@@ -121,7 +121,7 @@ node scripts/discover-vworld.mjs <VWORLD_KEY>
 신청이 됐는지는 이걸로 확인된다:
 
 ```bash
-TMAP_APP_KEY=... node scripts/probe-tmap.mjs
+npm run probe-tmap
 ```
 
 ---

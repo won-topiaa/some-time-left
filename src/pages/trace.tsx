@@ -127,7 +127,9 @@ function Trace() {
         ))}
         {/* 아직 빈 자리는 비워 두되 보이게 둔다. 채우라고 재촉하지는 않는다. */}
         {emptySlots.map((i) => (
-          <View key={`empty-${i}`} style={styles.emptySlot} />
+          <View key={`empty-${i}`} style={styles.emptySlot}>
+            <View style={styles.emptyDot} />
+          </View>
         ))}
       </View>
 
@@ -193,14 +195,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.lg,
   },
-  // 채워지지 않은 자리. 테두리 없이 아주 옅은 점 하나로만 있음을 알린다.
+  /**
+   * 채워지지 않은 자리.
+   *
+   * 자리는 지키되 존재를 주장하지 않는다. 흰 원에 테두리를 두르면 64px짜리 면이 생겨
+   * 정작 주인공인 길 모양들보다 눈에 띄고, "면이 아니라 선과 여백"이라는 원칙도 깨진다.
+   * 가운데 아주 작은 점 하나로 "여기 아직 안 채워짐"만 알린다.
+   */
   emptySlot: {
     width: GLYPH,
     height: GLYPH,
-    borderRadius: GLYPH / 2,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.inkGhost,
   },
 
   month: { marginTop: spacing.xl },

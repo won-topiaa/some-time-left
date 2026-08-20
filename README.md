@@ -322,7 +322,7 @@ node scripts/discover-vworld.mjs <VWORLD_KEY> <레이어아이디>
 방어적으로 쓰여 있다. TMAP 키가 있으면 한 번에 확인할 수 있다.
 
 ```bash
-TMAP_APP_KEY=... node scripts/probe-tmap.mjs
+npm run probe-tmap
 ```
 
 다섯 엔드포인트(보행자 경로·POI 검색·지오코딩·혼잡도 목록·실시간 혼잡도)를 호출해

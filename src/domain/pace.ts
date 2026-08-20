@@ -87,15 +87,27 @@ export function paceAdvice({
 }
 
 /**
+ * 중앙값이 튄 값을 걸러 주려면 표본이 이만큼은 있어야 한다.
+ *
+ * 하나뿐이면 중앙값이 곧 그 값이라 튐이 그대로 통과하고, 둘이면 평균이 되어
+ * 절반이 섞인다. 걷기 시작하고 3~6초 사이가 정확히 그 구간인데, 하필 그때
+ * 첫 측정이 튀면 출발하자마자 "서두르세요"가 뜬다.
+ */
+const MIN_SAMPLES_FOR_MEDIAN = 3;
+
+/**
  * 위치 표본들로 최근 보행 속도를 추정한다.
  * GPS 튐을 줄이려고 마지막 몇 개만 쓰고 중앙값을 취한다.
+ *
+ * 표본이 모자라면 추정하지 않고 평균 보행 속도로 둔다 — 걷는 사람에게
+ * 근거 없는 재촉을 하느니 아직 모른다고 두는 편이 낫다.
  */
 export function estimateSpeedMps(
   samples: { distanceFromPrevM: number; elapsedSec: number }[],
   window = 5
 ): number {
   const recent = samples.slice(-window).filter((s) => s.elapsedSec > 0);
-  if (recent.length === 0) {
+  if (recent.length < MIN_SAMPLES_FOR_MEDIAN) {
     return DEFAULT_WALK_SPEED_MPS;
   }
   const speeds = recent

@@ -5,17 +5,26 @@
  * 파서 세 개(경로·지오코딩·혼잡도)가 아직 실측 없이 방어적으로만 쓰여 있다.
  * 실제 응답의 필드 이름과 타입을 알면 좁힐 수 있다.
  *
- *   TMAP_APP_KEY=... node scripts/probe-tmap.mjs
+ *   npm run probe-tmap
+ *
+ * 키는 저장된 것(config.local.ts)을 읽는다. 명령줄에 키를 적으면 셸 기록에
+ * 그대로 남아, 화면에 안 찍는다는 이 저장소의 규칙이 무색해진다.
  *
  * 출력은 **구조만** 보여준다 — 키는 절대 찍지 않고, 문자열 값은 잘라서
  * 형태만 알 수 있게 한다. 그대로 복사해서 붙여도 안전하다.
  */
 
-const KEY = process.env.TMAP_APP_KEY;
+let KEY = '';
+try {
+  const { localSecrets } = await import('../src/config.local.ts');
+  KEY = localSecrets.tmapAppKey ?? '';
+} catch {
+  KEY = '';
+}
 
-if (KEY == null || KEY === '') {
-  console.error('TMAP_APP_KEY 환경변수가 필요해요.');
-  console.error('  TMAP_APP_KEY=... node scripts/probe-tmap.mjs');
+if (KEY === '') {
+  console.error('저장된 TMAP 키가 없어요.');
+  console.error('  npm run set-key tmap   (입력은 화면에 안 찍혀요)');
   process.exit(1);
 }
 

@@ -10,14 +10,21 @@ import { formatDuration } from './time';
 import type { FeatureKey, MoodId } from './types';
 import type { WalkPlan } from './time';
 
-/** 성질별로 사람에게 하는 말. 기능 이름을 그대로 노출하지 않는다. */
+/**
+ * 성질별로 사람에게 하는 말. 기능 이름을 그대로 노출하지 않는다.
+ *
+ * **숫자를 말하지 않는다.** 예전엔 "신호등이 두 개뿐이라"고 적혀 있었는데,
+ * 이 문장이 받는 건 성질 이름 하나뿐이라 실제 횡단보도 개수를 알지 못한다 —
+ * 열 개인 길에도 "두 개뿐"이라고 말하고 있었다. 그늘을 지어내지 않기로 한 것과
+ * 같은 이유로, 세어 보지 않은 수는 말하지 않는다.
+ */
 const FEATURE_REASON: Record<FeatureKey, string> = {
   quiet: '사람이 거의 없는 길이에요',
   flat: '오르막이 거의 없어요',
   shade: '이 시간엔 그늘이 이어지는 길이에요',
   scenic: '걷다 보면 볼 게 있는 길이에요',
   novelty: '아직 안 가보신 길이에요',
-  unbroken: '신호등이 두 개뿐이라 생각이 안 끊겨요',
+  unbroken: '신호등이 적어서 생각이 잘 안 끊겨요',
 };
 
 /**

@@ -98,6 +98,17 @@ export const CONGESTION_LABEL: Record<CongestionLevel, string> = {
   4: '붐벼요',
 };
 
+/**
+ * 응답의 혼잡도 값을 1~4 등급으로.
+ *
+ * 응답 구조가 아직 실측되지 않아 두 표기를 모두 받는다(README 참고).
+ * 그래서 **정확히 1**은 어느 쪽인지 알 수 없다 — 등급이면 '한산해요',
+ * 비율이면 최대치라 '붐벼요'다. 뜻이 정반대라 찍으면 절반은 거꾸로 말하게 된다.
+ *
+ * 등급 표기가 더 그럴듯하므로 1은 등급으로 읽는다. 비율이 정확히 1.0으로
+ * 떨어지는 일은 드물고, 이 값은 도착 화면에 한 줄 얹는 곁다리라 틀려도
+ * 흐름을 막지 않는다. **응답 구조를 실측하면 이 분기를 가장 먼저 확인할 것.**
+ */
 function toLevel(raw: unknown): CongestionLevel | null {
   const value = Number(raw);
   if (!Number.isFinite(value)) {
@@ -107,7 +118,7 @@ function toLevel(raw: unknown): CongestionLevel | null {
   if (value >= 1 && value <= 4 && Number.isInteger(value)) {
     return value as CongestionLevel;
   }
-  // 0~1 비율로 오는 경우
+  // 0~1 비율로 오는 경우 (위에서 1을 가져가므로 여기 오는 건 1 미만이다)
   if (value >= 0 && value <= 1) {
     if (value < 0.25) return 1;
     if (value < 0.5) return 2;

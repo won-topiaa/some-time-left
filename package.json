@@ -21,7 +21,9 @@
     "set-key": "node scripts/set-key.mjs",
     "preset-key": "node scripts/ensure-local-config.mjs",
     "vworld-layers": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/discover-vworld.mjs",
-    "prevworld-layers": "node scripts/ensure-local-config.mjs"
+    "prevworld-layers": "node scripts/ensure-local-config.mjs",
+    "probe-tmap": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/probe-tmap.mjs",
+    "preprobe-tmap": "node scripts/ensure-local-config.mjs"
   },
   "dependencies": {
     "@apps-in-toss/framework": "^2.10.10",

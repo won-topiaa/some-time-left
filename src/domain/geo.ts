@@ -74,27 +74,29 @@ export function pathLengthM(path: LatLng[]): number {
   return total;
 }
 
-/** 경로 위에서 현재 위치에 가장 가까운 지점 이후의 남은 거리 (m). */
+/**
+ * 경로 위에서 현재 위치 이후의 남은 거리 (m).
+ *
+ * **꼭짓점이 아니라 선분 위의 한 점을 찾아야 한다.** 가장 가까운 꼭짓점으로 스냅하면,
+ * 한 구간의 앞쪽 절반을 걷는 동안 남은 거리가 오히려 **늘어난다** — 아직 지나지 않은
+ * 그 꼭짓점까지의 거리가 통째로 더해지기 때문이다.
+ *
+ * TMAP은 직진 구간을 좌표 두 개로 주기도 한다(이 저장소의 파싱 테스트 픽스처가
+ * 그런 300m 한 구간이다). 그런 길에서 100m를 걸으면 599m짜리 경로에 699m가 남았다고
+ * 말하게 되고, 그 값이 그대로
+ *   - 페이스 안내로 가서 일찍 가는 사람에게 서두르라 하고,
+ *   - 화면의 "N m 남았어요"를 한 구간씩 뛰게 하고,
+ *   - 걸은 거리(전체 − 남은)를 0으로 만들어 기록을 0m로 남긴다.
+ * 세 가지 모두 "숫자가 흔들리면 안 된다"는 이 앱의 약속을 정면으로 깬다.
+ */
 export function remainingDistanceM(path: LatLng[], current: LatLng): number {
   if (path.length === 0) {
     return 0;
   }
 
-  let nearestIndex = 0;
-  let nearestDistance = Infinity;
-  for (let i = 0; i < path.length; i += 1) {
-    const d = distanceM(path[i], current);
-    if (d < nearestDistance) {
-      nearestDistance = d;
-      nearestIndex = i;
-    }
-  }
-
-  let remaining = distanceM(current, path[nearestIndex]);
-  for (let i = nearestIndex + 1; i < path.length; i += 1) {
-    remaining += distanceM(path[i - 1], path[i]);
-  }
-  return remaining;
+  // 경로에서 벗어나 있으면 되돌아갈 거리도 남은 거리다.
+  const projection = projectToPath(path, current);
+  return projection.distanceM + pathLengthM(path) * (1 - projection.alongRatio);
 }
 
 /**
