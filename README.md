@@ -172,14 +172,24 @@ npm run check-config
 값이 없으면 그 기능만 꺼지고 앱은 계속 돈다. TMAP 키가 없으면 경로가 mock으로,
 프록시 토큰이 없으면 `quiet`이 중립값으로 떨어진다.
 
-**클라이언트 번들에 들어간 값은 뜯으면 나온다.** 그래서 서울 인증키처럼 진짜 비밀은
-앱이 아니라 [`proxy/`](proxy/README.md)에 둔다. 앱에 있는 건 프록시 접근 토큰뿐이고,
-그건 벽이 아니라 문턱이다.
+**클라이언트 번들에 들어간 값은 뜯으면 나온다.** `src/config.local.ts`의 값은
+`_app.tsx`가 읽어 쓰므로 빌드하면 그대로 번들에 박힌다 — TMAP 키, 공공데이터 인증키,
+브이월드 키, 프록시 토큰 넷 다 그렇다. 모바일 앱의 클라이언트 키는 원래 그런 것이라
+비밀로 지키는 대신 **발급처에서 제한을 건다**(브이월드는 등록 도메인, TMAP은 사용량).
+
+번들에 넣을 수 없는 건 따로 뺀다. 서울 실시간 인구데이터 인증키가 그것이고,
+[`proxy/`](proxy/README.md)에만 있다. 앱이 들고 있는 프록시 토큰은 그 키가 아니라
+프록시 문을 여는 값이고, 그건 벽이 아니라 문턱이다.
 
 ## 지금 진짜 계산되는 것 / 아직 아닌 것
 
 `RouteFeatures` 6개 중 실제 데이터로 계산되는 건 넷이다. 없는 건 있는 척하지 않고
 중립값(0.5)으로 두고 `src/data/features.ts`에 표시해 뒀다.
+
+그늘도 마찬가지다. 건물을 하나도 못 받으면 모든 구간이 기본 단면(양옆 15m)으로 떨어지는데,
+그대로 계산하면 남북 길 0.03 / 동서 길 0.36처럼 그럴듯한 값이 나온다. 길의 방위는
+진짜지만 양옆 벽은 지어낸 것이라 그 숫자로 길을 고르면 근거 없는 추천이 된다 —
+그래서 건물이 없으면 중립값으로 둔다.
 
 | 성질 | 출처 | 키 없을 때 |
 |---|---|---|
@@ -188,7 +198,7 @@ npm run check-config
 | `novelty` | 사용자 본인의 걷기 기록 | — |
 | `quiet` | 서울시 실시간 인구데이터 (프록시 경유, **동작 확인**) | 0.5 |
 | `scenic` | 전국도시공원표준데이터 (공원·수변 근접) | 0.5 |
-| `shade` | 태양 위치 × 브이월드 건물 층수 | 기본 높이 15m로 계산 |
+| `shade` | 태양 위치 × 브이월드 건물 층수 | 0.5 |
 
 도로 폭만 아직 기본값(12m)이다. 도로망 데이터를 붙이면 `DEFAULT_STREET_PROFILE`을
 대체하면 된다.
@@ -229,7 +239,7 @@ TMAP 장소 혼잡도는 **대형 쇼핑시설 200여 곳**만 다룬다(스타�
 
 대신 **약속 장소가 마침 그런 곳일 때** 도착 화면에 한 줄 얹는다.
 
-> "3분 남았어요. 롯데월드몰, 지금 붐벼요."
+> "롯데월드몰, 지금 붐벼요." (남은 시간은 바로 위 큰 숫자가 말한다)
 
 목록에 없는 장소가 대부분이므로 없으면 조용히 생략한다. 검색으로 고른 목적지는
 `poiId`로, 지오코딩으로 온 목적지는 이름 정규화로 맞춘다.
@@ -342,16 +352,23 @@ TMAP_APP_KEY=... node scripts/probe-tmap.mjs
 |---|---|
 | TMAP `POST /tmap/routes/pedestrian?version=1` | **확인** — `INVALID_API_KEY` |
 | TMAP `GET /tmap/pois?version=1` | **확인** — `INVALID_API_KEY` |
-| 도시공원 `apis.data.go.kr/openapi/tn_pubr_public_cty_park_info_api` | **확인** — 키 미등록 응답 |
+| 도시공원 `api.data.go.kr/openapi/tn_pubr_public_cty_park_info_api` | **확인** — 활용신청 상세의 End Point 표기 (s 없음) |
 | 건축물대장 `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | **확인** — 구버전 `BldRgstService_v2`는 폐기됨 |
 | TMAP `GET /tmap/geo/fullAddrGeo` | **확인** — `INVALID_API_KEY` |
 | 서울 실시간 인구데이터 | **확인** — 실제 키로 4개 지역 조회 성공 |
 | 브이월드 건물 레이어 아이디·층수 속성명 | **미확인** — 아래 참고 |
 
-찾은 오류 두 가지:
-- 공공데이터포털 두 API는 **모두 `apis.data.go.kr`에 있다.**
-  `api.odcloud.kr`도 `api.data.go.kr`(s 없음)도 이들을 서빙하지 않는다.
+찾은 오류 세 가지:
+- **도시공원 표준데이터의 End Point는 `api.data.go.kr`(s 없음)이다.**
+  처음엔 `apis.data.go.kr`(s 있음)로 불렀는데, 같은 키인데도 계속
+  `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 났다. 게이트웨이가 서로 다르다 —
+  data.go.kr 활용신청 상세에 적힌 End Point 표기로 확인하고 고쳤다.
+  건축물대장(현재 미사용)은 여전히 `apis.data.go.kr` 쪽이라, 되살릴 땐 호스트를 따로 둔다.
 - 건축물대장 `BldRgstService_v2`는 폐기됐다(`NO_OPENAPI_SERVICE_ERROR`).
+  `BldRgstHubService`가 살아 있다.
+- 공공데이터포털이 주는 "Encoding 키"와 "Decoding 키"는 별개의 키가 아니라
+  같은 키의 다른 표기다. 코드가 `URLSearchParams`로 다시 인코딩하므로 저장은
+  디코딩된 형태여야 하고, 어느 쪽을 붙여넣든 되도록 `normalizeServiceKey()`가 맞춘다.
 
 ### 브이월드가 확인되지 않은 이유
 
