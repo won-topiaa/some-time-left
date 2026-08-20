@@ -309,3 +309,50 @@ describe('createWorkerFetch', () => {
     expect(await response.json()).toMatchObject({ ok: true });
   });
 });
+
+/**
+ * 앱 아이콘.
+ *
+ * `brand.icon`은 파일 경로가 아니라 이미지 주소라 어딘가에 떠 있어야 한다.
+ * 이미 떠 있는 이 프록시가 함께 낸다 — 토큰 없이, 바이트 그대로.
+ */
+describe('GET /icon.png', () => {
+  const config = {
+    seoulBaseUrl: 'http://seoul.test',
+    seoulKey: 'k',
+    authToken: 'abcdefghijklmnopqrstuvwxyz012345',
+    cacheTtlMs: 1000,
+    timeoutMs: 1000,
+    maxAreasPerRequest: 5,
+  };
+
+  it('토큰 없이도 준다 — 토스 앱이 그냥 불러야 한다', async () => {
+    const handle = createHandler(config);
+    const response = await handle(new Request('https://p.test/icon.png'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('진짜 PNG 바이트다', async () => {
+    const handle = createHandler(config);
+    const response = await handle(new Request('https://p.test/icon.png'));
+    const bytes = new Uint8Array(await response.arrayBuffer());
+
+    // PNG 매직 넘버
+    expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(bytes.length).toBeGreaterThan(10_000);
+  });
+
+  it('오래 캐시해도 된다고 알린다', async () => {
+    const handle = createHandler(config);
+    const response = await handle(new Request('https://p.test/icon.png'));
+    expect(response.headers.get('cache-control')).toContain('max-age');
+  });
+
+  it('아이콘 경로가 열렸다고 혼잡도까지 열리지는 않는다', async () => {
+    const handle = createHandler(config);
+    const response = await handle(new Request('https://p.test/population?area=강남역'));
+    expect(response.status).toBe(401);
+  });
+});

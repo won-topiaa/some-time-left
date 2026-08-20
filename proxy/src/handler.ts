@@ -6,6 +6,7 @@
  */
 
 import { TtlCache } from './cache.ts';
+import { ICON_PNG_BASE64 } from './icon-data.ts';
 import { fetchPopulation, isValidAreaName, type AreaPopulation } from './seoul.ts';
 
 export interface ProxyConfig {
@@ -130,6 +131,18 @@ export function createHandler(config: ProxyConfig, now: () => number = Date.now)
       return json({ ok: true, cached: cache.size });
     }
 
+    /*
+     * 앱 아이콘.
+     *
+     * `granite.config.ts`의 `brand.icon`은 파일 경로가 아니라 이미지 **주소**라
+     * 어딘가에 HTTPS로 떠 있어야 한다. 이 프록시가 이미 떠 있으니 여기서 함께 낸다.
+     * 토큰을 요구하지 않는다 — 토스 앱이 이 주소를 그냥 불러야 하고,
+     * 아이콘은 애초에 감출 것이 아니다.
+     */
+    if (url.pathname === '/icon.png') {
+      return iconResponse();
+    }
+
     if (url.pathname !== '/population') {
       return json({ error: '없는 경로예요.' }, 404);
     }
@@ -168,4 +181,21 @@ export function createHandler(config: ProxyConfig, now: () => number = Date.now)
     // 못 읽은 장소는 빼고 준다. 하나 실패해도 나머지는 쓸 수 있어야 한다.
     return json({ areas: results.filter((r): r is AreaPopulation => r != null) });
   };
+}
+
+/** base64로 품고 있는 아이콘을 PNG로 내보낸다. */
+function iconResponse(): Response {
+  const binary = atob(ICON_PNG_BASE64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Response(bytes, {
+    headers: {
+      'content-type': 'image/png',
+      // 아이콘은 배포할 때만 바뀐다. 오래 캐시해도 된다.
+      'cache-control': 'public, max-age=86400',
+      'access-control-allow-origin': '*',
+    },
+  });
 }

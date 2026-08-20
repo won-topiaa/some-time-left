@@ -25,12 +25,14 @@ export default defineConfig({
          * 프레임워크가 이 값을 그대로 `<Image source={{ uri }} />`에 넘긴다.
          * 그래서 './assets/icon.png' 같은 상대 경로는 영영 안 뜬다.
          *
-         * 아이콘 그림 자체는 `assets/icon.png`에 있다(`python3 scripts/make-icon.py`).
-         * 앱인토스 콘솔에 올려 주소를 받은 뒤 그 주소를 여기 넣는다.
-         * 그전까지는 템플릿 기본값과 같이 비워 둔다 — 지금은 `withTitle: false`라
-         * 화면에 쓰이지도 않고, 빈 값이면 프레임워크가 알아서 건너뛴다.
+         * 원본 그림은 `assets/icon.png`에 있고(`python3 scripts/make-icon.py`),
+         * 같은 스크립트가 프록시에 심을 base64도 함께 만든다. 프록시가 이미 떠 있으니
+         * 거기서 함께 내보낸다 — 아이콘 하나 때문에 호스팅을 따로 두지 않는다.
+         *
+         * 앱인토스 콘솔이 아이콘 호스팅을 제공하면 그 주소로 바꿔도 된다.
+         * 그때는 `proxy/src/handler.ts`의 `/icon.png` 경로를 지워도 그만이다.
          */
-        icon: '',
+        icon: 'https://some-time-left-proxy.yangjuwon240.workers.dev/icon.png',
       },
       // 위치만 받는다. 연락처는 "약속 상대" 기능에도 쓰지 않는다 —
       // 이름을 직접 적게 하는 편이 권한 요구보다 가볍고 덜 불쾌하다.

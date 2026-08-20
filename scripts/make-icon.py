@@ -102,6 +102,42 @@ def draw_icon() -> Image.Image:
     return img.resize((SIZE, SIZE), Image.LANCZOS)
 
 
+def write_proxy_copy(png_path: str) -> str:
+    """
+    프록시가 내보낼 수 있도록 base64로도 심어 둔다.
+
+    `granite.config.ts`의 `brand.icon`은 파일 경로가 아니라 이미지 주소라
+    어딘가에 HTTPS로 떠 있어야 한다. 이미 떠 있는 프록시가 함께 내보내면
+    아이콘 하나 때문에 호스팅을 따로 둘 일이 없다.
+    """
+    import base64
+    import os
+
+    raw = open(png_path, "rb").read()
+    b64 = base64.b64encode(raw).decode("ascii")
+    lines = [b64[i : i + 96] for i in range(0, len(b64), 96)]
+    body = "\n".join(f"  '{line}' +" for line in lines).rstrip(" +")
+
+    out = os.path.join(os.path.dirname(__file__), "..", "proxy", "src", "icon-data.ts")
+    open(out, "w", encoding="utf-8").write(
+        "/**\n"
+        " * 앱 아이콘을 base64로 품고 있는 파일. **손으로 고치지 않는다.**\n"
+        " *\n"
+        " * `python3 scripts/make-icon.py`가 그림과 함께 다시 만든다.\n"
+        " *\n"
+        " * 왜 여기 있나: `granite.config.ts`의 `brand.icon`은 파일 경로가 아니라\n"
+        " * 이미지 **주소**다(프레임워크가 그대로 <Image source={{ uri }} />에 넘긴다).\n"
+        " * 그래서 어딘가에 HTTPS로 떠 있어야 하는데, 이 프록시가 이미 떠 있으므로\n"
+        " * 여기서 함께 내보낸다. 앱인토스 콘솔이 아이콘 호스팅을 제공하면 그 주소를 쓰고\n"
+        " * 이 경로는 지워도 된다.\n"
+        " */\n\n"
+        f"/** {len(raw):,}바이트 PNG (1024x1024). */\n"
+        "export const ICON_PNG_BASE64 =\n"
+        f"{body};\n"
+    )
+    return os.path.normpath(out)
+
+
 if __name__ == "__main__":
     import os
 
@@ -111,3 +147,7 @@ if __name__ == "__main__":
     # 앱 아이콘에 알파가 있으면 스토어 검수에서 걸린다. RGB로만 저장한다.
     icon.save(out, "PNG", optimize=True)
     print(f"{os.path.normpath(out)} — {icon.size[0]}x{icon.size[1]}")
+
+    # 그림을 바꾸면 프록시가 내보내는 것도 함께 바뀌어야 한다.
+    print(f"{write_proxy_copy(out)} — 프록시용 base64 갱신")
+    print("\n프록시를 다시 배포해야 새 아이콘이 보여요:  cd proxy && npm run deploy")

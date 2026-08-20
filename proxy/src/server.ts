@@ -33,7 +33,9 @@ function toRequest(req: IncomingMessage): Request {
 async function send(response: Response, res: ServerResponse): Promise<void> {
   res.statusCode = response.status;
   response.headers.forEach((value, name) => res.setHeader(name, value));
-  res.end(await response.text());
+  // 바이트 그대로 보낸다. `text()`로 받으면 PNG 같은 이진 응답이 UTF-8로 다시
+  // 인코딩되어 파일이 망가진다(41KB 아이콘이 74KB가 되어 나갔다).
+  res.end(Buffer.from(await response.arrayBuffer()));
 }
 
 createServer((req, res) => {

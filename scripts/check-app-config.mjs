@@ -211,7 +211,31 @@ await probe(
       }
 );
 
-// 5. 브이월드 — 건물 레이어. 레이어 아이디가 맞는지도 여기서 드러난다
+// 5. 앱 아이콘 — 주소가 실제로 이미지를 주는지. 안 뜨는 아이콘은 배포하고 나서야 보인다.
+await probe(
+  '앱 아이콘 주소',
+  !iconIsUrl
+    ? null
+    : async () => {
+        const response = await fetch(iconValue).catch(() => {
+          throw new Error('주소에 닿지 못했어요 (네트워크나 방화벽 확인)');
+        });
+        if (response.status === 404) {
+          throw new Error('404 — 프록시를 다시 배포했나요? (cd proxy && npm run deploy)');
+        }
+        if (!response.ok) {
+          throw new Error(`${response.status} — 주소가 응답하지 않아요`);
+        }
+        const type = response.headers.get('content-type') ?? '';
+        if (!type.startsWith('image/')) {
+          throw new Error(`이미지가 아니에요 (${type || '타입 없음'})`);
+        }
+        const bytes = (await response.arrayBuffer()).byteLength;
+        return `${type} ${(bytes / 1024).toFixed(0)}KB`;
+      }
+);
+
+// 6. 브이월드 — 건물 레이어. 레이어 아이디가 맞는지도 여기서 드러난다
 const vworldKey = config.vworld.key;
 await probe(
   '브이월드 건물',
