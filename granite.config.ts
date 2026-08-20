@@ -14,9 +14,20 @@ export default defineConfig({
   plugins: [
     appsInToss({
       appType: 'general',
-      // package.json의 react-native과 같은 값으로 못 박는다. 둘이 어긋나면
-      // 빌드는 통과하고 기기에서만 깨지는 종류의 문제가 된다.
-      target: '0.72.6',
+      /*
+       * `target`을 적지 않는다. 적으면 안 된다.
+       *
+       * ait build는 런타임 두 벌(0.84.0 · 0.72.6)을 만드는데, 0.72.6 쪽만
+       * CLI가 임시 설정에 target을 주입하고 0.84.0 쪽은 **이 파일을 그대로** 쓴다
+       * (RUNTIME_BUILD_DEFINITIONS의 configTargetVersion 유무).
+       * 그래서 여기에 '0.72.6'을 적어 두면 0.84.0 번들까지 0.72 호환 변환을 받아
+       * 두 번들이 바이트까지 같아진다 — 실제로 그랬고, 토스(0.84 런타임)에서
+       * 흰 화면에 "잠시 문제가 생겼어요"로 죽었다.
+       *
+       * 비워 두면 플러그인 기본값 0.84.0이 쓰인다(REACT_NATIVE_VERSION).
+       * package.json의 react-native(0.72.6)와 달라도 된다 —
+       * 그 간극을 메우는 게 reactCompatibilityPlugin과 reverse 플러그인이 하는 일이다.
+       */
       brand: {
         /**
          * 토스 앱 목록과 앱 안에서 함께 보이는 이름이라
