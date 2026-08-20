@@ -117,6 +117,7 @@ if (!storeOk) {
 console.log('');
 
 const { getApiConfig, configureApi } = await import('../src/config.ts');
+const { baseTimeFor, firstForecast, toGrid, weatherLine } = await import('../src/domain/weather.ts');
 const { localSecrets } = await import('../src/config.local.ts');
 
 // 앱이 시작할 때 하는 것과 같은 주입.
@@ -283,7 +284,57 @@ await probe(
       }
 );
 
-// 5. 앱 아이콘 — 주소가 실제로 이미지를 주는지. 안 뜨는 아이콘은 배포하고 나서야 보인다.
+/*
+ * 5. 기상청 초단기예보 — 첫 화면 맨 위 한 줄.
+ *
+ * 공공데이터포털은 **서비스마다 활용신청을 따로** 받는다. 공원이 승인됐어도
+ * 기상청은 별개라, 같은 키로도 등록되지 않은 키라는 답이 온다.
+ * 그 둘을 구별해서 말해 주지 않으면 키를 잘못 넣은 줄 알고 계속 다시 넣게 된다.
+ */
+await probe(
+  '기상청 날씨',
+  serviceKey == null
+    ? null
+    : async () => {
+        // 서울 종로 격자(60,127). 앱이 쓰는 함수를 그대로 쓴다.
+        const { nx, ny } = toGrid(37.5665, 126.978);
+        const { baseDate, baseTime } = baseTimeFor(Date.now());
+        const params = new URLSearchParams({
+          serviceKey,
+          pageNo: '1',
+          numOfRows: '60',
+          dataType: 'JSON',
+          base_date: baseDate,
+          base_time: baseTime,
+          nx: String(nx),
+          ny: String(ny),
+        });
+        const response = await fetch(
+          `${config.publicData.weatherBaseUrl}${config.publicData.weatherPath}?${params}`
+        );
+        const text = await response.text();
+
+        if (text.includes('SERVICE_KEY_IS_NOT_REGISTERED')) {
+          throw new Error('기상청 서비스 활용신청이 아직이에요 (공원과 별개로 신청합니다)');
+        }
+        if (text.includes('LIMITED_NUMBER_OF_SERVICE_REQUESTS')) {
+          throw new Error('오늘 호출 한도를 다 썼어요');
+        }
+        if (!text.trimStart().startsWith('{')) {
+          throw new Error(`JSON이 아닌 응답: ${text.slice(0, 80)}`);
+        }
+
+        const body = JSON.parse(text);
+        const items = body?.response?.body?.items?.item ?? [];
+        const weather = firstForecast(items);
+        if (weather == null) {
+          throw new Error(`읽을 값이 없어요 (base_time=${baseTime}, 항목 ${items.length}개)`);
+        }
+        return `서울 — ${weatherLine(weather)}`;
+      }
+);
+
+// 6. 앱 아이콘 — 주소가 실제로 이미지를 주는지. 안 뜨는 아이콘은 배포하고 나서야 보인다.
 await probe(
   '앱 아이콘 주소',
   !iconIsUrl
@@ -307,7 +358,7 @@ await probe(
       }
 );
 
-// 6. 브이월드 — 건물 레이어. 레이어 아이디가 맞는지도 여기서 드러난다
+// 7. 브이월드 — 건물 레이어. 레이어 아이디가 맞는지도 여기서 드러난다
 const vworldKey = config.vworld.key;
 await probe(
   '브이월드 건물',

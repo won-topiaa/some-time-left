@@ -22,7 +22,7 @@ const configPath = join(root, 'src', 'config.local.ts');
 const KEYS = [
   { name: 'tmap', field: 'tmapAppKey', label: 'TMAP appKey', where: 'openapi.sk.com → 대시보드 → 앱' },
   { name: 'proxy', field: 'congestionProxyToken', label: '프록시 토큰', where: 'proxy/.env (npm run link-proxy 권장)' },
-  { name: 'publicdata', field: 'publicDataServiceKey', label: '공공데이터 인증키', where: 'data.go.kr → 마이페이지 (Decoding 키)' },
+  { name: 'publicdata', field: 'publicDataServiceKey', label: '공공데이터 인증키', where: 'data.go.kr → 마이페이지 → 일반 인증키 **(Decoding)**' },
   { name: 'vworld', field: 'vworldKey', label: '브이월드 키', where: 'vworld.kr → 오픈API 인증키' },
 ];
 
@@ -94,12 +94,45 @@ if (target == null) {
 console.log(`${target.label}를 붙여넣으세요. (${target.where})`);
 console.log('(입력은 화면에 보이지 않습니다)\n');
 
-const value = await askSecret(`${target.label}: `);
+let value = await askSecret(`${target.label}: `);
 rl.close();
 
 if (value === '') {
   console.error('값이 비어 있어요.');
   process.exit(1);
+}
+
+/*
+ * 공공데이터포털은 같은 키를 두 벌로 보여준다 — Encoding(%2F·%2B·%3D로 바뀐 것)과
+ * Decoding(원래 문자 그대로). 우리 코드는 `URLSearchParams`로 주소를 만들기 때문에
+ * 넘겨준 값을 **한 번 더** 인코딩한다. Encoding 키를 넣으면 %2F가 %252F가 되어
+ * 서버는 등록되지 않은 키라고 답한다.
+ *
+ * 포털에서 Decoding 키를 다시 찾아오게 하지 않는다. 둘은 정확히
+ * `encodeURIComponent` 한 번 차이라서 여기서 되돌릴 수 있다.
+ * 다만 **되돌린 것이 원래 값과 정확히 맞아떨어질 때만** 그렇게 하고,
+ * 무엇을 했는지 화면에 말한다 — 조용히 값을 바꾸는 건 나중에 원인을 못 찾게 만든다.
+ */
+if (target.name === 'publicdata' && /%2[FB]|%3D/i.test(value)) {
+  let decoded = null;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    decoded = null;
+  }
+
+  if (decoded != null && encodeURIComponent(decoded) === value) {
+    value = decoded;
+    console.log('Encoding 키를 받아서 Decoding 형태로 바꿨어요.');
+    console.log('  (%2F → /, %2B → +, %3D → =. 우리 코드가 주소를 만들 때');
+    console.log('   한 번 더 인코딩하기 때문에 이 형태여야 합니다)');
+    console.log('');
+  } else {
+    console.error('Encoding 키로 보이는데 되돌리지 못했어요.');
+    console.error('  포털의 같은 자리에 있는 Decoding 키를 넣어 주세요.');
+    console.error('  (/ 와 + 와 = 가 그대로 보이는 쪽입니다)');
+    process.exit(1);
+  }
 }
 
 const source = readFileSync(configPath, 'utf8');
