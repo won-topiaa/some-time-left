@@ -22,11 +22,14 @@ const FEATURE_REASON: Record<FeatureKey, string> = {
 
 /**
  * 경로 추천 이유 한 줄.
- * "{기분}이라고 하셔서, {성질}." 형태로 사용자의 말과 앱의 선택을 잇는다.
+ * "{기분}다고 하셔서, {성질}." 형태로 사용자의 말과 앱의 선택을 잇는다.
+ *
+ * 인용형은 `mood.ts`가 직접 들고 있다. 라벨에서 정규식으로 만들려 했더니
+ * 여섯 중 셋이 비문이었다 — 이 한 줄이 자동 추천의 생명줄이라 문법이 틀리면
+ * 설명이 아니라 흠집이 된다.
  */
 export function routeReason(mood: MoodId, feature: FeatureKey): string {
-  const label = moodById(mood).label.replace(/요$/, '다고').replace(/어다고$/, '다고');
-  return `${label} 하셔서, ${FEATURE_REASON[feature]}.`;
+  return `${moodById(mood).quoted} 하셔서, ${FEATURE_REASON[feature]}.`;
 }
 
 /** 계획 종류에 따른 첫 화면 문구. 여유가 없을 때도 빈 화면을 보여주지 않는다. */

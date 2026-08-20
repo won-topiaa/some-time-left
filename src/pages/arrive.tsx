@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { createRoute, useNavigation } from '@granite-js/react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { createRoute, useKeyboardHeight, useNavigation } from '@granite-js/react-native';
+import { useScreenInsets } from '../ui/screenInsets';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../domain/copy';
 import { saveRecord } from '../data/records';
@@ -25,9 +26,14 @@ export const Route = createRoute('/arrive', {
 function Arrive() {
   const navigation = useNavigation();
   const { trip, reset } = useTrip();
+  const screen = useScreenInsets();
+  const keyboardHeight = useKeyboardHeight();
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  // 계획을 세운 시계로 센다. 기기 시계가 틀어져 있으면 "3분 남았어요" 밑에
+  // 0:00이 떠 있는 화면이 만들어진다.
+  const offset = trip.clockOffsetMs;
+  const [nowMs, setNowMs] = useState(() => Date.now() + offset);
   const [congestion, setCongestion] = useState<DestinationCongestion | null>(null);
 
   useEffect(() => {
@@ -59,9 +65,9 @@ function Arrive() {
   }, [trip.destination, trip.destinationName, trip.destinationPoiId]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    const timer = setInterval(() => setNowMs(Date.now() + offset), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [offset]);
 
   const leftSec = useMemo(() => {
     if (trip.arriveAtMs == null) return 0;
@@ -91,37 +97,57 @@ function Arrive() {
   }, [trip, note, reset, navigation]);
 
   return (
-    <View style={styles.screen}>
-      <Text style={styles.countdown}>
-        {mm}:{ss}
-      </Text>
-
-      <Text style={styles.prompt}>
-        {arrivalPrompt(trip.companion.trim() === '' ? null : trip.companion)}
-      </Text>
-
-      {congestion != null && (
-        <Text style={styles.congestion}>
-          {congestion.poiName}, 지금 {CONGESTION_LABEL[congestion.level]}
+    <View style={[styles.screen, { paddingTop: screen.top }]}>
+      {/*
+        한 줄을 적는 화면이라 키보드가 올라온다. 작은 기기에서는 입력칸이 통째로
+        가리므로 스크롤로 두고, 키보드 높이만큼 아래를 비워 캐럿이 늘 보이게 한다.
+      */}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.countdown}>
+          {mm}:{ss}
         </Text>
-      )}
 
-      <View style={styles.noteBox}>
-        <TextInput
-          style={styles.note}
-          placeholder={NOTE_PLACEHOLDER}
-          placeholderTextColor={colors.inkFaint}
-          value={note}
-          onChangeText={setNote}
-          multiline
-        />
-      </View>
+        <Text style={styles.prompt}>
+          {arrivalPrompt(trip.companion.trim() === '' ? null : trip.companion)}
+        </Text>
 
-      <Text style={styles.hint}>적어두면 다음에 이 길을 지날 때 다시 꺼내드릴게요.</Text>
+        {congestion != null && (
+          <Text style={styles.congestion}>
+            {congestion.poiName}, 지금 {CONGESTION_LABEL[congestion.level]}
+          </Text>
+        )}
 
-      <View style={styles.spacer} />
+        <View style={styles.noteBox}>
+          <TextInput
+            style={styles.note}
+            placeholder={NOTE_PLACEHOLDER}
+            placeholderTextColor={colors.inkFaint}
+            value={note}
+            onChangeText={setNote}
+            multiline
+          />
+        </View>
 
-      <Pressable style={styles.cta} onPress={finish} disabled={saving}>
+        {/*
+          지킬 수 있는 말만 한다. 길 위에서 다시 꺼내 주는 기능은 아직 없고,
+          남긴 말이 실제로 가는 곳은 '지나온 길'이다.
+        */}
+        <Text style={styles.hint}>적어두면 지나온 길에 그대로 남아 있어요.</Text>
+      </ScrollView>
+
+      <Pressable
+        style={({ pressed }) => [
+          styles.cta,
+          { marginBottom: keyboardHeight > 0 ? keyboardHeight + spacing.md : screen.bottom },
+          pressed && styles.pressed,
+        ]}
+        onPress={finish}
+        disabled={saving}
+      >
         <Text style={styles.ctaText}>{note.trim() === '' ? '그냥 닫기' : '남기고 닫기'}</Text>
       </Pressable>
     </View>
@@ -129,7 +155,8 @@ function Arrive() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
+  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+  content: { paddingBottom: spacing.lg },
   // 이 화면의 주인공. 색으로 강조하지 않고 크기로만 말한다 —
   // 파란 숫자는 알림처럼 읽히고, 먹색 숫자는 그냥 남은 시간으로 읽힌다.
   countdown: {
@@ -137,7 +164,7 @@ const styles = StyleSheet.create({
     fontSize: 64,
     lineHeight: 72,
     color: colors.ink,
-    marginTop: spacing.xxl,
+    marginTop: spacing.lg,
   },
   prompt: { ...type.title, color: colors.ink, marginTop: spacing.md },
   congestion: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
@@ -150,7 +177,6 @@ const styles = StyleSheet.create({
   },
   note: { ...type.body, color: colors.ink, minHeight: 96, textAlignVertical: 'top' },
   hint: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
-  spacer: { flex: 1 },
   // 버튼은 먹색. 레퍼런스 세 앱 모두 크롬에 색을 쓰지 않는다 —
   // 색은 사용자가 쌓은 것에서만 나온다.
   cta: {
@@ -160,4 +186,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaText: { ...type.title, color: colors.surface },
+  pressed: { opacity: 0.6 },
 });

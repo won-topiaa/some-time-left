@@ -5,6 +5,7 @@ import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
 import { formatClock, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
+import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RoutePreview } from '../ui/RoutePreview';
 import { useTrip } from '../state/TripContext';
@@ -21,11 +22,13 @@ export const Route = createRoute('/route', {
 function RouteScreen() {
   const navigation = useNavigation();
   const { trip, update } = useTrip();
-  const { loading, error, plan, route, hasAlternative, showAnother } = useRouteSuggestion({
-    destination: trip.destination,
-    arriveAtMs: trip.arriveAtMs,
-    mood: trip.mood,
-  });
+  const screen = useScreenInsets();
+  const { loading, error, plan, route, hasAlternative, showAnother, retry, clockOffsetMs } =
+    useRouteSuggestion({
+      destination: trip.destination,
+      arriveAtMs: trip.arriveAtMs,
+      mood: trip.mood,
+    });
 
   // 가는 길에 스치는 가게 한 곳. 목적이 아니라 곁에 있다고 알려주는 정도.
   // 경로가 바뀌면(다른 길) 다시 찾고, 없으면 없는 채로 둔다.
@@ -51,17 +54,31 @@ function RouteScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.center]}>
+      <View style={[styles.screen, styles.center, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
         <ActivityIndicator color={colors.inkFaint} />
         <Text style={styles.searching}>길을 찾고 있어요</Text>
       </View>
     );
   }
 
+  // 실패가 막다른 길이 되면 안 된다. 약속을 앞두고 네트워크가 한 번 흔들린 것뿐인데
+  // 앱을 껐다 켜게 만들 이유는 없다 — 한 번 더 눌러볼 자리를 준다.
   if (error != null || plan == null) {
     return (
-      <View style={[styles.screen, styles.center]}>
-        <Text style={styles.headline}>{error ?? '길을 찾지 못했어요.'}</Text>
+      <View style={[styles.screen, styles.center, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
+        <Text style={styles.errorHeadline}>{error ?? '길을 찾지 못했어요.'}</Text>
+        <Pressable
+          style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
+          onPress={retry}
+        >
+          <Text style={styles.ghostText}>다시 찾아볼게요</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          onPress={() => navigation.navigate('/')}
+        >
+          <Text style={styles.backText}>처음으로</Text>
+        </Pressable>
       </View>
     );
   }
@@ -69,7 +86,7 @@ function RouteScreen() {
   // 최단으로도 늦는 경우. 빈 화면 대신 정직하게 말한다.
   if (plan.kind === 'too-late') {
     return (
-      <View style={[styles.screen, styles.center]}>
+      <View style={[styles.screen, styles.center, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
         <Text style={styles.headline}>{planHeadline(plan)}</Text>
         <Text style={styles.sub}>지금 나서는 게 최선이에요.</Text>
       </View>
@@ -77,12 +94,14 @@ function RouteScreen() {
   }
 
   const startWalking = () => {
-    update({ plan, route, startedAtMs: Date.now() });
+    // 시계 차이를 함께 실어 보낸다. 걷는 화면·도착 화면이 계획과 같은 시계로 세야
+    // "3분 전 도착"이 화면마다 다른 숫자가 되지 않는다.
+    update({ plan, route, startedAtMs: Date.now() + clockOffsetMs, clockOffsetMs });
     navigation.navigate('/walk');
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
       <Text style={styles.headline}>{planHeadline(plan)}</Text>
 
       {route != null && (
@@ -117,7 +136,10 @@ function RouteScreen() {
 
           {/* 조건 버튼은 입구가 아니라 출구에 둔다. 자동 추천이 틀렸을 때의 도망갈 곳. */}
           {hasAlternative && (
-            <Pressable style={styles.ghost} onPress={showAnother}>
+            <Pressable
+              style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
+              onPress={showAnother}
+            >
               <Text style={styles.ghostText}>다른 길로 보여주세요</Text>
             </Pressable>
           )}
@@ -126,21 +148,44 @@ function RouteScreen() {
 
       <View style={styles.spacer} />
 
-      <Pressable style={styles.cta} onPress={startWalking}>
-        <Text style={styles.ctaText}>
-          {plan.kind === 'straight' ? '곧장 갈게요' : '이 길로 갈게요'}
-        </Text>
-      </Pressable>
+      {/*
+        길이 없으면 걷기 버튼도 없다. 좌표 없이 걷기 화면에 들어가면
+        도착을 영영 못 잡고 기록도 남지 않는다 — 눌리는 죽은 버튼보다 없는 게 낫다.
+      */}
+      {route != null ? (
+        <Pressable
+          style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+          onPress={startWalking}
+        >
+          <Text style={styles.ctaText}>
+            {plan.kind === 'straight' ? '곧장 갈게요' : '이 길로 갈게요'}
+          </Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
+          onPress={retry}
+        >
+          <Text style={styles.ghostText}>길을 다시 찾아볼게요</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
+  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
   center: { alignItems: 'center', justifyContent: 'center' },
   searching: { ...type.body, color: colors.inkSoft, marginTop: spacing.md },
   headline: { ...type.display, color: colors.ink, marginTop: spacing.xl },
+  // 실패 문구는 가운데 정렬 화면에 놓이므로 위 여백을 두지 않는다.
+  errorHeadline: { ...type.title, color: colors.ink, textAlign: 'center' },
   sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+  // 눌린 걸 알리는 유일한 수단. 색을 바꾸지 않고 옅어지기만 한다 —
+  // 크롬에 색을 쓰지 않는다는 원칙을 누르는 순간에도 지킨다.
+  pressed: { opacity: 0.6 },
+  back: { paddingVertical: spacing.sm, alignItems: 'center' },
+  backText: { ...type.caption, color: colors.inkFaint },
   // 면을 채우지 않는다. 배경 위에 그대로 두고 선과 여백으로만 나눈다.
   card: { marginTop: spacing.lg },
   meta: { marginTop: spacing.md },

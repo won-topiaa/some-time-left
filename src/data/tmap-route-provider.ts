@@ -11,7 +11,7 @@
  * 실제 소요 시간은 TMAP이 알려주고 우리는 랭킹만 한다.
  */
 
-import { deriveFeatures } from './features';
+import { buildVisitedIndex, deriveFeatures } from './features';
 import { fetchPedestrianRoute } from './tmap/client';
 import { toStreetSegments } from './tmap/parse';
 import { planWaypoints, refineScale } from './waypoints';
@@ -128,6 +128,9 @@ export class TmapRouteProvider implements RouteProvider {
       routes.map((r) => r.parsed.path)
     ).catch(() => EMPTY_ENVIRONMENT);
 
+    // 지나온 좌표 격자도 후보마다 다시 만들면 안 된다. 여기서 한 번 만들어 나눠 쓴다.
+    const visitedIndex = buildVisitedIndex(previousPaths);
+
     return routes.map(({ parsed, index }) => {
       // 건물 높이가 있으면 그늘 계산이 실제 값으로 바뀐다.
       const segments = toStreetSegments(
@@ -147,6 +150,7 @@ export class TmapRouteProvider implements RouteProvider {
           origin,
           departAtMs,
           previousPaths,
+          visitedIndex,
           environment,
         }),
       };

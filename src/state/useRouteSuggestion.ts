@@ -26,6 +26,13 @@ export interface Suggestion {
   /** 아직 안 보여준 다른 길이 남아 있는가 */
   hasAlternative: boolean;
   showAnother: () => void;
+  /** 다시 찾아본다. 네트워크가 한 번 흔들린 게 막다른 길이 될 이유는 없다. */
+  retry: () => void;
+  /**
+   * 서버 시각 − 기기 시각 (ms). 걷는 화면·도착 화면이 같은 시계로 세도록 넘긴다.
+   * 서버 시각을 못 받았으면 0.
+   */
+  clockOffsetMs: number;
 }
 
 export interface SuggestionInput {
@@ -37,10 +44,16 @@ export interface SuggestionInput {
 /**
  * 기기 시계는 믿지 않는다. 3분을 약속하는 앱에서 시계가 몇 분 틀어져 있으면
  * 그 자체로 제품이 거짓말을 하게 된다.
+ *
+ * 계획만 서버 시각으로 세우고 이후 화면이 기기 시계로 세면 어긋남이 그대로 돌아오므로,
+ * 시각과 함께 **차이**를 돌려준다. 이후 화면은 `Date.now() + offset`으로 센다.
  */
-async function now(): Promise<number> {
+async function now(): Promise<{ nowMs: number; offsetMs: number }> {
   const serverTime = await getServerTime().catch(() => undefined);
-  return serverTime ?? Date.now();
+  if (serverTime == null) {
+    return { nowMs: Date.now(), offsetMs: 0 };
+  }
+  return { nowMs: serverTime, offsetMs: serverTime - Date.now() };
 }
 
 export function useRouteSuggestion({
@@ -53,6 +66,9 @@ export function useRouteSuggestion({
   const [plan, setPlan] = useState<WalkPlan | null>(null);
   const [ranked, setRanked] = useState<ScoredRoute[]>([]);
   const [shownIds, setShownIds] = useState<string[]>([]);
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  // 다시 찾기. 값이 바뀌면 아래 effect가 처음부터 다시 돈다.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,16 +81,28 @@ export function useRouteSuggestion({
       setLoading(true);
       setError(null);
 
+      // 위치 실패와 길 찾기 실패는 원인이 다르다. 한 덩어리로 잡아 "위치를 확인하지
+      // 못했어요"라고 하면, 네트워크가 흔들렸을 뿐인데 권한을 의심하게 만든다.
+      let origin: LatLng;
+      let nowMs: number;
       try {
-        const [position, nowMs] = await Promise.all([
+        const [position, clock] = await Promise.all([
           getCurrentLocation({ accuracy: Accuracy.Balanced }),
           now(),
         ]);
-        const origin: LatLng = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
+        origin = { lat: position.coords.latitude, lng: position.coords.longitude };
+        nowMs = clock.nowMs;
+        if (cancelled) return;
+        setClockOffsetMs(clock.offsetMs);
+      } catch {
+        if (!cancelled) {
+          setError('지금 위치를 확인하지 못했어요.');
+          setLoading(false);
+        }
+        return;
+      }
 
+      try {
         const provider = routeProvider();
         const shortest = await provider.shortest(origin, destination);
         const walkPlan = planWalk({
@@ -113,8 +141,13 @@ export function useRouteSuggestion({
 
         if (cancelled) return;
 
+        // 경유지가 하나도 안 붙는 날이 있다(전부 도로망 밖이거나 호출이 다 실패).
+        // 그때 빈 손으로 두면 걷기 화면이 좌표 없이 열려 도착을 영영 못 잡는다.
+        // 늘리진 못해도 최단 경로는 있으니, 그걸로라도 걷게 한다.
+        const usable = candidates.length > 0 ? candidates : [shortest];
+
         setRanked(
-          rankRoutes(candidates, {
+          rankRoutes(usable, {
             targetSec: walkPlan.targetWalkSec,
             weights: weightsFor(mood, isShadeWorthy(nowMs, origin)),
             recentRouteIds: recent,
@@ -122,7 +155,7 @@ export function useRouteSuggestion({
         );
       } catch {
         if (!cancelled) {
-          setError('지금 위치를 확인하지 못했어요.');
+          setError('길을 찾지 못했어요. 잠시 뒤에 다시 해볼까요?');
         }
       } finally {
         if (!cancelled) {
@@ -135,7 +168,7 @@ export function useRouteSuggestion({
     return () => {
       cancelled = true;
     };
-  }, [destination, arriveAtMs, mood]);
+  }, [destination, arriveAtMs, mood, attempt]);
 
   const current = nextRoute(ranked, shownIds) ?? ranked[0] ?? null;
 
@@ -145,6 +178,13 @@ export function useRouteSuggestion({
     }
   }, [current]);
 
+  // 다시 찾을 땐 "이미 보여준 길"도 함께 지운다. 실패한 시도가 남긴 기억이
+  // 새 후보를 가려 버리면 다시 찾기가 아니라 다른 길 찾기가 된다.
+  const retry = useCallback(() => {
+    setShownIds([]);
+    setAttempt((n) => n + 1);
+  }, []);
+
   return {
     loading,
     error,
@@ -153,5 +193,7 @@ export function useRouteSuggestion({
     hasAlternative:
       current != null && nextRoute(ranked, [...shownIds, current.candidate.id]) != null,
     showAnother,
+    retry,
+    clockOffsetMs,
   };
 }

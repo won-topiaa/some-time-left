@@ -5,6 +5,7 @@ import { loadRecords } from '../data/records';
 import { formatRecordDate, formatTotalDistance, groupByMonth, traceSummary } from '../domain/trace';
 import { moodById } from '../domain/mood';
 import { colors, spacing, type } from '../ui/theme';
+import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RouteGlyph } from '../ui/RoutePreview';
 import type { WalkRecord } from '../domain/types';
@@ -33,6 +34,7 @@ const LIST_MAX = 60;
  */
 function Trace() {
   const navigation = useNavigation();
+  const screen = useScreenInsets();
   const [records, setRecords] = useState<WalkRecord[] | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,16 @@ function Trace() {
     };
   }, []);
 
+  // 훅은 조건부 return보다 위에 있어야 한다. 아래로 내리면 첫 렌더(records == null)와
+  // 기록이 실린 렌더의 훅 개수가 달라져 "Rendered more hooks than during the previous
+  // render"로 화면이 죽는다 — 기록이 한 건이라도 생기는 순간부터 이 화면 전체가 못 열린다.
+  const loaded = records ?? [];
+  const summary = useMemo(() => traceSummary(loaded), [loaded]);
+  const months = useMemo(() => groupByMonth(loaded.slice(0, LIST_MAX)), [loaded]);
+  const emptyCount = Math.max(0, GRID_MIN - loaded.length);
+  const emptySlots = useMemo(() => Array.from({ length: emptyCount }, (_, i) => i), [emptyCount]);
+  const hidden = Math.max(0, loaded.length - LIST_MAX);
+
   // 불러오는 사이 빈 화면을 '기록 없음'으로 잘못 보여주지 않는다.
   if (records == null) {
     return <View style={styles.screen} />;
@@ -58,27 +70,30 @@ function Trace() {
 
   if (records.length === 0) {
     return (
-      <View style={[styles.screen, styles.center]}>
+      <View style={[styles.screen, styles.center, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
         <Text style={styles.emptyTitle}>아직 걸은 길이 없어요.</Text>
         <Text style={styles.emptyBody}>
           한 번 걷고 나면{'\n'}여기에 그 길의 모양이 남아요.
         </Text>
-        <Pressable style={styles.back} onPress={() => navigation.navigate('/')}>
+        <Pressable
+          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          onPress={() => navigation.navigate('/')}
+        >
           <Text style={styles.backText}>돌아가기</Text>
         </Pressable>
       </View>
     );
   }
 
-  const summary = useMemo(() => traceSummary(records), [records]);
-  const months = useMemo(() => groupByMonth(records.slice(0, LIST_MAX)), [records]);
-  const hidden = Math.max(0, records.length - LIST_MAX);
-
-  const emptyCount = Math.max(0, GRID_MIN - records.length);
-  const emptySlots = useMemo(() => Array.from({ length: emptyCount }, (_, i) => i), [emptyCount]);
-
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: screen.top, paddingBottom: screen.bottom + spacing.xl },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       {/* 주인공은 숫자 하나. 목표가 아니라 사실이라 단위는 작게 붙인다. */}
       <Text style={styles.label}>지금까지 걸은 길</Text>
       <View style={styles.numeralRow}>
@@ -139,7 +154,10 @@ function Trace() {
         <Text style={styles.hidden}>그 전에 걸은 {hidden}번은 위 숫자에만 담겨 있어요.</Text>
       )}
 
-      <Pressable style={styles.back} onPress={() => navigation.navigate('/')}>
+      <Pressable
+        style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+        onPress={() => navigation.navigate('/')}
+      >
         <Text style={styles.backText}>돌아가기</Text>
       </Pressable>
     </ScrollView>
@@ -148,10 +166,10 @@ function Trace() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  center: { alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  content: { paddingHorizontal: spacing.lg },
+  center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
 
-  label: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xl },
+  label: { ...type.caption, color: colors.inkSoft },
   numeralRow: { flexDirection: 'row', alignItems: 'flex-end' },
   numeral: { ...type.numeral, color: colors.ink },
   unit: { ...type.caption, color: colors.inkFaint, marginLeft: spacing.xs, marginBottom: spacing.sm },
@@ -208,4 +226,5 @@ const styles = StyleSheet.create({
 
   back: { marginTop: spacing.xl, paddingVertical: spacing.md, alignItems: 'center' },
   backText: { ...type.body, color: colors.inkSoft },
+  pressed: { opacity: 0.6 },
 });

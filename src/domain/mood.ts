@@ -14,15 +14,28 @@ export interface Mood {
   label: string;
   /** 고르고 난 뒤 짧게 받아주는 말 */
   ack: string;
+  /**
+   * 인용형. `routeReason`에서 "~ 하셔서"로 이어붙이는 형태다.
+   *
+   * 라벨을 정규식으로 활용형으로 바꾸려 했더니 여섯 중 셋이 비문이 됐다
+   * ('생각이 많아다고', '긴장돼다고', '그냥 그래다고'). 한국어 활용은 어간마다
+   * 달라서 규칙으로 못 만든다 — 그래서 각 기분이 제 인용형을 직접 들고 있는다.
+   */
+  quoted: string;
 }
 
 export const MOODS: Mood[] = [
-  { id: 'pensive', label: '생각이 많아요', ack: '조용히 걸을 수 있게 할게요.' },
-  { id: 'excited', label: '설레요', ack: '기분 좋은 길로 갈게요.' },
-  { id: 'nervous', label: '긴장돼요', ack: '숨 고를 수 있는 길로 갈게요.' },
-  { id: 'tired', label: '지쳤어요', ack: '힘 덜 드는 길로 갈게요.' },
-  { id: 'hot', label: '햇볕이 싫어요', ack: '그늘을 최대한 찾아볼게요.' },
-  { id: 'plain', label: '그냥 그래요', ack: '안 가본 길로 데려가 볼게요.' },
+  {
+    id: 'pensive',
+    label: '생각이 많아요',
+    ack: '조용히 걸을 수 있게 할게요.',
+    quoted: '생각이 많다고',
+  },
+  { id: 'excited', label: '설레요', ack: '기분 좋은 길로 갈게요.', quoted: '설렌다고' },
+  { id: 'nervous', label: '긴장돼요', ack: '숨 고를 수 있는 길로 갈게요.', quoted: '긴장된다고' },
+  { id: 'tired', label: '지쳤어요', ack: '힘 덜 드는 길로 갈게요.', quoted: '지쳤다고' },
+  { id: 'hot', label: '햇볕이 싫어요', ack: '그늘을 최대한 찾아볼게요.', quoted: '햇볕이 싫다고' },
+  { id: 'plain', label: '그냥 그래요', ack: '안 가본 길로 데려가 볼게요.', quoted: '그냥 그렇다고' },
 ];
 
 export type FeatureWeights = Record<FeatureKey, number>;

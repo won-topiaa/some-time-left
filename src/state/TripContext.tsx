@@ -29,6 +29,15 @@ export interface Trip {
   shownRouteIds: string[];
   /** 걷기 시작한 시각 */
   startedAtMs: number | null;
+  /**
+   * 서버 시각 − 기기 시각 (ms).
+   *
+   * 계획은 서버 시각으로 세우는데 걷는 화면과 도착 화면이 기기 시계로 세면
+   * 시계가 틀어진 만큼 앱이 거짓말을 한다 — 3분을 약속하는 앱에서 이건 치명적이다.
+   * 계획할 때 잰 차이를 여기 실어 두고, 이후 모든 화면이 `Date.now() + 이 값`으로 센다.
+   * 서버 시각을 못 받으면 0이라 기기 시계 그대로 쓰는 것과 같아진다.
+   */
+  clockOffsetMs: number;
 }
 
 const EMPTY: Trip = {
@@ -42,6 +51,7 @@ const EMPTY: Trip = {
   route: null,
   shownRouteIds: [],
   startedAtMs: null,
+  clockOffsetMs: 0,
 };
 
 interface TripContextValue {

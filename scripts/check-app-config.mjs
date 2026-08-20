@@ -10,9 +10,25 @@
  * 비밀값은 출력하지 않는다. 들어갔는지와 길이만 보여준다.
  */
 
+import { existsSync } from 'node:fs';
 import { requireNode } from '../proxy/scripts/require-node.mjs';
 
 requireNode();
+
+/**
+ * 출시에 필요한 파일이 실제로 있는가.
+ *
+ * `granite.config.ts`가 가리키는 아이콘이 없어도 typecheck와 테스트는 모두 통과한다 —
+ * 배포 직전에야 드러나는 종류의 구멍이라, 네트워크 확인보다 먼저 본다.
+ */
+const iconPath = new URL('../assets/icon.png', import.meta.url);
+const hasIcon = existsSync(iconPath);
+console.log(`앱 아이콘            ${hasIcon ? '✓ 있음' : '✗ 없음 (assets/icon.png)'}`);
+if (!hasIcon) {
+  console.log('  → python3 scripts/make-icon.py 로 만들고 커밋하세요.\n');
+} else {
+  console.log('');
+}
 
 const { getApiConfig, configureApi } = await import('../src/config.ts');
 const { localSecrets } = await import('../src/config.local.ts');
@@ -42,6 +58,10 @@ console.log(`\n  프록시 주소         ${config.congestionProxy.baseUrl ?? '(
 console.log('\n실제로 불러봅니다\n');
 
 const failures = [];
+
+if (!hasIcon) {
+  failures.push('앱 아이콘 assets/icon.png이 없어요 — ait deploy 전에 만들어 커밋하세요');
+}
 
 /**
  * JSON으로 읽되, 아니면 무엇이 왔는지 보여준다.
