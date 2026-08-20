@@ -6,6 +6,8 @@ import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
 import { formatClock } from '../domain/time';
+import { NO_CARRIED, loadCarried, loadRecords } from '../data/records';
+import { formatTotalDistance, traceSummary } from '../domain/trace';
 import type { Place } from '../data/places';
 
 export const Route = createRoute('/', {
@@ -36,8 +38,31 @@ function Home() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [query, setQuery] = useState('');
   const { results, searching, available } = usePlaceSearch(query);
+  // 지금까지 걸은 거리. 없으면 null이라 아무것도 덧붙이지 않는다.
+  const [walkedKm, setWalkedKm] = useState<string | null>(null);
 
   const slots = useMemo(() => presetTimes(nowMs), [nowMs]);
+
+  /**
+   * 쌓인 걸 첫 화면에서도 보이게 한다.
+   *
+   * 기록이 쌓이는 게 보여야 기록이라는 게 이 앱의 원칙인데, 정작 그 화면으로 가는 문은
+   * 맨 아래 흐린 글씨 하나였다 — 뭐가 들어 있는지 알 수 없으니 열어 볼 이유도 없다.
+   * 숫자를 그 문에 얹으면 주인공을 뺏지 않으면서 쌓인 게 보인다.
+   * 걷고 돌아올 때마다 늘어나야 하므로 화면이 다시 보일 때 함께 새로 읽는다.
+   */
+  const refreshWalked = useCallback(() => {
+    Promise.all([loadRecords().catch(() => []), loadCarried().catch(() => NO_CARRIED)])
+      .then(([records, carried]) => {
+        const list = Array.isArray(records) ? records : [];
+        if (list.length === 0 && carried.count === 0) {
+          setWalkedKm(null);
+          return;
+        }
+        setWalkedKm(formatTotalDistance(traceSummary(list, carried).totalDistanceM));
+      })
+      .catch(() => setWalkedKm(null));
+  }, []);
 
   /**
    * 이 화면은 스택 맨 아래에 계속 살아 있다. 한 번 걷고 돌아오거나 잠깐 딴짓을 하면
@@ -56,10 +81,16 @@ function Home() {
     }
   }, [trip.arriveAtMs, update]);
 
+  // 첫 진입에도 한 번 읽는다 — 'focus'는 이미 보이고 있는 첫 화면에는 안 올 수 있다.
+  useEffect(refreshWalked, [refreshWalked]);
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', refreshNow);
+    const unsubscribe = navigation.addListener('focus', () => {
+      refreshNow();
+      refreshWalked();
+    });
     return unsubscribe;
-  }, [navigation, refreshNow]);
+  }, [navigation, refreshNow, refreshWalked]);
 
   // 검색 결과에서 고르기 전에는 좌표가 없다. 좌표 없이는 경로를 찾을 수 없다.
   const canProceed = trip.destination != null && trip.arriveAtMs != null;
@@ -221,12 +252,18 @@ function Home() {
           <Text style={[styles.ctaText, !canProceed && styles.ctaTextOff]}>다음</Text>
         </Pressable>
 
-        {/* 지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 가장 옅게. */}
+        {/*
+          지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 가장 옅게.
+          다만 얼마나 쌓였는지는 여기서 보인다 — 걷고 돌아올 때마다 이 숫자가 늘고,
+          그게 이 앱에서 유일하게 쌓이는 것이다.
+        */}
         <Pressable
           style={({ pressed }) => [styles.trace, pressed && styles.pressed]}
           onPress={() => navigation.navigate('/trace')}
         >
-          <Text style={styles.traceText}>지나온 길</Text>
+          <Text style={styles.traceText}>
+            지나온 길{walkedKm != null && ` · ${walkedKm}km`}
+          </Text>
         </Pressable>
       </View>
     </View>
