@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { deriveFeatures, noveltyOf } from '../features';
 import { toStreetSegments } from '../tmap/parse';
+import { EMPTY_ENVIRONMENT } from '../environment';
+import type { Building } from '../buildings/types';
 import type { LatLng } from '../../domain/types';
 
 const SEOUL: LatLng = { lat: 37.5665, lng: 126.978 };
@@ -11,6 +13,14 @@ const PATH: LatLng[] = [
   { lat: 37.5711, lng: 126.9774 },
   { lat: 37.5663, lng: 126.9779 },
 ];
+
+/** 그늘을 계산하려면 건물 높이가 있어야 한다. 없으면 모르는 것으로 둔다. */
+const BUILDINGS: Building[] = [
+  { at: { lat: 37.5711, lng: 126.9765 }, floors: 8, heightM: 26 },
+  { at: { lat: 37.5711, lng: 126.9783 }, floors: 8, heightM: 26 },
+];
+
+const WITH_BUILDINGS = { ...EMPTY_ENVIRONMENT, buildings: BUILDINGS };
 
 function input(overrides: Partial<Parameters<typeof deriveFeatures>[0]> = {}) {
   return {
@@ -54,12 +64,39 @@ describe('deriveFeatures', () => {
     }
   });
 
-  it('그늘은 실제 경로 방위각으로 계산된다', () => {
-    const noon = deriveFeatures(input({ departAtMs: Date.UTC(2026, 7, 17, 3, 0) }));
-    const evening = deriveFeatures(input({ departAtMs: Date.UTC(2026, 7, 17, 9, 0) }));
+  it('건물 높이가 있으면 그늘은 실제 경로 방위각으로 계산된다', () => {
+    const noon = deriveFeatures(
+      input({ departAtMs: Date.UTC(2026, 7, 17, 3, 0), environment: WITH_BUILDINGS })
+    );
+    const evening = deriveFeatures(
+      input({ departAtMs: Date.UTC(2026, 7, 17, 9, 0), environment: WITH_BUILDINGS })
+    );
 
     // 해가 낮아지는 저녁에 그늘이 더 많다
     expect(evening.shade).toBeGreaterThan(noon.shade);
+  });
+
+  it('건물 높이를 하나도 못 받으면 그늘은 중립값이다 — 지어내지 않는다', () => {
+    // 기본 단면(양옆 15m)으로 계산하면 남북 길과 동서 길이 그럴듯하게 갈리는데,
+    // 그 차이는 전부 지어낸 벽에서 나온다. 모르면 모른다고 해야 한다.
+    const northSouth = deriveFeatures(input());
+    const eastWest = deriveFeatures(
+      input({
+        path: [
+          { lat: 37.5665, lng: 126.972 },
+          { lat: 37.5665, lng: 126.978 },
+          { lat: 37.5665, lng: 126.984 },
+        ],
+        segments: toStreetSegments([
+          { lat: 37.5665, lng: 126.972 },
+          { lat: 37.5665, lng: 126.978 },
+          { lat: 37.5665, lng: 126.984 },
+        ]),
+      })
+    );
+
+    expect(northSouth.shade).toBe(0.5);
+    expect(eastWest.shade).toBe(0.5);
   });
 
   it('아직 데이터가 없는 성질은 중립값이다', () => {

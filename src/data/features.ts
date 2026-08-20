@@ -24,6 +24,9 @@ import { EMPTY_ENVIRONMENT, type Environment } from './environment';
 const CROSSINGS_PER_KM_WORST = 8;
 const STAIRS_PER_KM_WORST = 4;
 
+/** 건물 높이를 못 받았을 때의 그늘. 혼잡도·경치와 같은 규칙이다. */
+export const NEUTRAL_SHADE = 0.5;
+
 function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v));
 }
@@ -68,7 +71,20 @@ export function deriveFeatures({
     unbroken: clamp01(1 - crossings / km / CROSSINGS_PER_KM_WORST),
     // 계단이 적을수록 평탄하다고 본다. 진짜 경사는 DEM을 붙여야 한다.
     flat: clamp01(1 - stairs / km / STAIRS_PER_KM_WORST),
-    shade: routeShadeOverTime(segments, origin, departAtMs, durationSec),
+    /*
+     * 건물 높이를 하나도 못 받았으면 그늘은 **모르는 것**이다.
+     *
+     * 못 받으면 모든 구간이 기본 단면(양옆 15m)으로 떨어지는데, 그 상태로 계산하면
+     * 남북 길 0.03 / 동서 길 0.36처럼 그럴듯하게 갈린 값이 나온다. 길의 방위는 진짜지만
+     * 양옆 벽은 지어낸 것이라, 그 숫자로 길을 고르고 "이 시간엔 그늘이 이어지는
+     * 길이에요"라고 말하면 근거 없는 말을 하는 셈이다 — 특히 '햇볕이 싫어요'는
+     * 그늘 가중치가 0.6이라 순위가 통째로 지어낸 값에 끌려간다.
+     * 이 파일이 처음부터 정한 대로, 모르면 중립값으로 둔다.
+     */
+    shade:
+      environment.buildings.length > 0
+        ? routeShadeOverTime(segments, origin, departAtMs, durationSec)
+        : NEUTRAL_SHADE,
     novelty: noveltyOf(path, previousPaths, visitedIndex),
     quiet: scoreQuiet(path, environment.congestion),
     scenic: scoreScenic(path, environment.parks),
