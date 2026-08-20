@@ -14,14 +14,14 @@
 |---|---|
 | 도메인 로직 (시간 예산·그늘·기분 매핑·경로 랭킹·페이스) | 구현 완료 |
 | 화면 6개 (입력 → 기분 → 경로 → 걷기 → 도착, 그리고 지나온 길) | 구현 완료, iOS/Android 번들 빌드 성공 |
-| 테스트 | 283개 통과 (앱 + 프록시) |
+| 테스트 | 308개 통과 (앱 + 프록시) |
 | 도보 경로 (TMAP 보행자 경로안내) | 연동 완료, **응답 구조 문서 대조 완료** |
 | 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
 | 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — 응답 구조 1회 확인 필요 |
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
 | 혼잡도 프록시 | **배포 완료** (Cloudflare Workers) — 서울까지 실측 확인 |
 | 앱 아이콘 | `assets/icon.png` (1024×1024) — `python3 scripts/make-icon.py`로 생성 |
-| 앱인토스 배포 | 미등록 (콘솔에서 미니앱 생성 필요) |
+| 앱인토스 배포 | `ait build` 성공 — 콘솔에 미니앱 생성과 API 키만 남음 ([`docs/release.md`](docs/release.md)) |
 
 ## 명령어
 
@@ -30,9 +30,15 @@ npm install
 npm test          # 도메인·파싱 테스트 (네이티브 런타임·네트워크 불필요)
 npm run typecheck
 npm run dev       # granite dev — 토스 앱에서 열어 확인
-npm run build     # iOS/Android 번들 빌드
-npm run deploy    # ait deploy — 콘솔 등록 후 사용 가능
+npm run build     # granite build — iOS/Android 번들만 빠르게 확인
+npm run build:ait # ait build — 배포용 some-time-left.ait 생성
+npm run deploy    # ait build + ait deploy. 콘솔 등록과 ait token add가 먼저다
+npm run check-config  # 키·아이콘 주소를 실제로 불러서 확인
 ```
+
+배포 절차는 [`docs/release.md`](docs/release.md)에 있다.
+`ait deploy`는 빌드를 하지 않고 이미 있는 `.ait`을 올리기만 해서,
+`npm run deploy`가 `predeploy`로 빌드를 먼저 돌리게 묶어 뒀다.
 
 ## 구조
 
@@ -419,3 +425,4 @@ configureApi({
 
 - [`docs/market-research.md`](docs/market-research.md) — 경쟁 지형, 화이트스페이스, 감성 진단
 - [`docs/concept-decisions.md`](docs/concept-decisions.md) — 확정된 제품 결정과 그 근거
+- [`docs/release.md`](docs/release.md) — 앱인토스 콘솔 등록과 배포 절차
