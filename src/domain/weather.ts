@@ -3,100 +3,16 @@
  *
  * 이 앱에서 날씨는 정보가 아니라 **편지의 첫 줄**이다. 첫 화면 맨 위에 한 줄로만
  * 두고, 예보표도 아이콘도 두지 않는다 — 지금 나가서 걸을지를 정하는 데 필요한 건
- * 몇 도인지와 비가 오는지 둘뿐이다.
+ * 몇 도인지와 하늘이 어떤지 둘뿐이다.
  *
- * 기상청 초단기예보(`getUltraSrtFcst`)를 쓴다. 실황(`Ncst`)에는 하늘 상태(SKY)가
- * 없어서, 맑은지 흐린지를 말할 수 없다. 그늘을 권하는 앱이 그걸 모르면 곤란하다.
+ * 기상청 초단기예보를 쓰다가 Open-Meteo로 옮겼다. 기상청은 서비스마다 활용신청을
+ * 따로 받아서, 공원이 승인돼도 날씨는 다시 신청하고 승인을 기다려야 한다.
+ * 한 줄짜리 기능이 그만한 절차를 요구하면 그건 기능이 비싼 것이다.
+ * Open-Meteo는 키가 아예 없고 좌표를 그대로 받는다(격자 변환도 필요 없다).
  */
-
-/** 격자 변환·발표 시각 계산은 한국 표준시 기준. 한국은 서머타임이 없다. */
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-export interface Grid {
-  nx: number;
-  ny: number;
-}
-
-/*
- * 기상청 격자(DFS) 변환 상수.
- * 람베르트 정각 원뿔 도법이고, 이 값들은 기상청이 배포하는 예제 코드와 같다.
- * 서울(60,127)·부산(98,76)·제주(53,38)로 검산했다.
- */
-const RE = 6371.00877; // 지구 반경 (km)
-const GRID = 5.0; // 격자 간격 (km)
-const SLAT1 = 30.0; // 투영 위도 1 (deg)
-const SLAT2 = 60.0; // 투영 위도 2 (deg)
-const OLON = 126.0; // 기준점 경도 (deg)
-const OLAT = 38.0; // 기준점 위도 (deg)
-const XO = 43; // 기준점 X 좌표
-const YO = 136; // 기준점 Y 좌표
-
-const DEG = Math.PI / 180;
-
-/** 위경도 → 기상청 격자. 5km 격자라 목적지든 현재 위치든 대개 같은 칸에 떨어진다. */
-export function toGrid(lat: number, lng: number): Grid {
-  const re = RE / GRID;
-  const slat1 = SLAT1 * DEG;
-  const slat2 = SLAT2 * DEG;
-  const olon = OLON * DEG;
-  const olat = OLAT * DEG;
-
-  let sn =
-    Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-  sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
-
-  let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-  sf = (sf ** sn * Math.cos(slat1)) / sn;
-
-  let ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
-  ro = (re * sf) / ro ** sn;
-
-  let ra = Math.tan(Math.PI * 0.25 + lat * DEG * 0.5);
-  ra = (re * sf) / ra ** sn;
-
-  let theta = lng * DEG - olon;
-  if (theta > Math.PI) {
-    theta -= 2 * Math.PI;
-  }
-  if (theta < -Math.PI) {
-    theta += 2 * Math.PI;
-  }
-  theta *= sn;
-
-  return {
-    nx: Math.floor(ra * Math.sin(theta) + XO + 0.5),
-    ny: Math.floor(ro - ra * Math.cos(theta) + YO + 0.5),
-  };
-}
-
-export interface BaseTime {
-  /** YYYYMMDD */
-  baseDate: string;
-  /** HHMM */
-  baseTime: string;
-}
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
-
-/**
- * 초단기예보의 발표 시각.
- *
- * 매시 30분에 발표되고 45분쯤부터 받아진다. 45분 전에는 직전 시간 것을 불러야
- * 빈 응답을 받지 않는다 — 6시 40분에 0630을 물으면 아직 없다고 나온다.
- */
-export function baseTimeFor(nowMs: number): BaseTime {
-  const shifted = new Date(nowMs + KST_OFFSET_MS);
-  const back = shifted.getUTCMinutes() >= 45 ? 0 : 60 * 60 * 1000;
-  const at = new Date(nowMs + KST_OFFSET_MS - back);
-
-  return {
-    baseDate: `${at.getUTCFullYear()}${pad2(at.getUTCMonth() + 1)}${pad2(at.getUTCDate())}`,
-    baseTime: `${pad2(at.getUTCHours())}30`,
-  };
-}
 
 export type Sky = 'clear' | 'partly' | 'cloudy';
-export type Precip = 'none' | 'rain' | 'sleet' | 'snow' | 'shower';
+export type Precip = 'none' | 'rain' | 'sleet' | 'snow' | 'shower' | 'thunder';
 
 export interface Weather {
   /** 섭씨 */
@@ -105,61 +21,74 @@ export interface Weather {
   precip: Precip;
 }
 
-/** 예보 항목 하나. 기상청 응답의 필드 이름 그대로. */
-export interface ForecastItem {
-  category: string;
-  fcstDate: string;
-  fcstTime: string;
-  fcstValue: string;
-}
+/**
+ * WMO 날씨 코드 → 우리가 쓰는 두 값.
+ *
+ * 표에 없는 코드는 **모르는 것으로 둔다.** 억지로 '맑음'에 밀어 넣으면
+ * 비 오는 날 맑다고 말하게 된다 — 이 앱이 하지 않기로 한 일이다.
+ */
+const BY_CODE: Record<number, { sky: Sky; precip: Precip }> = {
+  0: { sky: 'clear', precip: 'none' }, // 맑음
+  1: { sky: 'clear', precip: 'none' }, // 대체로 맑음
+  2: { sky: 'partly', precip: 'none' }, // 구름 조금
+  3: { sky: 'cloudy', precip: 'none' }, // 흐림
+  45: { sky: 'cloudy', precip: 'none' }, // 안개
+  48: { sky: 'cloudy', precip: 'none' }, // 서리 안개
 
-const SKY_BY_CODE: Record<string, Sky> = { '1': 'clear', '3': 'partly', '4': 'cloudy' };
+  51: { sky: 'cloudy', precip: 'rain' }, // 이슬비 약
+  53: { sky: 'cloudy', precip: 'rain' }, // 이슬비 중
+  55: { sky: 'cloudy', precip: 'rain' }, // 이슬비 강
+  61: { sky: 'cloudy', precip: 'rain' }, // 비 약
+  63: { sky: 'cloudy', precip: 'rain' }, // 비 중
+  65: { sky: 'cloudy', precip: 'rain' }, // 비 강
 
-const PRECIP_BY_CODE: Record<string, Precip> = {
-  '0': 'none',
-  '1': 'rain',
-  '2': 'sleet',
-  '3': 'snow',
-  // 4(소나기)는 초단기예보 코드표에 없지만 단기예보에는 있다. 언젠가 그쪽으로
-  // 옮기게 되면 조용히 '없음'으로 떨어지는 것보다 읽히는 편이 낫다.
-  '4': 'shower',
-  // 5 빗방울, 6 빗방울눈날림, 7 눈날림 — 사람이 느끼기엔 비/진눈깨비/눈과 같다.
-  '5': 'rain',
-  '6': 'sleet',
-  '7': 'snow',
+  56: { sky: 'cloudy', precip: 'sleet' }, // 어는 이슬비 약
+  57: { sky: 'cloudy', precip: 'sleet' }, // 어는 이슬비 강
+  66: { sky: 'cloudy', precip: 'sleet' }, // 어는 비 약
+  67: { sky: 'cloudy', precip: 'sleet' }, // 어는 비 강
+
+  71: { sky: 'cloudy', precip: 'snow' }, // 눈 약
+  73: { sky: 'cloudy', precip: 'snow' }, // 눈 중
+  75: { sky: 'cloudy', precip: 'snow' }, // 눈 강
+  77: { sky: 'cloudy', precip: 'snow' }, // 싸락눈
+  85: { sky: 'cloudy', precip: 'snow' }, // 소낙눈 약
+  86: { sky: 'cloudy', precip: 'snow' }, // 소낙눈 강
+
+  80: { sky: 'cloudy', precip: 'shower' }, // 소나기 약
+  81: { sky: 'cloudy', precip: 'shower' }, // 소나기 중
+  82: { sky: 'cloudy', precip: 'shower' }, // 소나기 강
+
+  95: { sky: 'cloudy', precip: 'thunder' }, // 뇌우
+  96: { sky: 'cloudy', precip: 'thunder' }, // 뇌우 + 약한 우박
+  99: { sky: 'cloudy', precip: 'thunder' }, // 뇌우 + 강한 우박
 };
 
 /**
- * 예보 목록에서 **가장 이른 시각**의 날씨를 뽑는다.
+ * 응답의 `current` 한 덩어리를 읽는다.
  *
- * 응답은 여섯 시간치가 한꺼번에 오는데, 지금 나갈지 정하는 데 필요한 건 첫 칸뿐이다.
- * 세 값(T1H·SKY·PTY) 중 하나라도 없으면 null — 반쪽짜리 문장을 만들지 않는다.
+ * 기온과 코드 중 하나라도 없거나 모르는 값이면 null — 반쪽짜리 문장을 만들지 않는다.
+ * 화면은 그때 그 줄을 아예 그리지 않는다.
  */
-export function firstForecast(items: ForecastItem[]): Weather | null {
-  if (items.length === 0) {
+export function readCurrent(current: unknown): Weather | null {
+  if (current == null || typeof current !== 'object') {
     return null;
   }
 
-  const keyOf = (i: ForecastItem) => `${i.fcstDate}${i.fcstTime}`;
-  const earliest = items.reduce((min, i) => (keyOf(i) < min ? keyOf(i) : min), keyOf(items[0]));
+  const { temperature_2m: temp, weather_code: code } = current as Record<string, unknown>;
 
-  const at = items.filter((i) => keyOf(i) === earliest);
-  const value = (category: string) => at.find((i) => i.category === category)?.fcstValue;
-
-  const temp = value('T1H');
-  const sky = SKY_BY_CODE[value('SKY') ?? ''];
-  const precip = PRECIP_BY_CODE[value('PTY') ?? ''];
-
-  if (temp == null || sky == null || precip == null) {
+  if (typeof temp !== 'number' || !Number.isFinite(temp)) {
+    return null;
+  }
+  if (typeof code !== 'number') {
     return null;
   }
 
-  const tempC = Number(temp);
-  if (!Number.isFinite(tempC)) {
+  const known = BY_CODE[code];
+  if (known == null) {
     return null;
   }
 
-  return { tempC: Math.round(tempC), sky, precip };
+  return { tempC: Math.round(temp), sky: known.sky, precip: known.precip };
 }
 
 const SKY_WORD: Record<Sky, string> = {
@@ -173,6 +102,7 @@ const PRECIP_WORD: Record<Exclude<Precip, 'none'>, string> = {
   sleet: '진눈깨비가 와요',
   snow: '눈이 와요',
   shower: '소나기가 지나가요',
+  thunder: '천둥번개가 쳐요',
 };
 
 /**

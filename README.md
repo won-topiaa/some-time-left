@@ -20,6 +20,7 @@
 | 목적지 검색 (TMAP POI + TMAP 지오코딩) | 연동 완료 |
 | 목적지 혼잡도 (TMAP Puzzle) | 연동 완료 — **실측 확인** (제공 장소 33,768곳) |
 | 혼잡도·공원·건물 높이 데이터 | 연동 완료 — 키 없으면 해당 성질만 중립값 |
+| 날씨 한 줄 (Open-Meteo) | 연동 완료 — **키가 필요 없다**, 실측 확인 |
 | 혼잡도 프록시 | **배포 완료** (Cloudflare Workers) — 서울까지 실측 확인 |
 | 앱 아이콘 | `assets/icon.png` (1024×1024) — `python3 scripts/make-icon.py`로 생성 |
 | 콘솔 노출 자료 | 로고 600×600 라이트/다크, 스크린샷 세로 6장·가로 1장 — `assets/store/` |
@@ -56,6 +57,7 @@ src/
   domain/            순수 로직. React Native에 의존하지 않아 CI에서 그대로 테스트된다.
     time.ts          "3분 전 도착" → 시간 예산. 이 앱의 출발점.
     sun.ts           태양 고도·방위각 (NOAA 근사)
+    weather.ts       WMO 코드 → 첫 화면 맨 위 한 줄
     shade.ts         그늘길 계산
     mood.ts          기분 → 경로 가중치 (사용자에게 비노출)
     route-plan.ts    후보 경로 랭킹

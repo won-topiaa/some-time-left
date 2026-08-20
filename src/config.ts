@@ -42,20 +42,22 @@ export interface ApiConfig {
     /** 전국도시공원표준데이터. 실측 확인 — 서비스 존재, 키만 필요. */
     parkPath: string;
     /**
-     * 기상청 초단기예보. 첫 화면 맨 위 한 줄에만 쓴다.
-     *
-     * 호스트가 표준데이터(`api.data.go.kr`)와 다르다 — 이쪽은 `apis`(s 있음)다.
-     * 실측 확인: 이 경로로 부르면 SERVICE_KEY_IS_NOT_REGISTERED_ERROR가 오고
-     * (경로는 살아 있고 키만 없는 상태), 경로가 틀리면 NO_OPENAPI_SERVICE_ERROR가 온다.
-     */
-    weatherBaseUrl: string;
-    weatherPath: string;
-    /**
      * 국토교통부 건축물대장.
      * 실측 확인: `BldRgstService_v2`는 폐기됐고(NO_OPENAPI_SERVICE_ERROR)
      * `BldRgstHubService`가 살아 있다(SERVICE_KEY_IS_NOT_REGISTERED_ERROR).
      */
     ledgerPath: string;
+  };
+  /**
+   * 날씨 — Open-Meteo. **키가 없다.**
+   *
+   * 기상청은 서비스마다 활용신청을 따로 받아서, 첫 화면 한 줄을 위해 발급·신청·승인을
+   * 다시 밟아야 했다. 여기는 좌표만 주면 되고 격자 변환도 필요 없다.
+   * 무료는 비상업적 사용 기준 하루 1만 요청까지다 — 지금 쓰임(사람당 하루 몇 번)과는
+   * 자릿수가 다르지만, 상업적으로 쓰게 되면 유료 플랜을 봐야 한다.
+   */
+  weather: {
+    baseUrl: string;
   };
   /** 브이월드 — 건물 공간 질의 (건축물대장은 좌표로 못 찾는다) */
   vworld: {
@@ -95,10 +97,11 @@ const config: ApiConfig = {
     // 표준데이터 End Point는 api.data.go.kr (s 없음). apis(s 있음)면 키 미등록으로 뜬다.
     baseUrl: 'https://api.data.go.kr',
     parkPath: '/openapi/tn_pubr_public_cty_park_info_api',
-    weatherBaseUrl: 'https://apis.data.go.kr',
-    weatherPath: '/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst',
     // 건축물대장(미사용)은 apis.data.go.kr의 다른 게이트웨이라, 되살릴 땐 호스트를 따로 둘 것.
     ledgerPath: '/1613000/BldRgstHubService/getBrTitleInfo',
+  },
+  weather: {
+    baseUrl: 'https://api.open-meteo.com',
   },
   vworld: {
     baseUrl: 'https://api.vworld.kr/req/data',

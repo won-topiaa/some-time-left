@@ -1,116 +1,67 @@
 import { describe, expect, it } from 'vitest';
-import { baseTimeFor, firstForecast, toGrid, weatherLine, type ForecastItem } from '../weather';
+import { readCurrent, weatherLine } from '../weather';
 
-/** 한국 시간으로 만든 epoch ms. 실행 환경 시간대에 흔들리지 않게. */
-function kst(y: number, mo: number, d: number, h: number, mi: number): number {
-  return Date.UTC(y, mo - 1, d, h - 9, mi, 0, 0);
-}
+const current = (temperature_2m: unknown, weather_code: unknown) => ({
+  time: '2026-08-20T17:45',
+  temperature_2m,
+  weather_code,
+});
 
-describe('toGrid — 위경도를 기상청 격자로', () => {
-  /**
-   * 기상청이 배포하는 격자 목록의 값들. 세 곳이 다 맞으면 투영이 맞다 —
-   * 하나만 맞추기는 상수를 잘못 넣어도 우연히 되는 일이 있다.
-   */
+describe('readCurrent — Open-Meteo 응답 읽기', () => {
+  it('맑음', () => {
+    expect(readCurrent(current(28.2, 0))).toEqual({
+      tempC: 28,
+      sky: 'clear',
+      precip: 'none',
+    });
+  });
+
+  it('실제로 받은 응답 그대로', () => {
+    // 2026-08-20 17:45 서울. 이 값으로 붙였다.
+    expect(readCurrent(current(24.8, 61))).toEqual({
+      tempC: 25,
+      sky: 'cloudy',
+      precip: 'rain',
+    });
+  });
+
   it.each([
-    ['서울 종로구', 37.5665, 126.978, 60, 127],
-    ['부산 중구', 35.1796, 129.0756, 98, 76],
-    ['제주시', 33.4996, 126.5312, 53, 38],
-  ])('%s', (_name, lat, lng, nx, ny) => {
-    expect(toGrid(lat, lng)).toEqual({ nx, ny });
+    ['맑음', 0, 'clear', 'none'],
+    ['대체로 맑음', 1, 'clear', 'none'],
+    ['구름 조금', 2, 'partly', 'none'],
+    ['흐림', 3, 'cloudy', 'none'],
+    ['안개', 45, 'cloudy', 'none'],
+    ['이슬비', 51, 'cloudy', 'rain'],
+    ['어는 비', 66, 'cloudy', 'sleet'],
+    ['눈', 73, 'cloudy', 'snow'],
+    ['소낙눈', 85, 'cloudy', 'snow'],
+    ['소나기', 81, 'cloudy', 'shower'],
+    ['뇌우', 95, 'cloudy', 'thunder'],
+    ['뇌우 + 우박', 99, 'cloudy', 'thunder'],
+  ])('%s (코드 %i)', (_name, code, sky, precip) => {
+    expect(readCurrent(current(20, code))).toEqual({ tempC: 20, sky, precip });
   });
 
-  it('가까운 두 곳은 같은 칸에 떨어진다', () => {
-    // 5km 격자라, 걸어갈 만한 거리의 출발지와 목적지는 대개 같은 날씨다.
-    expect(toGrid(37.5445, 127.0435)).toEqual(toGrid(37.5472, 127.0446));
-  });
-});
-
-describe('baseTimeFor — 발표 시각', () => {
-  it('45분이 지나야 그 시간 발표를 부른다', () => {
-    expect(baseTimeFor(kst(2026, 8, 20, 6, 45))).toEqual({
-      baseDate: '20260820',
-      baseTime: '0630',
-    });
+  it('영하도 반올림해서 읽는다', () => {
+    expect(readCurrent(current(-3.4, 71))?.tempC).toBe(-3);
+    expect(readCurrent(current(-3.6, 71))?.tempC).toBe(-4);
   });
 
-  it('45분 전에는 직전 시간을 부른다', () => {
-    // 6시 40분에 0630을 물으면 아직 없다고 나온다.
-    expect(baseTimeFor(kst(2026, 8, 20, 6, 40))).toEqual({
-      baseDate: '20260820',
-      baseTime: '0530',
-    });
+  it('모르는 코드는 null — 억지로 맑음에 밀어 넣지 않는다', () => {
+    expect(readCurrent(current(20, 7))).toBeNull();
+    expect(readCurrent(current(20, 100))).toBeNull();
+    expect(readCurrent(current(20, -1))).toBeNull();
   });
 
-  it('자정 직후에는 전날로 넘어간다', () => {
-    expect(baseTimeFor(kst(2026, 8, 20, 0, 10))).toEqual({
-      baseDate: '20260819',
-      baseTime: '2330',
-    });
-  });
-
-  it('한국 시간으로 센다', () => {
-    // UTC로는 아직 8월 19일이지만 한국은 이미 20일 아침이다.
-    expect(baseTimeFor(kst(2026, 8, 20, 8, 50)).baseDate).toBe('20260820');
-  });
-});
-
-const item = (category: string, fcstValue: string, fcstTime = '0700'): ForecastItem => ({
-  category,
-  fcstDate: '20260820',
-  fcstTime,
-  fcstValue,
-});
-
-describe('firstForecast — 가장 이른 시각만', () => {
-  it('세 값을 모두 읽는다', () => {
-    expect(
-      firstForecast([item('T1H', '28'), item('SKY', '1'), item('PTY', '0')])
-    ).toEqual({ tempC: 28, sky: 'clear', precip: 'none' });
-  });
-
-  it('뒤 시간대는 무시한다', () => {
-    const weather = firstForecast([
-      item('T1H', '31', '0900'),
-      item('SKY', '4', '0900'),
-      item('PTY', '1', '0900'),
-      item('T1H', '28', '0700'),
-      item('SKY', '1', '0700'),
-      item('PTY', '0', '0700'),
-    ]);
-    expect(weather).toEqual({ tempC: 28, sky: 'clear', precip: 'none' });
-  });
-
-  it('날짜가 넘어가도 이른 쪽을 고른다', () => {
-    const late = { ...item('T1H', '5', '0000'), fcstDate: '20260821' };
-    const weather = firstForecast([
-      late,
-      { ...item('SKY', '4', '0000'), fcstDate: '20260821' },
-      { ...item('PTY', '0', '0000'), fcstDate: '20260821' },
-      item('T1H', '28', '2300'),
-      item('SKY', '1', '2300'),
-      item('PTY', '0', '2300'),
-    ]);
-    expect(weather?.tempC).toBe(28);
-  });
-
-  it('하나라도 없으면 null — 반쪽짜리 문장을 만들지 않는다', () => {
-    expect(firstForecast([item('T1H', '28'), item('SKY', '1')])).toBeNull();
-    expect(firstForecast([item('SKY', '1'), item('PTY', '0')])).toBeNull();
-    expect(firstForecast([])).toBeNull();
-  });
-
-  it('모르는 코드는 null', () => {
-    expect(firstForecast([item('T1H', '28'), item('SKY', '9'), item('PTY', '0')])).toBeNull();
-  });
-
-  it('숫자가 아닌 기온은 null', () => {
-    expect(firstForecast([item('T1H', '-'), item('SKY', '1'), item('PTY', '0')])).toBeNull();
-  });
-
-  it('영하와 소수점을 읽는다', () => {
-    expect(
-      firstForecast([item('T1H', '-3.4'), item('SKY', '4'), item('PTY', '3')])
-    ).toEqual({ tempC: -3, sky: 'cloudy', precip: 'snow' });
+  it('값이 없거나 이상하면 null', () => {
+    expect(readCurrent(current(undefined, 0))).toBeNull();
+    expect(readCurrent(current(20, undefined))).toBeNull();
+    expect(readCurrent(current('24.8', 0))).toBeNull();
+    expect(readCurrent(current(20, '0'))).toBeNull();
+    expect(readCurrent(current(NaN, 0))).toBeNull();
+    expect(readCurrent(null)).toBeNull();
+    expect(readCurrent(undefined)).toBeNull();
+    expect(readCurrent('맑음')).toBeNull();
   });
 });
 
@@ -126,5 +77,11 @@ describe('weatherLine — 맨 위 한 줄', () => {
 
   it('영하도 그대로', () => {
     expect(weatherLine({ tempC: -3, sky: 'cloudy', precip: 'snow' })).toBe('지금 -3도, 눈이 와요');
+  });
+
+  it('천둥번개는 걸을지 말지를 바꾸므로 따로 말한다', () => {
+    expect(weatherLine({ tempC: 26, sky: 'cloudy', precip: 'thunder' })).toBe(
+      '지금 26도, 천둥번개가 쳐요'
+    );
   });
 });

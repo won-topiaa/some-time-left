@@ -117,7 +117,7 @@ if (!storeOk) {
 console.log('');
 
 const { getApiConfig, configureApi } = await import('../src/config.ts');
-const { baseTimeFor, firstForecast, toGrid, weatherLine } = await import('../src/domain/weather.ts');
+const { readCurrent, weatherLine } = await import('../src/domain/weather.ts');
 const { localSecrets } = await import('../src/config.local.ts');
 
 // 앱이 시작할 때 하는 것과 같은 주입.
@@ -285,54 +285,30 @@ await probe(
 );
 
 /*
- * 5. 기상청 초단기예보 — 첫 화면 맨 위 한 줄.
+ * 5. 날씨 — Open-Meteo.
  *
- * 공공데이터포털은 **서비스마다 활용신청을 따로** 받는다. 공원이 승인됐어도
- * 기상청은 별개라, 같은 키로도 등록되지 않은 키라는 답이 온다.
- * 그 둘을 구별해서 말해 주지 않으면 키를 잘못 넣은 줄 알고 계속 다시 넣게 된다.
+ * 여기만 `run`이 null이 될 일이 없다. 키가 없는 서비스라 건너뛸 조건이 없고,
+ * 그게 이걸로 옮겨 온 이유다.
  */
-await probe(
-  '기상청 날씨',
-  serviceKey == null
-    ? null
-    : async () => {
-        // 서울 종로 격자(60,127). 앱이 쓰는 함수를 그대로 쓴다.
-        const { nx, ny } = toGrid(37.5665, 126.978);
-        const { baseDate, baseTime } = baseTimeFor(Date.now());
-        const params = new URLSearchParams({
-          serviceKey,
-          pageNo: '1',
-          numOfRows: '60',
-          dataType: 'JSON',
-          base_date: baseDate,
-          base_time: baseTime,
-          nx: String(nx),
-          ny: String(ny),
-        });
-        const response = await fetch(
-          `${config.publicData.weatherBaseUrl}${config.publicData.weatherPath}?${params}`
-        );
-        const text = await response.text();
-
-        if (text.includes('SERVICE_KEY_IS_NOT_REGISTERED')) {
-          throw new Error('기상청 서비스 활용신청이 아직이에요 (공원과 별개로 신청합니다)');
-        }
-        if (text.includes('LIMITED_NUMBER_OF_SERVICE_REQUESTS')) {
-          throw new Error('오늘 호출 한도를 다 썼어요');
-        }
-        if (!text.trimStart().startsWith('{')) {
-          throw new Error(`JSON이 아닌 응답: ${text.slice(0, 80)}`);
-        }
-
-        const body = JSON.parse(text);
-        const items = body?.response?.body?.items?.item ?? [];
-        const weather = firstForecast(items);
-        if (weather == null) {
-          throw new Error(`읽을 값이 없어요 (base_time=${baseTime}, 항목 ${items.length}개)`);
-        }
-        return `서울 — ${weatherLine(weather)}`;
-      }
-);
+await probe('날씨', async () => {
+  // 서울 종로. 앱이 쓰는 파서를 그대로 쓴다.
+  const params = new URLSearchParams({
+    latitude: '37.5665',
+    longitude: '126.9780',
+    current: 'temperature_2m,weather_code',
+    timezone: 'Asia/Seoul',
+  });
+  const response = await fetch(`${config.weather.baseUrl}/v1/forecast?${params}`);
+  if (!response.ok) {
+    throw new Error(`${response.status} — ${(await response.text()).slice(0, 120)}`);
+  }
+  const body = await readJson(response);
+  const weather = readCurrent(body.current);
+  if (weather == null) {
+    throw new Error(`읽지 못한 응답: ${JSON.stringify(body.current ?? null).slice(0, 120)}`);
+  }
+  return `서울 — ${weatherLine(weather)}`;
+});
 
 // 6. 앱 아이콘 — 주소가 실제로 이미지를 주는지. 안 뜨는 아이콘은 배포하고 나서야 보인다.
 await probe(
