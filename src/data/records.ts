@@ -7,11 +7,13 @@
 
 import { Storage } from '@apps-in-toss/framework';
 import { compactPath, pathLengthM } from '../domain/geo';
+import { NO_CARRIED, addToCarried, type CarriedTotals } from '../domain/trace';
 import type { WalkRecord } from '../domain/types';
+
+export { NO_CARRIED, type CarriedTotals };
 
 const RECORDS_KEY = 'stl:records:v1';
 const COMPANIONS_KEY = 'stl:companions:v1';
-const CARRIED_KEY = 'stl:carried:v1';
 
 /** 최근 걸은 길을 다시 추천하지 않기 위해 참조하는 개수. */
 const RECENT_WINDOW = 5;
@@ -26,18 +28,36 @@ const RECENT_WINDOW = 5;
 const MAX_RECORDS = 400;
 
 /**
- * 목록에서 밀려난 기록들의 합.
+ * 저장에 실제로 들어가는 모양.
  *
- * '지나온 길'의 주인공은 누적 거리라서, 오래된 걸 지웠다고 그 숫자가 줄면
- * 이 앱이 기록이라고 말할 수 없게 된다. 낱낱은 버리되 합은 남긴다.
+ * 낱낱의 기록과 밀려난 것들의 합을 **한 키에 함께** 둔다. 예전엔 둘을 따로 썼는데,
+ * 합을 먼저 쓰고 목록 쓰기가 실패하면 밀려난 기록이 목록에도 남고 합에도 들어가
+ * 다음 저장 때 또 더해진다 — '지나온 길'의 누적 거리가 슬금슬금 부풀어 오른다.
+ * 한 번에 쓰면 둘이 어긋날 수가 없다.
  */
-export interface CarriedTotals {
-  count: number;
-  distanceM: number;
-  noteCount: number;
+interface RecordStore {
+  records: WalkRecord[];
+  carried: CarriedTotals;
 }
 
-export const NO_CARRIED: CarriedTotals = { count: 0, distanceM: 0, noteCount: 0 };
+const EMPTY_STORE: RecordStore = { records: [], carried: NO_CARRIED };
+
+/** 예전 형태(배열만)도 읽을 수 있게 한다. */
+function toStore(raw: unknown): RecordStore {
+  if (Array.isArray(raw)) {
+    return { records: raw as WalkRecord[], carried: NO_CARRIED };
+  }
+  if (raw != null && typeof raw === 'object') {
+    const value = raw as Partial<RecordStore>;
+    const carried = value.carried;
+    return {
+      records: Array.isArray(value.records) ? value.records : [],
+      carried:
+        carried != null && typeof carried.count === 'number' ? carried : NO_CARRIED,
+    };
+  }
+  return EMPTY_STORE;
+}
 
 /**
  * 읽기에 관대한 버전. 못 읽으면 없는 셈 친다.
@@ -73,18 +93,13 @@ async function writeJson(key: string, value: unknown): Promise<void> {
 }
 
 export async function loadRecords(): Promise<WalkRecord[]> {
-  const records = await readJson<WalkRecord[]>(RECORDS_KEY, []);
-  // 저장된 값이 손상돼 배열이 아니면 sort에서 터진다. 읽기가 화면을 죽이지 않게 한다.
-  if (!Array.isArray(records)) {
-    return [];
-  }
-  return [...records].sort((a, b) => b.arrivedAt - a.arrivedAt);
+  const store = toStore(await readJson<unknown>(RECORDS_KEY, null));
+  return [...store.records].sort((a, b) => b.arrivedAt - a.arrivedAt);
 }
 
 export async function saveRecord(record: WalkRecord): Promise<void> {
   // 못 읽었으면 여기서 던진다. 덮어쓰지 않는 것이 한 건을 더 남기는 것보다 중요하다.
-  const existing = await readJsonStrict<WalkRecord[]>(RECORDS_KEY, []);
-  const records = Array.isArray(existing) ? existing : [];
+  const store = toStore(await readJsonStrict<unknown>(RECORDS_KEY, null));
 
   // 좌표는 솎아서 넣되, 누적 거리는 솎기 전 참값으로 적어 둔다.
   const stored: WalkRecord = {
@@ -93,16 +108,14 @@ export async function saveRecord(record: WalkRecord): Promise<void> {
     path: compactPath(record.path),
   };
 
-  const next = [stored, ...records];
+  const next = [stored, ...store.records];
 
   // 넘치는 만큼은 합으로 옮겨 담는다. 낱낱은 사라져도 누적 숫자는 그대로다.
-  if (next.length > MAX_RECORDS) {
-    const dropped = next.slice(MAX_RECORDS);
-    await carryOver(dropped);
-    await writeJson(RECORDS_KEY, next.slice(0, MAX_RECORDS));
-  } else {
-    await writeJson(RECORDS_KEY, next);
-  }
+  // 목록과 합을 한 번에 써야 둘이 어긋나지 않는다.
+  await writeJson(RECORDS_KEY, {
+    records: next.slice(0, MAX_RECORDS),
+    carried: addToCarried(store.carried, next.slice(MAX_RECORDS)),
+  } satisfies RecordStore);
 
   // 기록은 이미 남았다. 이름 목록은 편의 기능일 뿐이라 여기서 실패해도
   // 위 저장까지 실패한 것처럼 보이게 하지 않는다.
@@ -111,27 +124,9 @@ export async function saveRecord(record: WalkRecord): Promise<void> {
   }
 }
 
-/** 목록에서 밀려난 기록들을 합에 더한다. */
-async function carryOver(dropped: WalkRecord[]): Promise<void> {
-  const existing = await readJsonStrict<CarriedTotals>(CARRIED_KEY, NO_CARRIED);
-  const base =
-    existing != null && typeof existing.count === 'number' ? existing : NO_CARRIED;
-
-  const next: CarriedTotals = {
-    count: base.count + dropped.length,
-    distanceM:
-      base.distanceM +
-      dropped.reduce((sum, r) => sum + (r.distanceM ?? pathLengthM(r.path)), 0),
-    noteCount: base.noteCount + dropped.filter((r) => r.note.trim() !== '').length,
-  };
-
-  await writeJson(CARRIED_KEY, next);
-}
-
 /** 목록에서 밀려난 기록들의 합. 없으면 0. */
 export async function loadCarried(): Promise<CarriedTotals> {
-  const carried = await readJson<CarriedTotals>(CARRIED_KEY, NO_CARRIED);
-  return carried != null && typeof carried.count === 'number' ? carried : NO_CARRIED;
+  return toStore(await readJson<unknown>(RECORDS_KEY, null)).carried;
 }
 
 /** 최근에 걸은 경로 id들. 같은 길을 반복 추천하지 않기 위해. */

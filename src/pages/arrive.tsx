@@ -25,7 +25,7 @@ export const Route = createRoute('/arrive', {
  */
 function Arrive() {
   const navigation = useNavigation();
-  const { trip, reset } = useTrip();
+  const { trip, update, reset } = useTrip();
   const screen = useScreenInsets();
   const keyboardHeight = useKeyboardHeight();
   const [note, setNote] = useState('');
@@ -82,38 +82,60 @@ function Arrive() {
   /**
    * 걸은 일을 기록에 남긴다.
    *
-   * 화면을 어떻게 떠나든 한 번만 남긴다 — 버튼을 눌러도, 뒤로 나가도.
+   * 화면을 어떻게 떠나든 **한 번만** 남긴다 — 버튼을 눌러도, 뒤로 나가도.
    * 걸은 건 일어난 일이라 버튼을 눌러야만 인정되는 게 아니고, 여기서 안 남기면
    * '지나온 길'에서 그날이 통째로 사라진다. 선택인 건 한 줄을 적는 것뿐이다.
+   *
+   * 중복 방지는 화면 안의 ref가 아니라 이동(Trip)에 둔다. 뒤로 나갔다 다시 들어오면
+   * 화면이 새로 만들어져 ref는 초기화되지만, 걸은 일은 여전히 한 번이기 때문이다.
    */
   const persist = useCallback(async () => {
-    if (saved.current || trip.mood == null || trip.route == null) {
+    if (saved.current || trip.recordSaved || trip.mood == null || trip.route == null) {
       return;
     }
     saved.current = true;
 
     const now = Date.now() + offset;
-    await saveRecord({
-      id: `${now}`,
-      companion: trip.companion,
-      mood: trip.mood,
-      note: note.trim(),
-      arrivedAt: now,
-      destinationName: trip.destinationName,
-      path: trip.route.candidate.path,
-      routeId: trip.route.candidate.id,
-      // 실제로 걸은 거리. 도착을 직접 눌렀다면 걸어온 만큼만 센다.
-      distanceM: trip.walkedDistanceM ?? trip.route.candidate.distanceM,
-    }).catch(() => {
+    try {
+      await saveRecord({
+        id: `${now}`,
+        companion: trip.companion,
+        mood: trip.mood,
+        note: note.trim(),
+        arrivedAt: now,
+        destinationName: trip.destinationName,
+        path: trip.route.candidate.path,
+        routeId: trip.route.candidate.id,
+        // 실제로 걸은 거리. 도착을 직접 눌렀다면 걸어온 만큼만 센다.
+        distanceM: trip.walkedDistanceM ?? trip.route.candidate.distanceM,
+      });
+      update({ recordSaved: true });
+    } catch {
       // 다음 기회에 다시 시도할 수 있도록 되돌린다.
       saved.current = false;
-    });
-  }, [trip, note, offset]);
+    }
+  }, [trip, note, offset, update]);
 
-  // 뒤로 나가도 걸은 일은 남는다. 적던 한 줄까지 함께.
-  useEffect(() => navigation.addListener('blur', () => {
-    persist();
-  }), [navigation, persist]);
+  /**
+   * 화면을 떠날 때 남긴다.
+   *
+   * `blur`만으로는 부족하다. 뒤로 나가면 이 화면은 사라지는데, 리액트는 사라지는
+   * 컴포넌트의 정리(리스너 해제)를 먼저 하고 그다음에 blur를 쏘기 때문에
+   * 정작 뒤로 나가는 경우를 못 받을 수 있다. 그래서 사라질 때도 함께 남긴다.
+   * 두 번 불려도 위 가드가 한 번만 남긴다.
+   */
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      persistRef.current();
+    });
+    return () => {
+      unsubscribe();
+      persistRef.current();
+    };
+  }, [navigation]);
 
   const finish = useCallback(async () => {
     setSaving(true);

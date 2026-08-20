@@ -24,6 +24,14 @@ export interface Trip {
   /** 지금 제안 중인 경로 */
   route: ScoredRoute | null;
   /**
+   * 이번 이동을 이미 기록에 남겼는가.
+   *
+   * 도착 화면 안의 ref로는 부족하다 — 뒤로 나갔다가 다시 들어오면 화면이 새로 만들어져
+   * ref가 초기화되고, 한 번 걸은 일이 두 번 기록된다. 이동 하나에 하나만 남아야 하므로
+   * 이동과 수명이 같은 이곳에 둔다. `reset()`이 다음 이동을 위해 지운다.
+   */
+  recordSaved: boolean;
+  /**
    * 실제로 걸은 거리 (m). 위치를 한 번도 못 잡았으면 null.
    *
    * '이미 도착했어요'를 눌러 중간에 끝낼 수 있으니, 계획한 거리를 그대로 기록하면
@@ -50,6 +58,7 @@ const EMPTY: Trip = {
   companion: '',
   mood: null,
   route: null,
+  recordSaved: false,
   walkedDistanceM: null,
   clockOffsetMs: 0,
 };

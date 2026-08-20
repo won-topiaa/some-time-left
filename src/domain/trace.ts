@@ -36,9 +36,30 @@ export interface CarriedTotals {
   noteCount: number;
 }
 
+export const NO_CARRIED: CarriedTotals = { count: 0, distanceM: 0, noteCount: 0 };
+
+/**
+ * 목록에서 밀려난 기록들을 합에 더한다.
+ *
+ * 순수 계산이라 저장 실패와 얽히지 않는다 — 저장은 이 결과를 목록과 **한 번에** 쓴다.
+ * 따로 쓰면 합만 먼저 들어가고 목록 쓰기가 실패했을 때 같은 기록이 두 번 세어진다.
+ */
+export function addToCarried(base: CarriedTotals, dropped: WalkRecord[]): CarriedTotals {
+  if (dropped.length === 0) {
+    return base;
+  }
+  return {
+    count: base.count + dropped.length,
+    distanceM:
+      base.distanceM +
+      dropped.reduce((sum, r) => sum + (r.distanceM ?? pathLengthM(r.path)), 0),
+    noteCount: base.noteCount + dropped.filter((r) => r.note.trim() !== '').length,
+  };
+}
+
 export function traceSummary(
   records: WalkRecord[],
-  carried: CarriedTotals = { count: 0, distanceM: 0, noteCount: 0 }
+  carried: CarriedTotals = NO_CARRIED
 ): TraceSummary {
   let totalDistanceM = carried.distanceM;
   let noteCount = carried.noteCount;
