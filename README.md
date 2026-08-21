@@ -50,6 +50,17 @@
 `ait deploy`는 빌드를 하지 않고 이미 있는 `.ait`을 올리기만 해서,
 `npm run deploy`가 `predeploy`로 빌드를 먼저 돌리게 묶어 뒀다.
 
+## 프로젝트에 반드시 있어야 하는 파일
+
+`npm create granite-app`이 만드는 것들이다. 손으로 만든 프로젝트라 빠져 있었고,
+없어도 빌드는 통과하기 때문에 한참 뒤에야 드러났다.
+
+| 파일 | 없으면 |
+|---|---|
+| `babel.config.js` | Metro가 제 기본 변환으로 떨어진다. 번들이 6.5KB 달라졌다 |
+| `react-native.config.js` | 중첩 node_modules에서 RN 경로를 못 찾을 수 있다 |
+| `@toss/tds-react-native` | 프레임워크가 `<TDSProvider>`를 그리므로 직접 의존성이어야 한다 |
+
 ## 구조
 
 ```
