@@ -59,6 +59,24 @@ export interface ApiConfig {
   weather: {
     baseUrl: string;
   };
+  /**
+   * 지도 타일 — CARTO Positron.
+   *
+   * 지금은 **키 없이** 받아진다(실측). 다만 CARTO 문서는 무료 basemap에 대해
+   * "월 500만 타일까지 무료, API 키만 있으면 된다"고 말한다. 키는 계정 없이 즉시
+   * 받을 수 있고, 상업적 사용은 별도 라이선스를 봐야 한다.
+   *
+   * 그래서 주소를 **설정으로 뺐다.** 나중에 키를 붙이거나 다른 제공자로 갈아탈 때
+   * 화면 코드를 건드리지 않게 하려는 것이다 — 무료 타일 서비스는 전부 SLA가 없고,
+   * 어느 날 막히면 그때가 앱을 다시 배포할 때가 되면 곤란하다.
+   *
+   * `{z}` `{x}` `{y}`를 좌표로 바꿔 부른다. 키가 필요해지면 주소 뒤에 붙이면 된다.
+   */
+  mapTiles: {
+    urlTemplate: string;
+    /** 지도 위에 반드시 적어야 하는 출처. 제공자를 바꾸면 이것도 같이 바꾼다. */
+    attribution: string;
+  };
   /** 브이월드 — 건물 공간 질의 (건축물대장은 좌표로 못 찾는다) */
   vworld: {
     baseUrl: string;
@@ -102,6 +120,12 @@ const config: ApiConfig = {
   },
   weather: {
     baseUrl: 'https://api.open-meteo.com',
+  },
+  mapTiles: {
+    // `@2x`는 고해상도 타일(512px). 논리 크기보다 크게 받아 두면 확대해도 안 뭉개진다.
+    urlTemplate: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+    // CARTO는 자사 표기를 요구하고, 데이터 출처인 OSM은 ODbL이 요구한다. 지우지 않는다.
+    attribution: '© CARTO © OpenStreetMap',
   },
   vworld: {
     baseUrl: 'https://api.vworld.kr/req/data',

@@ -31,6 +31,8 @@ import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, dayLabel, formatClock, formatDurati
 import { formatTotalDistance } from '../src/domain/trace.ts';
 import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from '../src/ui/routeShape.ts';
 import { distanceM } from '../src/domain/geo.ts';
+import { mapView, tileUrl } from '../src/ui/mercator.ts';
+import { getApiConfig } from '../src/config.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, '..', 'assets', 'store');
@@ -161,6 +163,98 @@ function glyph(pathPoints, tint, size = 64) {
 }
 
 /* ------------------------------------------------------------------ *
+ * 지도
+ *
+ * 앱은 실제 타일을 깐다(`RouteMap`). 그림에 리본만 그려 두면 스토어에서 본 것과
+ * 받아서 켠 것이 달라지므로, 여기서도 같은 계산으로 같은 타일을 받아 얹는다.
+ *
+ * 네트워크가 없으면 타일 없이 경로만 그린다 — 그림 만들기가 인터넷에 매여선 안 된다.
+ * ------------------------------------------------------------------ */
+
+/** 받아 둔 타일. `{키: dataURI}`. 없으면 빈 칸으로 둔다. */
+const tileCache = new Map();
+
+/** 앱과 같은 출처 표기. 설정에서 뽑으므로 제공자를 바꾸면 그림도 따라온다. */
+const MAP_CREDIT = getApiConfig().mapTiles.attribution;
+
+/** 폰 안쪽 폭에서 좌우 여백을 뺀 값. 화면들이 쓰는 지도 폭이다. */
+const MAP_W = 390 - spacing.lg * 2;
+
+async function loadTiles(view) {
+  await Promise.all(
+    view.tiles.map(async (tile) => {
+      const key = `${tile.zoom}/${tile.x}/${tile.y}`;
+      if (tileCache.has(key)) return;
+      try {
+        const response = await fetch(tileUrl(tile), {
+          headers: { 'User-Agent': 'some-time-left/0.1 (store screenshots)' },
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        const buffer = Buffer.from(await response.arrayBuffer());
+        tileCache.set(key, `data:image/png;base64,${buffer.toString('base64')}`);
+      } catch {
+        tileCache.set(key, null);
+      }
+    })
+  );
+}
+
+/**
+ * 지도 위 경로 한 장.
+ *
+ * `progress`를 주면 걸어온 길이 흐려지고 지금 자리에 점이 찍힌다(걷는 화면).
+ * 안 주면 경로 한 줄만 그린다(경로 화면).
+ */
+function routeMap(pathPoints, tint, { width, height, progress } = {}) {
+  const view = mapView(pathPoints, { width, height });
+  const pts = pathPoints.map((at) => view.project(at));
+  const d = (points) =>
+    points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+
+  const segmentM = pathPoints.slice(1).map((point, i) => distanceM(pathPoints[i], point));
+  const split = progress == null ? null : splitAtRatio(pts, progress, segmentM);
+
+  const tiles = view.tiles
+    .map((tile) => {
+      const uri = tileCache.get(`${tile.zoom}/${tile.x}/${tile.y}`);
+      if (uri == null) return '';
+      return `<img src="${uri}" style="position:absolute;left:${tile.left}px;top:${tile.top}px;
+        width:${view.tilePx}px;height:${view.tilePx}px"/>`;
+    })
+    .join('');
+
+  const line = (points, color, w) =>
+    `<path d="${d(points)}" stroke="${color}" stroke-width="${w}" fill="none"
+       stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  return `<div style="position:relative;width:${width}px;height:${height}px;overflow:hidden;
+      border-radius:14px;background:${colors.bg}">
+    ${tiles}
+    <svg width="${width}" height="${height}" style="position:absolute;left:0;top:0">
+      <path d="${d(pts)}" stroke="${colors.surface}" stroke-width="7" fill="none"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      ${
+        split == null
+          ? line(pts, tint, 4)
+          : line(split.walked, colors.inkGhost, 4) + line(split.ahead, tint, 4)
+      }
+      <circle cx="${pts[0].x}" cy="${pts[0].y}" r="5" fill="${colors.surface}"
+              stroke="${colors.inkFaint}" stroke-width="2"/>
+      <circle cx="${pts[pts.length - 1].x}" cy="${pts[pts.length - 1].y}" r="6.5"
+              fill="${tint}" stroke="${colors.surface}" stroke-width="2"/>
+      ${
+        split == null
+          ? ''
+          : `<circle cx="${split.at.x}" cy="${split.at.y}" r="8" fill="${colors.surface}"/>
+             <circle cx="${split.at.x}" cy="${split.at.y}" r="5" fill="${tint}"/>`
+      }
+    </svg>
+    <div style="position:absolute;right:${spacing.sm}px;bottom:${spacing.xs}px;
+        ${font(type.caption)};font-size:10px;line-height:14px;color:${colors.inkFaint}">${MAP_CREDIT}</div>
+  </div>`;
+}
+
+/* ------------------------------------------------------------------ *
  * 화면 여섯 개
  *
  * 각 함수는 폰 안쪽(390x844)에 들어갈 마크업만 낸다.
@@ -267,7 +361,7 @@ function route() {
     <div style="${font(type.display)};color:${colors.ink};margin-top:${spacing.xl}px">${ARRIVE_EARLY_MIN}분 전에 닿는 길이에요.</div>
 
     <div style="margin-top:${spacing.lg}px">
-      <div style="height:180px">${ribbon(WALK_PATH, MOOD_TINT.pensive)}</div>
+      ${routeMap(WALK_PATH, MOOD_TINT.pensive, { width: MAP_W, height: 200 })}
 
       <div style="margin-top:${spacing.md}px">
         <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(27 * 60)}</div>
@@ -296,31 +390,9 @@ function route() {
   `);
 }
 
-/**
- * 걷는 중 리본. 앱의 `RoutePreview progress={...}`와 같은 그림 —
- * 걸어온 길은 흐려지고 남은 길에만 색이 남으며, 지금 자리에 점이 찍힌다.
- */
-function walkedRibbon(pathPoints, tint, ratio) {
-  const pts = projectPath(pathPoints);
-  // 앱과 같은 자로 잰다 — 구간별 실제 거리(m). 안 맞추면 그림에서만 점이 밀린다.
-  const segmentM = pathPoints.slice(1).map((point, i) => distanceM(pathPoints[i], point));
-  const split = splitAtRatio(pts, ratio, segmentM);
-  const line = (d, color) =>
-    `<path d="${d}" stroke="${color}" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
-
-  return `<svg viewBox="0 0 ${VIEWBOX} ${VIEWBOX}" width="100%" height="100%">
-    ${line(toSvgPath(split.walked), colors.inkGhost)}
-    ${line(toSvgPath(split.ahead), tint)}
-    <circle cx="${pts[0].x}" cy="${pts[0].y}" r="3" fill="${colors.surface}" stroke="${colors.inkGhost}" stroke-width="1.5"/>
-    <circle cx="${pts[pts.length - 1].x}" cy="${pts[pts.length - 1].y}" r="4" fill="${tint}"/>
-    <circle cx="${split.at.x}" cy="${split.at.y}" r="5.5" fill="${colors.surface}"/>
-    <circle cx="${split.at.x}" cy="${split.at.y}" r="3.5" fill="${tint}"/>
-  </svg>`;
-}
-
 function walk() {
   return screen(`
-    <div style="height:200px">${walkedRibbon(WALK_PATH, MOOD_TINT.pensive, 0.55)}</div>
+    ${routeMap(WALK_PATH, MOOD_TINT.pensive, { width: MAP_W, height: 220, progress: 0.55 })}
 
     <div style="flex:1"></div>
 
@@ -469,6 +541,14 @@ function landscape() {
 /* ------------------------------------------------------------------ *
  * 굽기
  * ------------------------------------------------------------------ */
+
+/*
+ * 타일을 먼저 받아 둔다. 그림 만들기는 동기 함수들이라, 여기서 한 번에 채워 놓고
+ * 아래에서는 캐시만 읽는다. 실패하면 캐시에 null이 들어가고 그 자리는 비워진다.
+ */
+for (const height of [200, 220]) {
+  await loadTiles(mapView(WALK_PATH, { width: MAP_W, height }));
+}
 
 const SHOTS = [
   {

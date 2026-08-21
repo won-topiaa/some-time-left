@@ -7,7 +7,7 @@ import { arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
-import { RoutePreview } from '../ui/RoutePreview';
+import { RouteMap } from '../ui/RouteMap';
 import { useTrip } from '../state/TripContext';
 import { useRouteSuggestion } from '../state/useRouteSuggestion';
 
@@ -160,9 +160,16 @@ function RouteScreen() {
 
         {route != null && (
           <View style={styles.card}>
-            {/* 길에 그날의 기분 색을 입힌다. 이 색 그대로 기록에 남는다. */}
-            <RoutePreview
+            {/*
+              길에 그날의 기분 색을 입힌다. 이 색 그대로 기록에 남는다.
+
+              여기도 실제 지도를 깐다. "이 길로 갈까"를 정하는 자리인데 모양만
+              보여주면 어디를 지나는지 알 수 없어서, 이유 한 줄만으로 결정하게 된다.
+              지도는 옅은 회색뿐이라 아래 이유 한 줄에서 눈을 뺏지 않는다.
+            */}
+            <RouteMap
               path={route.candidate.path}
+              height={200}
               tint={trip.mood != null ? moodTint(trip.mood) : colors.ink}
             />
 

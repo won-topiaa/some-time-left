@@ -5,7 +5,7 @@ import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss
 import { distanceM, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
 import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
-import { RoutePreview } from '../ui/RoutePreview';
+import { RouteMap } from '../ui/RouteMap';
 import { moodTint } from '../ui/moodTint';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useScreenInsets } from '../ui/screenInsets';
@@ -229,16 +229,16 @@ function Walk() {
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
       {/*
-        따라갈 수 있는 그림.
+        따라갈 수 있는 지도.
 
         걸어온 길은 흐려지고 남은 길에만 기분 색이 남는다. 지금 자리에 점이 찍혀서
-        어느 쪽으로 가는 중인지, 얼마나 왔는지가 숫자를 읽기 전에 먼저 보인다.
-        (거리 타일이 깔린 지도는 아니다 — 아래 주석 참고.)
+        어느 쪽으로 가는 중인지, 다음 골목이 어느 쪽인지가 숫자를 읽기 전에 먼저 보인다.
+        타일이 안 와도 경로는 그대로 그려진다.
       */}
       {path.length >= 2 && (
-        <RoutePreview
+        <RouteMap
           path={path}
-          height={200}
+          height={220}
           tint={trip.mood != null ? moodTint(trip.mood) : colors.ink}
           progress={alongRatio}
         />
