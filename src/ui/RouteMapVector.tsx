@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import WebView from '@granite-js/native/react-native-webview';
 import { getApiConfig } from '../config';
@@ -49,10 +49,21 @@ export function RouteMapVector({
     progress,
   ]);
 
-  if (update != null) {
-    // 지도가 아직 준비되기 전이면 웹뷰 쪽에서 알아서 흘려보낸다.
-    webView.current?.injectJavaScript(update);
-  }
+  /*
+   * 렌더 중에 밀어 넣으면 안 된다.
+   *
+   * 처음 렌더에서는 ref가 아직 비어 있어 그 한 번이 통째로 사라지고, 그 뒤로는
+   * **렌더할 때마다** 같은 조각이 다시 들어간다. 걷는 화면은 1초에 한 번 다시 그리므로
+   * 걷는 내내 초당 한 번씩 소스 세 개를 갈아 끼우게 된다 — 값이 그대로여도.
+   *
+   * effect로 옮기면 `update` 문자열이 실제로 달라졌을 때만 나간다.
+   */
+  useEffect(() => {
+    if (update != null) {
+      // 지도가 아직 안 떴으면 웹뷰 쪽이 들고 있다가 뜰 때 반영한다.
+      webView.current?.injectJavaScript(update);
+    }
+  }, [update]);
 
   return (
     <View style={[styles.box, { height }]}>
@@ -64,7 +75,6 @@ export function RouteMapVector({
         containerStyle={styles.web}
         // 지도 안에서 스크롤·확대를 막는다. 화면의 스크롤과 싸우지 않게.
         scrollEnabled={false}
-        // 첫 그림이 다 그려지기 전에는 안 보여준다. 반쯤 그려진 지도가 더 어수선하다.
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
@@ -153,6 +163,20 @@ function mapHtml(path: LatLng[], tint: string): string {
   var PAPER = ${JSON.stringify(colors.surface)};
   var FAINT = ${JSON.stringify(colors.inkFaint)};
 
+  /*
+   * 스타일을 못 받아도 경로는 그린다.
+   *
+   * 소스와 레이어를 'load' 한 번에만 얹으면, 스타일 요청이 실패했을 때 그 이벤트가
+   * 영영 안 와서 빈 상자만 남는다. 비행기 모드에서 래스터판은 타일만 비고 경로는
+   * 그대로 나오는데, 그 성질을 여기서 잃으면 안 된다.
+   *
+   * 그래서 스타일이 바뀔 때마다('styledata') 다시 얹고, 스타일이 깨지면 종이 한 장짜리
+   * 빈 스타일로 갈아탄다. 갈아타면 'styledata'가 다시 오고 경로가 그 위에 그려진다.
+   */
+  var BLANK = { version: 8, sources: {}, layers: [
+    { id: 'paper', type: 'background', paint: { 'background-color': ${JSON.stringify(colors.bg)} } }
+  ] };
+
   var map = new maplibregl.Map({
     container: 'map',
     style: ${JSON.stringify(mapTiles.vectorStyleUrl)},
@@ -164,66 +188,76 @@ function mapHtml(path: LatLng[], tint: string): string {
   });
 
   var whole = ${lineString(path)};
+  var start = ${point(start)};
+  var end = ${point(end)};
+
+  /** 마지막으로 받은 진행 상황. 스타일이 바뀌어도 이 값으로 다시 그린다. */
+  var latest = null;
+  var fellBack = false;
 
   function src(id, data) {
     if (map.getSource(id)) { map.getSource(id).setData(data); return; }
     map.addSource(id, { type: 'geojson', data: data });
   }
 
-  map.on('load', function () {
-    src('whole', whole);
-    src('walked', ${lineString([path[0]])});
-    src('ahead', whole);
-    src('here', ${point(start)});
-    src('start', ${point(start)});
-    src('end', ${point(end)});
-
-    // 길 밑에 흰 테. 밑그림의 길도 흰색이라 얇은 선만 얹으면 지워진 것처럼 보인다.
-    map.addLayer({ id: 'casing', type: 'line', source: 'whole',
+  function line(id, source, color, width, extra) {
+    if (map.getLayer(id)) { return; }
+    map.addLayer({ id: id, type: 'line', source: source,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': PAPER, 'line-width': 7, 'line-opacity': 0.9 } });
-
-    // 걸어온 길은 물러난다. 지운 게 아니라 지나온 것이므로 남겨는 둔다.
-    map.addLayer({ id: 'walked', type: 'line', source: 'walked',
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': GHOST, 'line-width': 4 } });
-
-    // 남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다.
-    map.addLayer({ id: 'ahead', type: 'line', source: 'ahead',
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': TINT, 'line-width': 4 } });
-
-    // 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게.
-    map.addLayer({ id: 'start', type: 'circle', source: 'start',
-      paint: { 'circle-radius': 5, 'circle-color': PAPER,
-               'circle-stroke-color': FAINT, 'circle-stroke-width': 2 } });
-    map.addLayer({ id: 'end', type: 'circle', source: 'end',
-      paint: { 'circle-radius': 6.5, 'circle-color': TINT,
-               'circle-stroke-color': PAPER, 'circle-stroke-width': 2 } });
-
-    // 지금 자리. 진행이 들어오기 전에는 그리지 않는다.
-    map.addLayer({ id: 'here', type: 'circle', source: 'here',
-      paint: { 'circle-radius': 5, 'circle-color': TINT,
-               'circle-stroke-color': PAPER, 'circle-stroke-width': 3,
-               'circle-opacity': 0, 'circle-stroke-opacity': 0 } });
-
-    if (pending) { apply(pending); pending = null; }
-  });
-
-  var pending = null;
-
-  function apply(next) {
-    src('walked', next.walked);
-    src('ahead', next.ahead);
-    src('here', next.here);
-    map.setPaintProperty('here', 'circle-opacity', 1);
-    map.setPaintProperty('here', 'circle-stroke-opacity', 1);
+      paint: Object.assign({ 'line-color': color, 'line-width': width }, extra || {}) });
   }
 
-  // 지도가 아직 안 떴으면 들고 있다가 뜰 때 한 번에 반영한다.
+  function circle(id, source, radius, fill, stroke, strokeWidth, extra) {
+    if (map.getLayer(id)) { return; }
+    map.addLayer({ id: id, type: 'circle', source: source,
+      paint: Object.assign({
+        'circle-radius': radius, 'circle-color': fill,
+        'circle-stroke-color': stroke, 'circle-stroke-width': strokeWidth
+      }, extra || {}) });
+  }
+
+  /** 여러 번 불려도 괜찮게 둔다 — 스타일이 바뀔 때마다 다시 온다. */
+  function draw() {
+    src('whole', whole);
+    src('walked', latest ? latest.walked : ${lineString([path[0]])});
+    src('ahead', latest ? latest.ahead : whole);
+    src('here', latest ? latest.here : start);
+    src('start', start);
+    src('end', end);
+
+    // 길 밑에 흰 테. 밑그림의 길도 흰색이라 얇은 선만 얹으면 지워진 것처럼 보인다.
+    line('casing', 'whole', PAPER, 7, { 'line-opacity': 0.9 });
+    // 걸어온 길은 물러난다. 지운 게 아니라 지나온 것이므로 남겨는 둔다.
+    line('walked', 'walked', GHOST, 4);
+    // 남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다.
+    line('ahead', 'ahead', TINT, 4);
+
+    // 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게.
+    circle('start', 'start', 5, PAPER, FAINT, 2);
+    circle('end', 'end', 6.5, TINT, PAPER, 2);
+    // 지금 자리. 진행이 들어오기 전에는 안 보인다.
+    circle('here', 'here', 5, TINT, PAPER, 3, {
+      'circle-opacity': 0, 'circle-stroke-opacity': 0
+    });
+
+    var visible = latest ? 1 : 0;
+    map.setPaintProperty('here', 'circle-opacity', visible);
+    map.setPaintProperty('here', 'circle-stroke-opacity', visible);
+  }
+
+  map.on('styledata', draw);
+
+  map.on('error', function () {
+    // 스타일을 못 받았다. 종이 한 장 위에라도 경로는 보여준다.
+    if (fellBack || map.isStyleLoaded()) { return; }
+    fellBack = true;
+    map.setStyle(BLANK);
+  });
+
   window.__setProgress = function (walked, ahead, here) {
-    var next = { walked: walked, ahead: ahead, here: here };
-    if (map.isStyleLoaded() && map.getLayer('here')) { apply(next); } else { pending = next; }
+    latest = { walked: walked, ahead: ahead, here: here };
+    // 스타일이 아직이면 그냥 들고 있는다 — 'styledata'가 올 때 이 값으로 그린다.
+    if (map.getLayer('here')) { draw(); }
   };
 }());
 </script>

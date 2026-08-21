@@ -31,6 +31,7 @@ import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, dayLabel, formatClock, formatDurati
 import { formatTotalDistance } from '../src/domain/trace.ts';
 import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from '../src/ui/routeShape.ts';
 import { distanceM } from '../src/domain/geo.ts';
+import { DEFAULT_WALK_SPEED_MPS } from '../src/domain/pace.ts';
 import { mapView, tileUrl } from '../src/ui/mercator.ts';
 import { getApiConfig } from '../src/config.ts';
 
@@ -88,17 +89,31 @@ function smooth(points, steps = 10) {
  * 이 앱이 만드는 길은 최단 경로를 두고 **일부러 돌아가는** 길이라
  * 한 번 크게 휘었다가 목적지로 올라온다.
  */
-const WALK_PATH = smooth([
-  [37.5402, 127.0405],
-  [37.5399, 127.0428],
-  [37.5408, 127.0447],
-  [37.5424, 127.0451],
-  [37.5436, 127.0438],
-  [37.5442, 127.0419],
-  [37.5455, 127.0412],
-  [37.5468, 127.0424],
-  [37.5472, 127.0446],
-]);
+/*
+ * 실제 도로를 따라 딴 경로다. 성수동 — 뚝섬로를 따라 동쪽으로, 성수이로7가길로
+ * 꺾어 북동쪽, 연무장9길을 지나 아차산로에서 끝난다. 타일 위에 겹쳐 놓고 도로
+ * 중심선에 앉을 때까지 좌표를 맞췄다.
+ *
+ * **곡선 보간(smooth)을 하지 않는다.** 진짜 길은 모퉁이가 각져 있다 — 부드럽게
+ * 만들면 모퉁이가 잘려 건물을 가로지르고, 실제 지도 위에서 그건 바로 들킨다.
+ * 화면의 거리·시간 숫자도 이 좌표에서 계산한다. 적어 둔 숫자는 길과 어긋난다.
+ */
+const WALK_PATH = [
+  { lat: 37.54046, lng: 127.04847 },
+  { lat: 37.5402, lng: 127.04955 },
+  { lat: 37.53999, lng: 127.05046 },
+  { lat: 37.53978, lng: 127.05191 },
+  { lat: 37.53963, lng: 127.05319 },
+  { lat: 37.53955, lng: 127.0542 },
+  { lat: 37.54032, lng: 127.05463 },
+  { lat: 37.54104, lng: 127.05502 },
+  { lat: 37.54176, lng: 127.05538 },
+  { lat: 37.54223, lng: 127.05559 },
+  { lat: 37.543, lng: 127.05602 },
+  { lat: 37.54361, lng: 127.05636 },
+  { lat: 37.54419, lng: 127.0567 },
+  { lat: 37.54462, lng: 127.05695 },
+];
 
 /** 기록에 남은 길들. 서로 다른 모양이어야 격자가 무늬로 읽힌다. */
 const RECORD_PATHS = [
@@ -177,6 +192,21 @@ const tileCache = new Map();
 /** 앱과 같은 출처 표기. 설정에서 뽑으므로 제공자를 바꾸면 그림도 따라온다. */
 const MAP_CREDIT = getApiConfig().mapTiles.attribution;
 
+/*
+ * 화면에 적는 거리·시간은 경로에서 계산한다.
+ *
+ * 손으로 적어 둔 "27분 · 2.1km"는 그려진 길과 어긋나 있었다 — 실제 지도 위에서는
+ * 길이가 눈에 보이므로 바로 들킨다. 앱과 같은 보행 속도로 같은 좌표를 잰다.
+ */
+const WALK_M = WALK_PATH.slice(1).reduce(
+  (sum, point, i) => sum + distanceM(WALK_PATH[i], point),
+  0
+);
+const WALK_SEC = WALK_M / DEFAULT_WALK_SPEED_MPS;
+/** 걷는 화면이 보여주는 진행 지점. 두 지도가 같은 값을 써야 한다. */
+const WALK_PROGRESS = 0.55;
+const REMAIN_M = WALK_M * (1 - WALK_PROGRESS);
+
 /** 폰 안쪽 폭에서 좌우 여백을 뺀 값. 화면들이 쓰는 지도 폭이다. */
 const MAP_W = 390 - spacing.lg * 2;
 
@@ -188,7 +218,7 @@ const MAP_W = 390 - spacing.lg * 2;
  * 달라지면 타일 번호가 통째로 달라지고, 그림은 지도 없이 조용히 그려진다.
  */
 const ROUTE_MAP = { width: MAP_W, height: 200 };
-const WALK_MAP = { width: MAP_W, height: 220, progress: 0.55 };
+const WALK_MAP = { width: MAP_W, height: 220, progress: WALK_PROGRESS };
 
 async function loadTiles(view) {
   await Promise.all(
@@ -376,14 +406,14 @@ function route() {
       ${routeMap(WALK_PATH, MOOD_TINT.pensive, ROUTE_MAP)}
 
       <div style="margin-top:${spacing.md}px">
-        <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(27 * 60)}</div>
+        <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(WALK_SEC)}</div>
         <!--
           도착 시각. 앱이 화면에 적는 줄이라 여기서도 적는다.
           맞는 길이면 약속보다 그만큼 앞선 시각이 나오므로 그 값을 그대로 쓴다 —
           숫자를 손으로 적어 두면 상수가 바뀌는 날 이 그림만 옛말을 하게 된다.
         -->
         <div style="${font(type.caption)};color:${colors.inkSoft};margin-top:${spacing.xs}px">${formatClock(APPOINTMENT_MS - ARRIVE_EARLY_SEC * 1000)} 도착</div>
-        <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:2px">2.1km · ${formatClock(APPOINTMENT_MS)} 약속</div>
+        <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:2px">${(WALK_M / 1000).toFixed(1)}km · ${formatClock(APPOINTMENT_MS)} 약속</div>
       </div>
 
       <div style="${font(type.body)};color:${colors.ink};margin-top:${spacing.md}px;
@@ -410,8 +440,8 @@ function walk() {
 
     <div style="text-align:center;margin-bottom:${spacing.xl}px">
       <div style="${font(type.caption)};color:${colors.inkSoft}">도착까지</div>
-      <div style="${font(type.numeral)};color:${colors.ink}">${formatDuration(18 * 60)}</div>
-      <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.xs}px">1,240m 남았어요</div>
+      <div style="${font(type.numeral)};color:${colors.ink}">${formatDuration(REMAIN_M / DEFAULT_WALK_SPEED_MPS)}</div>
+      <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.xs}px">${Math.round(REMAIN_M).toLocaleString('ko-KR')}m 남았어요</div>
     </div>
 
     <!-- 페이스 안내. 걷는 중에만 색을 쓴다 — 경고가 아니라 종이 위에 얹은 정도로. -->

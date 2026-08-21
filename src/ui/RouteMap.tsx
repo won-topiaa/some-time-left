@@ -18,6 +18,11 @@ import type { LatLng } from '../domain/types';
  * 크롬은 무채색으로 두고 색은 내용이 낸다는 원칙 그대로다.
  *
  * 부르는 쪽은 어느 판인지 몰라도 된다. 그게 이 파일이 있는 이유다.
+ *
+ * **지금은 두 판의 무게를 다 치른다.** 메트로는 안 쓰는 가지를 털어내지 않아서,
+ * `kind`가 'raster'여도 MapLibre 1.1MB가 번들에 들어간다(1.37MB → 2.5MB).
+ * 나란히 두는 건 실기기에서 골라 보려는 임시 상태다 — 샌드박스에서 정하고 나면
+ * 진 쪽을 지우고, 그때 무게도 같이 빠진다.
  */
 export function RouteMap(props: {
   path: LatLng[];
@@ -27,6 +32,17 @@ export function RouteMap(props: {
   progress?: number;
 }) {
   const { mapTiles } = getApiConfig();
+
+  /*
+   * 좌표가 모자라면 아무 판도 만들지 않는다.
+   *
+   * 경로 화면은 길이 있으면 무조건 이걸 부르는데, 길이 늘 두 점 이상인 건 아니다 —
+   * 티맵 응답이 비면 최단 경로가 빈 좌표열로 온다. 여기서 안 막으면 그때
+   * 화면이 통째로 죽는다. 부르는 쪽마다 같은 검사를 두느니 한 군데서 막는다.
+   */
+  if (props.path.length < 2) {
+    return null;
+  }
 
   if (mapTiles.kind === 'vector') {
     return <RouteMapVector {...props} />;
