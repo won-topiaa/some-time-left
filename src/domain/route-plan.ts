@@ -97,6 +97,21 @@ export function rankRoutes(
 }
 
 /**
+ * 처음 보여줄 한 장.
+ *
+ * `nextRoute`보다 문턱이 하나 낮다 — 너무 일찍 닿는 것은 봐주고, **늦는 것만 막는다.**
+ * 여유가 두 시간 남은 날에는 어느 후보도 목표에 못 미치는데, 그때 빈 화면을 주면
+ * 걷지도 못하고 왜 안 되는지도 모른다. 일찍 닿는 건 아쉬운 일이지 실패가 아니다.
+ *
+ * 여기서도 **늦는 것만은 막는다.** 후보가 전부 목표를 넘겨 null이 나오는 날을 위해
+ * `useRouteSuggestion`이 최단 경로를 따로 들고 있다 — 늘리는 계획이 섰다는 건
+ * 최단이 목표 안에 든다는 뜻이므로, 그 한 장은 언제나 제때 닿는다.
+ */
+export function firstRoute(ranked: ScoredRoute[], targetSec: number): ScoredRoute | null {
+  return ranked.find((r) => arrivesOnTime(r.candidate.durationSec, targetSec)) ?? null;
+}
+
+/**
  * 사용자가 "다른 길"을 눌렀을 때 다음 후보.
  * 이미 보여준 것들을 빼고, **약속을 지키는 것 중에서** 그다음으로 좋은 것.
  *
@@ -108,21 +123,6 @@ export function rankRoutes(
  * 그래서 보여줄 게 없으면 없는 것으로 둔다 — 화면은 "다른 길" 버튼을 감춘다.
  * 나쁜 선택지를 주는 것보다 선택지가 없는 편이 정직하다.
  */
-/**
- * 처음 보여줄 한 장.
- *
- * `nextRoute`보다 문턱이 하나 낮다 — 너무 일찍 닿는 것은 봐주고, **늦는 것만 막는다.**
- * 여유가 두 시간 남은 날에는 어느 후보도 목표에 못 미치는데, 그때 빈 화면을 주면
- * 걷지도 못하고 왜 안 되는지도 모른다. 일찍 닿는 건 아쉬운 일이지 실패가 아니다.
- *
- * 늦는 길이 여기로 새지 않는 건 후보 목록에 **최단 경로가 항상 들어 있기** 때문이다
- * (`useRouteSuggestion`). 늘리는 계획이 섰다는 건 최단이 목표 안에 든다는 뜻이므로,
- * 최악의 경우에도 이 함수는 최단 경로를 돌려준다.
- */
-export function firstRoute(ranked: ScoredRoute[], targetSec: number): ScoredRoute | null {
-  return ranked.find((r) => arrivesOnTime(r.candidate.durationSec, targetSec)) ?? null;
-}
-
 export function nextRoute(
   ranked: ScoredRoute[],
   shownRouteIds: string[],

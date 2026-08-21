@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { VIEWBOX, projectPath, toSvgPath } from '../../ui/routeShape';
+import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from '../../ui/routeShape';
+import { distanceM } from '../geo';
 
 describe('projectPath', () => {
   it('빈 경로는 빈 배열', () => {
@@ -81,5 +82,75 @@ describe('toSvgPath', () => {
         { x: 3, y: 4 },
       ])
     ).toBe('M1.00 2.00 L3.00 4.00');
+  });
+});
+
+describe('splitAtRatio', () => {
+  const straight = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 20, y: 0 },
+  ];
+
+  it('점이 하나 이하면 나눌 게 없다', () => {
+    expect(splitAtRatio([{ x: 0, y: 0 }], 0.5)).toBeNull();
+  });
+
+  it('한가운데면 절반씩', () => {
+    const split = splitAtRatio(straight, 0.5);
+    expect(split?.at).toEqual({ x: 10, y: 0 });
+  });
+
+  it('0과 1은 양 끝', () => {
+    expect(splitAtRatio(straight, 0)?.at).toEqual({ x: 0, y: 0 });
+    expect(splitAtRatio(straight, 1)?.at).toEqual({ x: 20, y: 0 });
+  });
+
+  it('범위를 벗어난 값은 끝으로 잘린다', () => {
+    expect(splitAtRatio(straight, -1)?.at).toEqual({ x: 0, y: 0 });
+    expect(splitAtRatio(straight, 2)?.at).toEqual({ x: 20, y: 0 });
+  });
+
+  it('걸어온 길과 남은 길이 지금 자리에서 맞닿는다', () => {
+    const split = splitAtRatio(straight, 0.25);
+    if (split == null) throw new Error('나뉘어야 한다');
+
+    expect(split.walked[split.walked.length - 1]).toEqual(split.at);
+    expect(split.ahead[0]).toEqual(split.at);
+  });
+
+  /*
+   * 이 테스트가 있는 이유.
+   *
+   * 걷는 화면이 넘기는 비율은 **미터**로 잰 값인데, 그림 좌표는 위경도를 그대로
+   * 눌러 담은 것이라 경도 쪽이 서울에서 0.8배쯤 눌려 있다. 자를 안 맞추면
+   * 동서로 긴 구간에서 점이 실제 자리보다 앞뒤로 밀린다.
+   */
+  it('구간 길이를 주면 그 자로 잰다', () => {
+    // 남북 1, 동서 1 — 도 단위로는 같은 길이지만 실제 거리는 동서가 짧다.
+    const corner = [
+      { lat: 37.5, lng: 127.0 },
+      { lat: 37.51, lng: 127.0 },
+      { lat: 37.51, lng: 127.01 },
+    ];
+    const points = projectPath(corner);
+    const segmentM = corner.slice(1).map((point, i) => distanceM(corner[i], point));
+
+    // 실제 거리로 딱 절반이면 모서리보다 앞이다 — 남북 구간이 더 길기 때문.
+    const metric = splitAtRatio(points, 0.5, segmentM);
+    const drawn = splitAtRatio(points, 0.5);
+    if (metric == null || drawn == null) throw new Error('나뉘어야 한다');
+
+    // 그림 위 길이로 재면 정확히 모서리에 찍힌다(두 구간이 도 단위로 같으므로).
+    expect(drawn.at.x).toBeCloseTo(points[1].x, 6);
+    expect(drawn.at.y).toBeCloseTo(points[1].y, 6);
+    // 실제 거리로 재면 아직 모서리에 못 미친다 — 남북 구간을 다 걷기 전이다.
+    // (y는 위로 갈수록 작아지므로, 덜 왔다는 건 y가 더 크다는 뜻이다.)
+    expect(metric.at.y).toBeGreaterThan(points[1].y + 1);
+    expect(metric.at.x).toBeCloseTo(points[1].x, 6);
+  });
+
+  it('구간 개수가 안 맞는 길이 배열은 무시한다', () => {
+    expect(splitAtRatio(straight, 0.5, [1])?.at).toEqual({ x: 10, y: 0 });
   });
 });

@@ -88,8 +88,13 @@ export function toSvgPath(points: Point[]): string {
  * 걷는 화면이 "따라갈 수 있는 그림"이 되려면 걸어온 만큼과 남은 만큼이
  * 갈라져야 한다. 선 하나만 있으면 방향도 위치도 알 수 없다.
  *
- * 길이는 **그려진 좌표계**에서 잰다. 미터로 재면 그림과 어긋난 자리에 점이 찍힌다 —
- * 여기서 필요한 건 실제 거리가 아니라 그림 위의 자리다.
+ * 비율이 어느 자로 잰 것인지가 중요하다. 걷는 화면이 넘겨주는 `alongRatio`는
+ * **미터**로 잰 값인데(`walkProgress`), 여기 좌표는 위경도를 그대로 눌러 담은 것이라
+ * 경도 쪽이 서울에서 약 0.8배로 눌려 있다. 그림의 길이로 그 비율을 쓰면 동서로 긴
+ * 구간에서 점이 실제 자리보다 앞뒤로 밀린다 — 2km짜리 ㄱ자 길에서 100m 넘게 어긋났다.
+ *
+ * 그래서 구간별 길이(`weights`)를 받는다. 넘기면 그 자로 재고, 안 넘기면 그림 위의
+ * 길이로 잰다. 부르는 쪽이 어느 자를 썼는지 알고 있으므로 그쪽에서 정하게 한다.
  */
 export interface SplitPath {
   /** 걸어온 부분. 점이 하나 이하면 아직 시작 언저리다. */
@@ -111,13 +116,21 @@ function lengthsOf(points: Point[]): { steps: number[]; total: number } {
   return { steps, total };
 }
 
-export function splitAtRatio(points: Point[], ratio: number): SplitPath | null {
+export function splitAtRatio(
+  points: Point[],
+  ratio: number,
+  /** 구간별 길이. `points.length - 1`개여야 하고, 아니면 그림 위의 길이로 잰다. */
+  weights?: number[]
+): SplitPath | null {
   if (points.length < 2) {
     return null;
   }
 
   const clamped = Math.min(1, Math.max(0, ratio));
-  const { steps, total } = lengthsOf(points);
+  const drawn = lengthsOf(points);
+  const usable = weights != null && weights.length === points.length - 1;
+  const steps = usable ? weights : drawn.steps;
+  const total = usable ? weights.reduce((sum, step) => sum + step, 0) : drawn.total;
 
   if (!(total > 0)) {
     return { walked: [points[0]], ahead: [...points], at: points[0] };
@@ -131,7 +144,8 @@ export function splitAtRatio(points: Point[], ratio: number): SplitPath | null {
       continue;
     }
 
-    // 이 구간 안에 있다. 남은 만큼을 선분 위에서 비례로 찍는다.
+    // 이 구간 안에 있다. 남은 만큼을 **그 구간 안에서의 비율**로 바꿔 선분 위에 찍는다.
+    // 비율은 재는 자와 무관하므로, 자리는 그림 위 선분에서 그대로 비례로 구하면 된다.
     const t = steps[i] === 0 ? 0 : remaining / steps[i];
     const from = points[i];
     const to = points[i + 1];

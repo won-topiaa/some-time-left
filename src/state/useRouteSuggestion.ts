@@ -6,7 +6,7 @@ import { isTmapConfigured } from '../config';
 import { loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
-import { arrivesOnTime, firstRoute, nextRoute, rankRoutes } from '../domain/route-plan';
+import { firstRoute, keepsPromise, nextRoute, rankRoutes } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
@@ -41,11 +41,14 @@ export interface Suggestion {
    */
   clockOffsetMs: number;
   /**
-   * 지금 보여주는 길로 가면 약속보다 먼저 닿는가.
+   * 지금 보여주는 길로 가면 **목표한 그 시각에** 닿는가.
    *
-   * `stretched`와 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 **그 길로 가면
-   * 제때 닿는지**다. 최단 경로가 늘 후보에 있으므로 늘리는 계획에서는 참이지만,
-   * 화면은 이 값이 false면 "먼저 닿는 길이에요"라고 말하지 않는다.
+   * 늦지 않는 것만으로는 모자란다. 목표보다 한참 일찍 닿는 길도 false다 —
+   * 20분짜리 길을 걸으면서 30분 뒤를 세면, 도착하고 나서도 "10분 남았다"고
+   * 말하는 화면이 된다. `arrivesOnTime`이 아니라 `keepsPromise`인 이유다.
+   *
+   * `stretched`와도 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 그 길로 가면
+   * 계획한 시각에 닿는지다. 화면은 이 값이 false면 그 시각을 약속하지 않는다.
    */
   onTime: boolean;
 }
@@ -80,6 +83,19 @@ export function useRouteSuggestion({
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<WalkPlan | null>(null);
   const [ranked, setRanked] = useState<ScoredRoute[]>([]);
+  /**
+   * 최단 경로. 아무것도 제때 닿지 못할 때 마지막으로 내놓는 한 장.
+   *
+   * **순위에는 넣지 않는다.** `shortest()`는 첫 화면을 빠르게 띄우려고 환경 데이터를
+   * 부르지 않아서, novelty가 재보지도 않고 1.0으로 나온다(`noveltyOf`는 기록이 없으면
+   * 전부 새 길로 친다). 그대로 후보에 섞으면 기분 점수가 부풀어 진짜 후보를 밀어내고,
+   * 매일 걷는 출근길에 "아직 안 가보신 길이에요"라고 말하게 된다.
+   *
+   * 그래서 따로 들고 있다가 정말 내놓을 게 없을 때만 쓴다. 늘리는 계획이 섰다는 건
+   * 최단이 목표 안에 든다는 뜻이므로, 이 한 장은 언제나 제때 닿는다 —
+   * 이게 "늦는 길은 안 내놓는다"의 바닥이다.
+   */
+  const [floor, setFloor] = useState<ScoredRoute | null>(null);
   const [shownIds, setShownIds] = useState<string[]>([]);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [stretched, setStretched] = useState(true);
@@ -101,6 +117,7 @@ export function useRouteSuggestion({
       setLoading(true);
       setError(null);
       setStretched(true);
+      setFloor(null);
 
       // 위치 실패와 길 찾기 실패는 원인이 다르다. 한 덩어리로 잡아 "위치를 확인하지
       // 못했어요"라고 하면, 네트워크가 흔들렸을 뿐인데 권한을 의심하게 만든다.
@@ -139,6 +156,7 @@ export function useRouteSuggestion({
 
         // 곧장 가거나 이미 늦은 경우엔 후보를 찾을 이유가 없다.
         if (walkPlan.kind !== 'stretch') {
+          setFloor(null);
           setRanked(
             walkPlan.kind === 'straight'
               ? rankRoutes([shortest], {
@@ -164,30 +182,23 @@ export function useRouteSuggestion({
 
         if (cancelled) return;
 
-        /*
-         * 최단 경로를 **항상** 후보에 넣는다.
-         *
-         * 두 가지를 한꺼번에 막는다.
-         * 1. 경유지가 하나도 안 붙는 날(전부 도로망 밖이거나 호출이 다 실패)에도
-         *    걷기 화면이 좌표 없이 열리지 않는다.
-         * 2. 늘린 후보가 전부 목표를 넘겨 버려도 **늦지 않는 길이 하나는 남는다.**
-         *    늘리는 계획이 섰다는 건 최단이 목표 안에 든다는 뜻이므로, 최단은
-         *    정의상 언제나 제때 닿는다. 이게 "늦는 길은 안 내놓는다"의 바닥이다.
-         *
-         * 점수에서 밀려 1등이 되는 일은 없다 — 목표보다 한참 짧으면 fit이 0에 가깝다.
-         */
-        const usable = [shortest, ...candidates];
+        // 경유지가 하나도 안 붙는 날이 있다(전부 도로망 밖이거나 호출이 다 실패).
+        // 그때 빈 손으로 두면 걷기 화면이 좌표 없이 열려 도착을 영영 못 잡는다.
+        // 늘리진 못해도 최단 경로는 있으니, 그걸로라도 걷게 한다.
+        const usable = candidates.length > 0 ? candidates : [shortest];
         // 물러선 사실을 화면에 알린다. 늘리지 못했는데 "골라 온 길"이라고 하면
         // 15분에서 두 시간까지 일찍 도착하는 길에 그 약속을 붙이게 된다.
         setStretched(candidates.length > 0);
 
-        setRanked(
-          rankRoutes(usable, {
-            targetSec: walkPlan.targetWalkSec,
-            weights: weightsFor(mood, isShadeWorthy(nowMs, origin)),
-            recentRouteIds: recent,
-          })
-        );
+        const rankOptions = {
+          targetSec: walkPlan.targetWalkSec,
+          weights: weightsFor(mood, isShadeWorthy(nowMs, origin)),
+          recentRouteIds: recent,
+        };
+
+        setRanked(rankRoutes(usable, rankOptions));
+        // 늘린 후보가 전부 목표를 넘겨도 내놓을 한 장은 남겨 둔다.
+        setFloor(rankRoutes([shortest], rankOptions)[0] ?? null);
       } catch {
         if (!cancelled) {
           setError('길을 찾지 못했어요. 잠시 뒤에 다시 해볼까요?');
@@ -223,7 +234,8 @@ export function useRouteSuggestion({
    * "다른 길"은 문턱이 하나 더 높다. 사용자가 더 나은 걸 청한 것이므로,
    * 더 나쁜 걸 주느니 없다고 하는 게 맞다.
    */
-  const current = nextRoute(ranked, shownIds, targetSec) ?? firstRoute(ranked, targetSec) ?? null;
+  const current =
+    nextRoute(ranked, shownIds, targetSec) ?? firstRoute(ranked, targetSec) ?? floor;
 
   const showAnother = useCallback(() => {
     if (current != null) {
@@ -250,6 +262,6 @@ export function useRouteSuggestion({
     retry,
     stretched,
     clockOffsetMs,
-    onTime: current != null && arrivesOnTime(current.candidate.durationSec, targetSec),
+    onTime: current != null && keepsPromise(current.candidate.durationSec, targetSec),
   };
 }

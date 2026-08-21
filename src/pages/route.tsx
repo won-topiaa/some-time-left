@@ -195,8 +195,13 @@ function RouteScreen() {
               여유가 없어 곧장 가는 계획(straight)은 후보가 하나뿐이라 이 문장이
               "골랐다"고 말하게 되는데, 바로 위 헤드라인은 "그냥 곧장 가요"라고 한다.
               둘이 어긋나면 이 앱이 신뢰를 얻는 유일한 문장이 흠집이 된다.
+
+              `!onTime`도 같다. 그건 내놓을 게 없어 최단 경로로 물러선 자리인데,
+              최단 경로는 환경 데이터를 부르지 않고 만든 것이라 성질 값이 재본 값이 아니다
+              (novelty가 늘 1.0으로 나온다). 매일 걷는 출근길에 "아직 안 가보신 길이에요"라고
+              말하게 되므로, 고르지 않은 길에는 이유도 붙이지 않는다.
             */}
-            {trip.mood != null && plan.kind === 'stretch' && (
+            {trip.mood != null && plan.kind === 'stretch' && onTime && (
               <Text style={styles.reason}>
                 {routeReason(trip.mood, route.dominantFeature)}
               </Text>

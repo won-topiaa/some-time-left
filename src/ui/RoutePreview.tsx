@@ -3,6 +3,7 @@ import Svg, { Circle, Path } from '@granite-js/native/react-native-svg';
 import { View, StyleSheet } from 'react-native';
 import { colors } from './theme';
 import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from './routeShape';
+import { distanceM } from '../domain/geo';
 import type { LatLng } from '../domain/types';
 
 /**
@@ -34,9 +35,17 @@ export function RoutePreview({
 }) {
   const points = useMemo(() => projectPath(path), [path]);
   const d = useMemo(() => toSvgPath(points), [points]);
+  /*
+    구간별 실제 거리(m). `progress`가 미터로 잰 값이라 자를 맞춰야 한다 —
+    그림 위 길이로 재면 동서로 긴 구간에서 점이 앞뒤로 밀린다(routeShape.ts 참고).
+  */
+  const segmentM = useMemo(
+    () => path.slice(1).map((point, i) => distanceM(path[i], point)),
+    [path]
+  );
   const split = useMemo(
-    () => (progress == null ? null : splitAtRatio(points, progress)),
-    [points, progress]
+    () => (progress == null ? null : splitAtRatio(points, progress, segmentM)),
+    [points, progress, segmentM]
   );
 
   if (points.length < 2) {

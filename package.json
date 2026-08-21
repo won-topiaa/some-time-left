@@ -2,7 +2,7 @@
   "name": "some-time-left",
   "version": "0.1.0",
   "private": true,
-  "description": "약속 3분 전에 도착하는 길을 찾아주는 앱인토스 미니앱",
+  "description": "약속 5분 전에 도착하는 길을 찾아주는 앱인토스 미니앱",
   "scripts": {
     "dev": "granite dev",
     "build": "ait build",

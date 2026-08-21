@@ -30,6 +30,7 @@ import { NOTE_PLACEHOLDER, arrivalPrompt } from '../src/domain/copy.ts';
 import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, dayLabel, formatClock, formatDuration } from '../src/domain/time.ts';
 import { formatTotalDistance } from '../src/domain/trace.ts';
 import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from '../src/ui/routeShape.ts';
+import { distanceM } from '../src/domain/geo.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, '..', 'assets', 'store');
@@ -301,7 +302,9 @@ function route() {
  */
 function walkedRibbon(pathPoints, tint, ratio) {
   const pts = projectPath(pathPoints);
-  const split = splitAtRatio(pts, ratio);
+  // 앱과 같은 자로 잰다 — 구간별 실제 거리(m). 안 맞추면 그림에서만 점이 밀린다.
+  const segmentM = pathPoints.slice(1).map((point, i) => distanceM(pathPoints[i], point));
+  const split = splitAtRatio(pts, ratio, segmentM);
   const line = (d, color) =>
     `<path d="${d}" stroke="${color}" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
 
