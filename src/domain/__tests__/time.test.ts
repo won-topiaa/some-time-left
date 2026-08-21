@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ARRIVE_EARLY_SEC,
   MAX_STRETCH_RATIO,
+  arrivalAt,
   dayLabel,
   formatClock,
   formatDuration,
@@ -204,5 +205,27 @@ describe('dayLabel — 언제로 읽혔는지 보여 준다', () => {
   it('자정 직후도 한국 기준으로 센다', () => {
     // UTC 날짜로 세면 오후 3시(UTC 06:00)와 밤 11시가 같은 날로 보이지 않는다.
     expect(dayLabel(kst(2026, 8, 21, 0, 10), kst(2026, 8, 20, 23, 50))).toBe('내일');
+  });
+});
+
+describe('arrivalAt', () => {
+  const now = Date.UTC(2026, 7, 17, 3, 0, 0);
+
+  it('지금 나서서 그만큼 걸으면 닿는 시각', () => {
+    expect(arrivalAt(now, 27 * MIN)).toBe(now + 27 * 60_000);
+  });
+
+  /*
+   * 이 앱이 화면에서 지켜야 하는 관계. 목표대로 걸으면 약속 3분 전에 닿는다 —
+   * 화면이 이 값을 그대로 적으므로, 어긋나면 사용자가 먼저 본다.
+   */
+  it('목표대로 걸으면 약속 3분 전에 닿는다', () => {
+    const appointment = now + 40 * 60_000;
+    const plan = planWalk({ nowMs: now, arriveAtMs: appointment, shortestSec: 20 * MIN });
+
+    expect(plan.kind).toBe('stretch');
+    if (plan.kind !== 'stretch') return;
+
+    expect(arrivalAt(now, plan.targetWalkSec)).toBe(appointment - ARRIVE_EARLY_SEC * 1000);
   });
 });

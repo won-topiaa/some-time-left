@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { weightsFor } from '../mood';
-import { durationFit, nextRoute, rankRoutes } from '../route-plan';
+import { durationFit, keepsPromise, nextRoute, rankRoutes } from '../route-plan';
 import type { RouteCandidate, RouteFeatures } from '../types';
 
 const MIN = 60;
@@ -132,7 +132,7 @@ describe('nextRoute', () => {
       { targetSec: 27 * MIN, weights: weightsFor('plain') }
     );
 
-    const second = nextRoute(ranked, [ranked[0].candidate.id]);
+    const second = nextRoute(ranked, [ranked[0].candidate.id], 27 * MIN);
     expect(second?.candidate.id).toBe(ranked[1].candidate.id);
   });
 
@@ -142,7 +142,64 @@ describe('nextRoute', () => {
       weights: weightsFor('plain'),
     });
 
-    expect(nextRoute(ranked, ['a'])).toBeNull();
+    expect(nextRoute(ranked, ['a'], 27 * MIN)).toBeNull();
+  });
+
+  /*
+   * 여기가 이 파일의 핵심이다. 후보는 경유지를 흩뿌려 만들기 때문에 소요 시간이
+   * 넓게 퍼지는데, 점수만 따라 내려가면 "다른 길"을 누를수록 안 맞는 길이 나온다.
+   * 몇 번 누른 사람이 약속에 늦으면 이 앱은 존재 이유를 잃는다.
+   */
+  it('약속에 늦는 길은 다른 길로도 내놓지 않는다', () => {
+    const ranked = rankRoutes([candidate('a', 27 * MIN), candidate('late', 40 * MIN)], {
+      targetSec: 27 * MIN,
+      weights: weightsFor('plain'),
+    });
+
+    expect(ranked.map((r) => r.candidate.id)).toContain('late');
+    expect(nextRoute(ranked, ['a'], 27 * MIN)).toBeNull();
+  });
+
+  it('너무 일찍 닿는 길도 내놓지 않는다', () => {
+    const ranked = rankRoutes([candidate('a', 27 * MIN), candidate('early', 15 * MIN)], {
+      targetSec: 27 * MIN,
+      weights: weightsFor('plain'),
+    });
+
+    expect(nextRoute(ranked, ['a'], 27 * MIN)).toBeNull();
+  });
+
+  it('조금 어긋나는 정도는 대안으로 받는다', () => {
+    const ranked = rankRoutes([candidate('a', 27 * MIN), candidate('near', 27 * MIN + 45)], {
+      targetSec: 27 * MIN,
+      weights: weightsFor('plain'),
+    });
+
+    expect(nextRoute(ranked, ['a'], 27 * MIN)?.candidate.id).toBe('near');
+  });
+});
+
+describe('keepsPromise', () => {
+  const target = 27 * MIN;
+
+  it('목표에 맞으면 지킨다', () => {
+    expect(keepsPromise(target, target)).toBe(true);
+  });
+
+  it('1분까지 늦는 건 받고, 그 너머는 안 받는다', () => {
+    expect(keepsPromise(target + 60, target)).toBe(true);
+    expect(keepsPromise(target + 61, target)).toBe(false);
+  });
+
+  it('5분까지 이른 건 받고, 그 너머는 안 받는다', () => {
+    expect(keepsPromise(target - 5 * MIN, target)).toBe(true);
+    expect(keepsPromise(target - 5 * MIN - 1, target)).toBe(false);
+  });
+
+  /* 늦는 쪽이 이른 쪽보다 훨씬 좁아야 한다. 늦으면 약속이 깨지고, 이르면 아깝기만 하다. */
+  it('늦는 쪽에 더 가혹하다', () => {
+    expect(keepsPromise(target + 3 * MIN, target)).toBe(false);
+    expect(keepsPromise(target - 3 * MIN, target)).toBe(true);
   });
 });
 

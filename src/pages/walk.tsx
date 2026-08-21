@@ -4,7 +4,7 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss/framework';
 import { distanceM, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
-import { ARRIVE_EARLY_SEC, formatDuration } from '../domain/time';
+import { ARRIVE_EARLY_SEC, arrivalAt, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
@@ -197,7 +197,7 @@ function Walk() {
    * 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다. 그럴 땐 실제로 닿을 시각을 센다.
    */
   const plannedArrivalMs =
-    trip.route != null ? startedAtMs + trip.route.candidate.durationSec * 1000 : null;
+    trip.route != null ? arrivalAt(startedAtMs, trip.route.candidate.durationSec) : null;
   const promiseMs =
     trip.arriveAtMs != null ? trip.arriveAtMs - ARRIVE_EARLY_SEC * 1000 : null;
   const targetMs = trip.arrivesEarly ? plannedArrivalMs : (promiseMs ?? plannedArrivalMs);

@@ -27,7 +27,7 @@ import { colors, radius, spacing, type } from '../src/ui/theme.ts';
 import { MOOD_TINT } from '../src/ui/moodTint.ts';
 import { MOODS } from '../src/domain/mood.ts';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../src/domain/copy.ts';
-import { dayLabel, formatClock, formatDuration } from '../src/domain/time.ts';
+import { ARRIVE_EARLY_SEC, dayLabel, formatClock, formatDuration } from '../src/domain/time.ts';
 import { formatTotalDistance } from '../src/domain/trace.ts';
 import { VIEWBOX, projectPath, toSvgPath } from '../src/ui/routeShape.ts';
 
@@ -270,7 +270,13 @@ function route() {
 
       <div style="margin-top:${spacing.md}px">
         <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(27 * 60)}</div>
-        <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:${spacing.xs}px">2.1km · ${formatClock(APPOINTMENT_MS)} 약속</div>
+        <!--
+          도착 시각. 앱이 화면에 적는 줄이라 여기서도 적는다.
+          맞는 길이면 약속 3분 전이 나오므로 그 값을 그대로 쓴다 —
+          숫자를 손으로 적어 두면 3분이 바뀌는 날 이 그림만 옛말을 하게 된다.
+        -->
+        <div style="${font(type.caption)};color:${colors.inkSoft};margin-top:${spacing.xs}px">${formatClock(APPOINTMENT_MS - ARRIVE_EARLY_SEC * 1000)} 도착</div>
+        <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:2px">2.1km · ${formatClock(APPOINTMENT_MS)} 약속</div>
       </div>
 
       <div style="${font(type.body)};color:${colors.ink};margin-top:${spacing.md}px;

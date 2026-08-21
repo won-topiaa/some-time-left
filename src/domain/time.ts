@@ -89,6 +89,17 @@ export function planWalk({ nowMs, arriveAtMs, shortestSec }: PlanInput): WalkPla
   };
 }
 
+/**
+ * 지금 나서면 몇 시에 닿는가 (epoch ms).
+ *
+ * 화면이 소요 시간만 보여주면 "3분 전"은 앱만 아는 약속이 된다. 사용자가 그걸
+ * 검산하려면 머릿속에서 지금 시각에 분을 더해야 하는데, 그건 이 앱이 대신 하기로 한 일이다.
+ * 다른 길을 눌러 시간이 달라져도 이 숫자가 그대로면 약속이 지켜진 것이 눈에 보인다.
+ */
+export function arrivalAt(departAtMs: number, durationSec: number): number {
+  return departAtMs + durationSec * 1000;
+}
+
 /** "12분" / "1시간 5분" 처럼 사람이 읽는 길이로. */
 export function formatDuration(sec: number): string {
   const total = Math.max(0, Math.round(sec / 60));

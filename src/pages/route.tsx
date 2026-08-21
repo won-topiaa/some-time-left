@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
-import { formatClock, formatDuration } from '../domain/time';
+import { arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
@@ -33,6 +33,7 @@ function RouteScreen() {
     retry,
     stretched,
     clockOffsetMs,
+    onTime,
   } = useRouteSuggestion({
     destination: trip.destination,
     arriveAtMs: trip.arriveAtMs,
@@ -112,7 +113,9 @@ function RouteScreen() {
       walkedDistanceM: null,
       // 상한에서 잘렸거나 아예 못 늘렸으면 3분 전 도착을 약속할 수 없다.
       // 걷는 화면이 알아야 같은 말을 하지 않는다.
-      arrivesEarly: plan.kind === 'stretch' && (plan.capped || !stretched),
+      // 고른 길이 문턱을 못 넘었으면(onTime === false) 걷는 화면도 3분 전을
+      // 약속하면 안 된다. 계획만 보고 정하면 그 화면만 혼자 옛말을 하게 된다.
+      arrivesEarly: plan.kind === 'stretch' && (plan.capped || !stretched || !onTime),
     });
     navigation.navigate('/walk');
   };
@@ -137,11 +140,22 @@ function RouteScreen() {
         <Text style={styles.headline}>
           {plan.kind === 'stretch' && !stretched
             ? '오늘은 돌아갈 길을 못 찾았어요.'
-            : planHeadline(plan)}
+            : plan.kind === 'stretch' && !onTime
+              ? '딱 맞는 길이 없었어요.'
+              : planHeadline(plan)}
         </Text>
 
         {plan.kind === 'stretch' && !stretched && (
           <Text style={styles.sub}>곧장 가는 길로 보여드릴게요.</Text>
+        )}
+
+        {/*
+          늘리는 데는 성공했는데 어느 후보도 시간에 안 맞는 날이 있다.
+          그때 "3분 전에 닿는 길이에요"를 그대로 두면 화면에 적힌 도착 시각과
+          바로 어긋난다 — 아래 도착 시각이 그 거짓말을 즉시 들키게 만든다.
+        */}
+        {plan.kind === 'stretch' && stretched && !onTime && (
+          <Text style={styles.sub}>가장 가까운 길로 보여드릴게요.</Text>
         )}
 
         {route != null && (
@@ -155,6 +169,20 @@ function RouteScreen() {
             <View style={styles.meta}>
               <Text style={styles.duration}>
                 {formatDuration(route.candidate.durationSec)}
+              </Text>
+              {/*
+                도착 시각을 적는다.
+
+                소요 시간만 보여주면 "3분 전"은 앱만 아는 약속이 된다. 다른 길을
+                눌러 30분이 34분이 됐을 때, 사용자가 검산할 방법이 화면에 없으면
+                이 앱이 무엇을 지키고 있는지도 보이지 않는다.
+                기준 시계는 서버 시각이다 — 계획을 세운 시계와 같아야 두 숫자가 안 어긋난다.
+              */}
+              <Text style={styles.arrival}>
+                {formatClock(
+                  arrivalAt(Date.now() + clockOffsetMs, route.candidate.durationSec)
+                )}{' '}
+                도착
               </Text>
               <Text style={styles.metaSub}>
                 {(route.candidate.distanceM / 1000).toFixed(1)}km
@@ -234,7 +262,12 @@ const styles = StyleSheet.create({
   meta: { marginTop: spacing.md },
   // 걷는 시간이 이 화면의 주인공. 굵기 대신 크기로 말한다.
   duration: { ...type.numeral, fontSize: 44, lineHeight: 52, color: colors.ink },
-  metaSub: { ...type.caption, color: colors.inkFaint, marginTop: spacing.xs },
+  /*
+    도착 시각은 약속을 검산하는 줄이라 곁다리 수치보다 한 단계 앞에 둔다.
+    그래도 주인공은 위의 큰 숫자이므로 크기를 키우지 않고 색만 진하게 한다.
+  */
+  arrival: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
+  metaSub: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
   // 추천 이유는 이 앱의 생명줄이라 또렷하게 두되, 색이 아니라 자리로 강조한다.
   reason: {
     ...type.body,

@@ -6,7 +6,7 @@ import { isTmapConfigured } from '../config';
 import { loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
-import { nextRoute, rankRoutes } from '../domain/route-plan';
+import { keepsPromise, nextRoute, rankRoutes } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
@@ -23,7 +23,7 @@ export interface Suggestion {
   error: string | null;
   plan: WalkPlan | null;
   route: ScoredRoute | null;
-  /** 아직 안 보여준 다른 길이 남아 있는가 */
+  /** 아직 안 보여준, **약속을 지키는** 다른 길이 남아 있는가 */
   hasAlternative: boolean;
   showAnother: () => void;
   /** 다시 찾아본다. 네트워크가 한 번 흔들린 게 막다른 길이 될 이유는 없다. */
@@ -40,6 +40,14 @@ export interface Suggestion {
    * 서버 시각을 못 받았으면 0.
    */
   clockOffsetMs: number;
+  /**
+   * 지금 보여주는 길로 가면 "3분 전 도착"이 지켜지는가.
+   *
+   * `stretched`와 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 **그 길로 가면
+   * 제때 닿는지**다. 후보가 전부 안 맞는 날에는 늘리는 데 성공하고도 약속을 못 지킨다.
+   * 화면은 이 값이 false면 "3분 전에 닿는 길이에요"라고 말하지 않는다.
+   */
+  onTime: boolean;
 }
 
 export interface SuggestionInput {
@@ -188,7 +196,24 @@ export function useRouteSuggestion({
     };
   }, [destination, arriveAtMs, mood, attempt]);
 
-  const current = nextRoute(ranked, shownIds) ?? ranked[0] ?? null;
+  /**
+   * 목표 소요 시간. 계획이 없으면 잴 자가 없다.
+   *
+   * `too-late`에는 목표가 없다 — 그 화면은 길을 아예 안 보여주므로 0으로 둬도 된다.
+   */
+  const targetSec = plan != null && plan.kind !== 'too-late' ? plan.targetWalkSec : 0;
+
+  /*
+   * 첫 한 장은 문턱을 넘지 못해도 보여준다.
+   *
+   * 후보가 전부 안 맞는 날이 있는데, 그때 빈 화면을 주면 사용자는 걷지도 못하고
+   * 왜 안 되는지도 모른다. 대신 그 길에 약속을 얹지 않는다 — `onTime`이 false가 되고
+   * 화면과 걷는 화면이 둘 다 다른 말을 한다.
+   *
+   * "다른 길"은 다르다. 그건 사용자가 더 나은 걸 청한 것이므로, 더 나쁜 걸 주느니
+   * 없다고 하는 게 맞다.
+   */
+  const current = nextRoute(ranked, shownIds, targetSec) ?? ranked[0] ?? null;
 
   const showAnother = useCallback(() => {
     if (current != null) {
@@ -209,10 +234,12 @@ export function useRouteSuggestion({
     plan,
     route: current,
     hasAlternative:
-      current != null && nextRoute(ranked, [...shownIds, current.candidate.id]) != null,
+      current != null &&
+      nextRoute(ranked, [...shownIds, current.candidate.id], targetSec) != null,
     showAnother,
     retry,
     stretched,
     clockOffsetMs,
+    onTime: current != null && keepsPromise(current.candidate.durationSec, targetSec),
   };
 }
