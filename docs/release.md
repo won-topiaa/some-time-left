@@ -397,11 +397,49 @@ function AppUpdate() {
 반나절을 target·React 버전·번들 구조를 뒤지며 보냈다 — 흰 화면을 보면
 **앱 버전부터** 확인할 것.
 
+### `'PlatformConstants' could not be found` — RN 버전을 맞춰야 한다
+
+샌드박스에서 이 오류가 뜬다.
+
+```
+Requiring module "node_modules/react-native/Libraries/Utilities/Platform.ios.js",
+which threw an exception: Invariant Violation: TurboModuleRegistry.getEnforcing(...):
+'PlatformConstants' could not be found.
+```
+
+DevTools 제목줄에 `React Native: 0.84.0`이 찍혀 있다 — **네이티브는 0.84 브리지리스**인데
+우리가 보낸 번들은 `react-native@0.72.6`의 JS였다. 0.72의 `Platform.ios.js`가
+0.84 바이너리에 없는 방식으로 모듈을 찾으니 그 자리에서 멈춘다.
+
+`package.json`의 `react-native`·`react`는 **CLI가 정한 값에 고정**한다.
+`@apps-in-toss/react-native-cli`의 마이그레이션 표에 그대로 적혀 있다.
+
+| 패키지 | 값 |
+|---|---|
+| `react-native` | `0.84.0` |
+| `react` | `19.2.3` |
+| `@types/react` | `19.2.3` |
+
+`@granite-js/*`는 같은 표의 `1.0.18`이 아니라 **`^1.0.42`를 유지한다.** 1.0.18에는
+`useKeyboardHeight`가 없어서 `src/pages/index.tsx`와 `arrive.tsx`가 컴파일되지 않는다.
+표는 최소선이지 상한이 아니다.
+
+**개발과 배포에서 react-native가 오는 곳이 다르다.** 이 차이를 모르면 엉뚱한 데를 판다.
+
+| | react-native JS | 확인 방법 |
+|---|---|---|
+| `granite dev` (샌드박스) | **번들에 들어간다** | 개발 번들에 `getEnforcing('PlatformConstants')`가 있다 |
+| `ait build` (배포) | 호스트가 준다 | 배포 번들에 `__SHARED__["react-native"]`만 있다 |
+
+그래서 이 고침은 **샌드박스 오류를 없앤다.** 배포본의 흰 화면은 배포 번들이
+바이트 단위로 그대로이므로(1375385) 원인이 따로 있다 — 위의 토스 앱 버전을 먼저 본다.
+
 ### 안 보이면 여기부터
 
 | 증상 | 원인 |
 |---|---|
-| **아무것도 없는 흰 화면** | 토스 앱 버전이 낮다. 아래 참고 |
+| **아무것도 없는 흰 화면** | 토스 앱 버전이 낮다. 위 참고 |
+| 샌드박스에 `PlatformConstants` 오류 | `react-native`가 0.84.0이 아니다. 위 참고 |
 | 첫 줄에 날씨가 없다 | 위치 거절이거나 네트워크. 날씨는 없으면 그 줄을 안 그린다 |
 | 아이콘이 안 뜬다 | 프록시 재배포 (`cd proxy && npm run deploy`) |
 | 고친 게 그대로다 | 옛 `_deploymentId`로 열었다. 새로 배포한 주소로 |
