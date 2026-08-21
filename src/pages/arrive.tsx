@@ -30,6 +30,8 @@ function Arrive() {
   const keyboardHeight = useKeyboardHeight();
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  /** 저장이 한 번 실패했다. 조용히 삼키면 사용자는 남은 줄 알고 떠난다. */
+  const [saveFailed, setSaveFailed] = useState(false);
   // 계획을 세운 시계로 센다. 기기 시계가 틀어져 있으면 "몇 분 남았어요" 밑에
   // 0:00이 떠 있는 화면이 만들어진다.
   const offset = trip.clockOffsetMs;
@@ -89,9 +91,10 @@ function Arrive() {
    * 중복 방지는 화면 안의 ref가 아니라 이동(Trip)에 둔다. 뒤로 나갔다 다시 들어오면
    * 화면이 새로 만들어져 ref는 초기화되지만, 걸은 일은 여전히 한 번이기 때문이다.
    */
-  const persist = useCallback(async () => {
+  const persist = useCallback(async (): Promise<boolean> => {
     if (saved.current || trip.recordSaved || trip.mood == null || trip.route == null) {
-      return;
+      // 남길 게 없거나 이미 남았다. 어느 쪽이든 잃은 것은 없다.
+      return true;
     }
     saved.current = true;
 
@@ -104,15 +107,17 @@ function Arrive() {
         note: note.trim(),
         arrivedAt: now,
         destinationName: trip.destinationName,
-        path: trip.route.candidate.path,
+        // 실제로 걸은 만큼만. 중간에 끝냈다면 나머지는 걷지 않은 길이다.
+        path: trip.walkedPath ?? trip.route.candidate.path,
         routeId: trip.route.candidate.id,
-        // 실제로 걸은 거리. 도착을 직접 눌렀다면 걸어온 만큼만 센다.
         distanceM: trip.walkedDistanceM ?? trip.route.candidate.distanceM,
       });
       update({ recordSaved: true });
+      return true;
     } catch {
       // 다음 기회에 다시 시도할 수 있도록 되돌린다.
       saved.current = false;
+      return false;
     }
   }, [trip, note, offset, update]);
 
@@ -139,7 +144,21 @@ function Arrive() {
 
   const finish = useCallback(async () => {
     setSaving(true);
-    await persist();
+    /*
+     * 저장이 됐을 때만 이동을 지운다.
+     *
+     * 저장 실패 후에 reset()을 부르면 기록의 재료(mood·route)가 사라져서,
+     * persist의 catch가 열어 둔 "다음 기회"가 영영 오지 않는다 — 저장소가 한 번
+     * 흔들렸다고 걸은 하루가 통째로 사라지는 것이다. 화면에 사실대로 말하고
+     * 이 화면에 남는다. 버튼이 다시 눌리므로 그 자리가 다음 기회다.
+     */
+    setSaveFailed(false);
+    const ok = await persist();
+    if (!ok) {
+      setSaving(false);
+      setSaveFailed(true);
+      return;
+    }
     reset();
     navigation.navigate('/');
   }, [persist, reset, navigation]);
@@ -189,6 +208,10 @@ function Arrive() {
         <Text style={styles.hint}>적어두면 지나온 길에 그대로 남아 있어요.</Text>
       </ScrollView>
 
+      {saveFailed && (
+        <Text style={styles.saveFailed}>기록을 저장하지 못했어요. 한 번만 다시 눌러주세요.</Text>
+      )}
+
       <Pressable
         style={({ pressed }) => [
           styles.cta,
@@ -198,7 +221,9 @@ function Arrive() {
         onPress={finish}
         disabled={saving}
       >
-        <Text style={styles.ctaText}>{note.trim() === '' ? '그냥 닫기' : '남기고 닫기'}</Text>
+        <Text style={styles.ctaText}>
+          {saveFailed ? '다시 저장하기' : note.trim() === '' ? '그냥 닫기' : '남기고 닫기'}
+        </Text>
       </Pressable>
     </View>
   );
@@ -206,6 +231,8 @@ function Arrive() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+  // 실패는 조용히 말하되 보이게. 이 앱에서 붉은색을 쓰는 유일한 자리가 아니도록 잉크로.
+  saveFailed: { ...type.caption, color: colors.inkSoft, textAlign: 'center', marginBottom: spacing.sm },
   content: { paddingBottom: spacing.lg },
   // 이 화면의 주인공. 색으로 강조하지 않고 크기로만 말한다 —
   // 파란 숫자는 알림처럼 읽히고, 먹색 숫자는 그냥 남은 시간으로 읽힌다.

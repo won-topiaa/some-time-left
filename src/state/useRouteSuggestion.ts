@@ -3,7 +3,7 @@ import { Accuracy, getCurrentLocation, getServerTime } from '@apps-in-toss/frame
 import { MockRouteProvider, type RouteProvider } from '../data/route-provider';
 import { TmapRouteProvider } from '../data/tmap-route-provider';
 import { isTmapConfigured } from '../config';
-import { loadRecords } from '../data/records';
+import { RECENT_WINDOW, loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
 import { firstRoute, keepsPromise, nextRoute, rankRoutes } from '../domain/route-plan';
@@ -169,7 +169,7 @@ export function useRouteSuggestion({
         }
 
         const records = await loadRecords().catch(() => []);
-        const recent = records.slice(0, 5).map((r) => r.routeId);
+        const recent = records.slice(0, RECENT_WINDOW).map((r) => r.routeId);
         const previousPaths = records.slice(0, 20).map((r) => r.path);
 
         const candidates = await provider.candidates({

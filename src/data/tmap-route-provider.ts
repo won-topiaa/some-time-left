@@ -27,6 +27,23 @@ const REFINE_THRESHOLD_SEC = 120;
 /** 한 번에 띄우는 후보 개수. TMAP 호출 수와 직결되므로 과하게 늘리지 않는다. */
 const CANDIDATE_COUNT = 6;
 
+/**
+ * 경로의 정체성으로 만든 id.
+ *
+ * 자리 번호(`tmap-a-0`)를 쓰면 안 된다. 기록에 남는 routeId가 "최근에 걸은 길
+ * 감점"(REPEAT_PENALTY)의 열쇠인데, 자리 번호는 **다른 목적지의 전혀 다른 길**과도
+ * 겹친다 — 어제 카페 가는 길의 0번과 오늘 회사 가는 길의 0번이 같은 id가 되어,
+ * 걸어 본 적 없는 길이 감점을 받는다.
+ *
+ * 길 가운데 지점의 좌표를 소수 셋째 자리(±100m 남짓)로 뭉쳐 쓴다. 같은 길이면
+ * GPS가 조금 달라도 같은 id가 되고, 다른 동네의 길과는 겹칠 수 없다.
+ */
+function routeIdOf(path: LatLng[]): string {
+  const mid = path[Math.floor(path.length / 2)];
+  const end = path[path.length - 1];
+  return `tmap-${mid.lat.toFixed(3)},${mid.lng.toFixed(3)}-${end.lat.toFixed(3)},${end.lng.toFixed(3)}`;
+}
+
 export class TmapRouteProvider implements RouteProvider {
   /**
    * 최단 경로는 시간 예산을 잡기 위한 것이라 환경 데이터를 부르지 않는다.
@@ -37,7 +54,8 @@ export class TmapRouteProvider implements RouteProvider {
     const segments = toStreetSegments(parsed.path);
 
     return {
-      id: 'shortest',
+      // 자리 이름('shortest')이 아니라 정체성이다 — 이 id도 기록에 남아 감점의 열쇠가 된다.
+      id: routeIdOf(parsed.path),
       durationSec: parsed.durationSec,
       distanceM: parsed.distanceM,
       path: parsed.path,
@@ -58,7 +76,7 @@ export class TmapRouteProvider implements RouteProvider {
     departAtMs,
     previousPaths = [],
   }: RouteRequest): Promise<RouteCandidate[]> {
-    const build = (scale: number, tag: string) =>
+    const build = (scale: number) =>
       this.fetchRound({
         origin,
         destination,
@@ -66,10 +84,9 @@ export class TmapRouteProvider implements RouteProvider {
         departAtMs,
         previousPaths,
         scale,
-        tag,
       });
 
-    const first = await build(1, 'a');
+    const first = await build(1);
 
     // 도로망은 직선이 아니라서 첫 추정은 빗나가는 게 정상이다.
     const best = closestTo(first, targetSec);
@@ -77,7 +94,7 @@ export class TmapRouteProvider implements RouteProvider {
       return first;
     }
 
-    const second = await build(refineScale(best.durationSec, targetSec, 1), 'b').catch(
+    const second = await build(refineScale(best.durationSec, targetSec, 1)).catch(
       () => [] as RouteCandidate[]
     );
 
@@ -91,11 +108,9 @@ export class TmapRouteProvider implements RouteProvider {
     departAtMs,
     previousPaths,
     scale,
-    tag,
   }: RouteRequest & {
     previousPaths: LatLng[][];
     scale: number;
-    tag: string;
   }): Promise<RouteCandidate[]> {
     const waypoints = planWaypoints({
       origin,
@@ -113,9 +128,9 @@ export class TmapRouteProvider implements RouteProvider {
     );
 
     // 일부 경유지는 도로망에 안 붙는다. 하나 실패해도 나머지는 살린다.
-    const routes = results.flatMap((result, index) =>
+    const routes = results.flatMap((result) =>
       result.status === 'fulfilled' && result.value.path.length >= 2
-        ? [{ parsed: result.value, index }]
+        ? [{ parsed: result.value }]
         : []
     );
 
@@ -131,7 +146,7 @@ export class TmapRouteProvider implements RouteProvider {
     // 지나온 좌표 격자도 후보마다 다시 만들면 안 된다. 여기서 한 번 만들어 나눠 쓴다.
     const visitedIndex = buildVisitedIndex(previousPaths);
 
-    return routes.map(({ parsed, index }) => {
+    return routes.map(({ parsed }) => {
       // 건물 높이가 있으면 그늘 계산이 실제 값으로 바뀐다.
       const segments = toStreetSegments(
         parsed.path,
@@ -139,7 +154,7 @@ export class TmapRouteProvider implements RouteProvider {
       );
 
       return {
-        id: `tmap-${tag}-${index}`,
+        id: routeIdOf(parsed.path),
         durationSec: parsed.durationSec,
         distanceM: parsed.distanceM,
         path: parsed.path,

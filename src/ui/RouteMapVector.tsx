@@ -65,6 +65,20 @@ export function RouteMapVector({
     }
   }, [update]);
 
+  /*
+   * 첫 조각은 페이지가 뜨기 전에 나가서 조용히 사라진다 — `window.__setProgress &&`
+   * 가드가 그냥 지나친다. 그런데 출발 자리에 서 있는 동안(신호 대기)은 진행이 0에서
+   * 안 바뀌어 위 effect가 다시는 안 돌므로, 움직이기 전까지 지금-자리 점이 영영 없다.
+   * 페이지가 뜬 시점에 마지막 조각을 한 번 더 보내 그 구멍을 막는다.
+   */
+  const latest = useRef<string | null>(null);
+  latest.current = update;
+  const resend = () => {
+    if (latest.current != null) {
+      webView.current?.injectJavaScript(latest.current);
+    }
+  };
+
   return (
     <View style={[styles.box, { height }]}>
       <WebView
@@ -82,6 +96,7 @@ export function RouteMapVector({
         bounces={false}
         overScrollMode="never"
         androidLayerType="hardware"
+        onLoadEnd={resend}
       />
     </View>
   );

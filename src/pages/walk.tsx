@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss/framework';
-import { distanceM, walkProgress } from '../domain/geo';
+import { distanceM, splitPath, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
 import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { RouteMap } from '../ui/RouteMap';
@@ -118,9 +118,15 @@ function Walk() {
   }, [focused]);
 
   useEffect(() => {
+    // 가려져 있으면 세지 않는다. 도착 화면에서 한 줄을 적는 몇 분 내내
+    // 밑에 깔린 이 화면이 1초마다 통째로 다시 그려질 이유가 없다.
+    if (!focused) {
+      return;
+    }
+    setNowMs(Date.now() + offset);
     const timer = setInterval(() => setNowMs(Date.now() + offset), 1000);
     return () => clearInterval(timer);
-  }, [offset]);
+  }, [offset, focused]);
 
   useEffect(() => {
     // 화면이 가려져 있으면 위치를 받을 이유가 없다. 도착 화면 동안 고정밀 GPS를
@@ -178,13 +184,18 @@ function Walk() {
     }
     navigating.current = true;
 
-    // 기록에는 계획한 거리가 아니라 실제로 걸은 만큼을 남긴다.
+    // 기록에는 계획한 것이 아니라 실제로 걸은 만큼을 남긴다 — 거리도, 좌표도.
     // 중간에 '이미 도착했어요'를 눌렀다면 나머지는 걷지 않은 길이다.
-    // 위치를 한 번도 못 잡았다면 알 길이 없으니 null로 두고, 그때는 계획한 거리를 쓴다.
+    // 위치를 한 번도 못 잡았다면 알 길이 없으니 null로 두고, 그때는 계획한 값을 쓴다.
     const total = trip.route?.candidate.distanceM;
-    const walked =
-      total != null && remainingM != null ? Math.max(0, total - remainingM) : null;
-    update({ walkedDistanceM: walked });
+    const measured = remainingM != null;
+    const walked = total != null && measured ? Math.max(0, total - remainingM) : null;
+    update({
+      walkedDistanceM: walked,
+      // 좌표도 걸은 데까지만 자른다. 통째로 남기면 걷지 않은 골목이 '가 본 길'이 되어
+      // novelty 계산과 기록 글리프가 거짓말을 하게 된다.
+      walkedPath: measured ? (splitPath(path, progress.current)?.walked ?? null) : null,
+    });
 
     navigation.navigate('/arrive');
   }, [navigation, update, trip.route, remainingM]);
@@ -202,16 +213,24 @@ function Walk() {
    * 무엇까지 세는가.
    *
    * 보통은 약속 ARRIVE_EARLY_MIN분 전이다 — 길이 그 시각에 닿도록 골라졌으니
-   * 그게 곧 도착 시각이다.
-   * 다만 약속보다 눈에 띄게 일찍 닿게 되는 계획이면(`arrivesEarly`) 둘이 갈라진다.
-   * 87분이 남았는데 44분짜리 길을 걷는다면 약속 앞까지 세는 건 43분을 부풀리는 것이고,
-   * 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다. 그럴 땐 실제로 닿을 시각을 센다.
+   * 그게 곧 도착 시각이다. 그때만 그 시각을 센다.
+   *
+   * 계획이 그 시각과 어긋나 있으면(더 일찍이든 더 늦게든) **실제로 닿을 시각**을 센다.
+   * - 더 일찍: 87분 남았는데 44분짜리 길이면, 약속 앞까지 세는 건 43분을 부풀리는
+   *   것이고 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다.
+   * - 더 늦게: 최단으로도 5분 전엔 못 닿는 날(no-early), 못 지킬 시각을 세면
+   *   계획대로 걷는 사람에게 걷는 내내 "서둘러야 해요"라고 재촉하고, 아직 걷는 중인데
+   *   카운트다운이 먼저 0이 된다. 목표는 빌린 숫자가 아니라 지킬 수 있는 숫자여야 한다.
    */
   const plannedArrivalMs =
     trip.route != null ? arrivalAt(startedAtMs, trip.route.candidate.durationSec) : null;
   const promiseMs =
     trip.arriveAtMs != null ? trip.arriveAtMs - ARRIVE_EARLY_SEC * 1000 : null;
-  const targetMs = trip.arrivesEarly ? plannedArrivalMs : (promiseMs ?? plannedArrivalMs);
+  const promiseHeld =
+    !trip.arrivesEarly &&
+    promiseMs != null &&
+    (plannedArrivalMs == null || plannedArrivalMs <= promiseMs);
+  const targetMs = promiseHeld ? promiseMs : (plannedArrivalMs ?? promiseMs);
 
   const remainingSec = targetMs != null ? Math.max(0, (targetMs - nowMs) / 1000) : 0;
 
@@ -291,9 +310,12 @@ function Walk() {
       */}
       <Text style={styles.footnote}>
         {trip.destinationName !== '' ? `${trip.destinationName}까지 ` : ''}
-        {trip.arrivesEarly
-          ? '넉넉히 걷고 있어요.'
-          : `${ARRIVE_EARLY_MIN}분 전에 도착하도록 맞추고 있어요.`}
+        {promiseHeld
+          ? `${ARRIVE_EARLY_MIN}분 전에 도착하도록 맞추고 있어요.`
+          : trip.arrivesEarly
+            ? '넉넉히 걷고 있어요.'
+            : // 5분 전은 애초에 포기한 계획(no-early). 지키지 못할 약속을 말하지 않는다.
+              '제시간에 닿도록 걷고 있어요.'}
       </Text>
 
       <View style={styles.spacer} />

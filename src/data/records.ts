@@ -13,10 +13,15 @@ import type { WalkRecord } from '../domain/types';
 export { NO_CARRIED, type CarriedTotals };
 
 const RECORDS_KEY = 'stl:records:v1';
-const COMPANIONS_KEY = 'stl:companions:v1';
 
 /** 최근 걸은 길을 다시 추천하지 않기 위해 참조하는 개수. */
-const RECENT_WINDOW = 5;
+/**
+ * "최근에 걸은 길" 감점이 보는 창의 크기.
+ *
+ * 이 값을 쓰는 곳(useRouteSuggestion)이 기록을 이미 읽어 들고 있어서 함수 대신
+ * 상수를 내보낸다 — 같은 목록을 두 번 읽지 않으면서도 숫자가 한 군데만 있게.
+ */
+export const RECENT_WINDOW = 5;
 
 /**
  * 낱낱이 들고 있을 기록의 최대 개수.
@@ -116,12 +121,6 @@ export async function saveRecord(record: WalkRecord): Promise<void> {
     records: next.slice(0, MAX_RECORDS),
     carried: addToCarried(store.carried, next.slice(MAX_RECORDS)),
   } satisfies RecordStore);
-
-  // 기록은 이미 남았다. 이름 목록은 편의 기능일 뿐이라 여기서 실패해도
-  // 위 저장까지 실패한 것처럼 보이게 하지 않는다.
-  if (record.companion.trim() !== '') {
-    await rememberCompanion(record.companion).catch(() => {});
-  }
 }
 
 /** 목록에서 밀려난 기록들의 합. 없으면 0. */
@@ -129,29 +128,4 @@ export async function loadCarried(): Promise<CarriedTotals> {
   return toStore(await readJson<unknown>(RECORDS_KEY, null)).carried;
 }
 
-/** 최근에 걸은 경로 id들. 같은 길을 반복 추천하지 않기 위해. */
-export async function recentRouteIds(): Promise<string[]> {
-  const records = await loadRecords();
-  return records.slice(0, RECENT_WINDOW).map((r) => r.routeId);
-}
 
-/** 이 상대와 지난번엔 어떤 길로 갔는지. */
-export async function lastWalkWith(companion: string): Promise<WalkRecord | null> {
-  const records = await loadRecords();
-  return records.find((r) => r.companion === companion) ?? null;
-}
-
-/** 자주 만나는 사람을 입력창 위에 띄우기 위해. */
-export async function loadCompanions(): Promise<string[]> {
-  const names = await readJson<string[]>(COMPANIONS_KEY, []);
-  return Array.isArray(names) ? names : [];
-}
-
-async function rememberCompanion(name: string): Promise<void> {
-  // 여기도 덮어쓰기라 엄격하게 읽는다. 다만 이름 목록은 편의 기능이라
-  // 실패해도 기록 저장까지 막지는 않는다 — saveRecord가 이미 끝난 뒤다.
-  const existing = await readJsonStrict<string[]>(COMPANIONS_KEY, []);
-  const names = Array.isArray(existing) ? existing : [];
-  const next = [name, ...names.filter((c) => c !== name)].slice(0, 8);
-  await writeJson(COMPANIONS_KEY, next);
-}

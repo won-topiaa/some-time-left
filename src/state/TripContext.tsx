@@ -49,6 +49,15 @@ export interface Trip {
    */
   walkedDistanceM: number | null;
   /**
+   * 실제로 걸은 부분의 좌표. 위치를 한 번도 못 잡았으면 null.
+   *
+   * 거리와 같은 이유로 있다. '이미 도착했어요'로 중간에 끝냈는데 계획한 좌표열을
+   * 통째로 기록하면, 걷지 않은 골목이 '가 본 길'로 남는다 — novelty가 그 좌표로
+   * 계산되므로 다음 추천에서 정말 처음인 길을 "이미 걸었다"고 치게 되고,
+   * 기록 글리프도 걷지 않은 모양을 그린다.
+   */
+  walkedPath: LatLng[] | null;
+  /**
    * 서버 시각 − 기기 시각 (ms).
    *
    * 계획은 서버 시각으로 세우는데 걷는 화면과 도착 화면이 기기 시계로 세면
@@ -70,6 +79,7 @@ const EMPTY: Trip = {
   arrivesEarly: false,
   recordSaved: false,
   walkedDistanceM: null,
+  walkedPath: null,
   clockOffsetMs: 0,
 };
 

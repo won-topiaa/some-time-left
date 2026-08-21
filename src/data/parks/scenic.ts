@@ -71,9 +71,42 @@ export function scoreScenic(path: LatLng[], parks: Park[]): number {
   return clamp01(total / path.length);
 }
 
-/** 경로 주변 공원만 남긴다. 전국 목록을 매번 훑지 않기 위해. */
+/**
+ * 경로 주변 공원만 남긴다. 전국 목록을 매번 훑지 않기 위해.
+ *
+ * 상자 비교를 먼저 한다. 공원 하나하나에 대해 경로의 모든 점과 하버사인을 재면
+ * 공원 1000개 × 후보 경로 점 ~1800개 ≈ 수백만 번의 삼각함수가 되는데, Hermes에는
+ * JIT이 없어 그게 그대로 "길을 찾고 있어요" 화면의 멈춤이 된다. 경로를 담는
+ * 사각형을 한 번 만들어 두면, 멀리 있는 공원 대부분은 곱셈 네 번으로 떨어져 나간다.
+ * (건물·지나온 길이 격자 인덱스를 만드는 것과 같은 이유다.)
+ */
 export function parksNear(parks: Park[], path: LatLng[]): Park[] {
-  return parks.filter((park) =>
-    path.some((point) => distanceM(point, park.at) <= FAR_M)
+  if (path.length === 0) {
+    return [];
+  }
+
+  // FAR_M을 도 단위로. 경도는 위도에 따라 줄어들지만, 거르기용 상자는
+  // 넉넉한 쪽(가장 큰 값)으로 잡아야 있어야 할 공원을 떨어뜨리지 않는다.
+  const latPad = FAR_M / 111_320;
+  const lngPad =
+    FAR_M / (111_320 * Math.max(0.2, Math.cos((path[0].lat * Math.PI) / 180)));
+
+  const box = path.reduce(
+    (acc, p) => ({
+      minLat: Math.min(acc.minLat, p.lat),
+      maxLat: Math.max(acc.maxLat, p.lat),
+      minLng: Math.min(acc.minLng, p.lng),
+      maxLng: Math.max(acc.maxLng, p.lng),
+    }),
+    { minLat: Infinity, maxLat: -Infinity, minLng: Infinity, maxLng: -Infinity }
+  );
+
+  return parks.filter(
+    (park) =>
+      park.at.lat >= box.minLat - latPad &&
+      park.at.lat <= box.maxLat + latPad &&
+      park.at.lng >= box.minLng - lngPad &&
+      park.at.lng <= box.maxLng + lngPad &&
+      path.some((point) => distanceM(point, park.at) <= FAR_M)
   );
 }
