@@ -57,6 +57,17 @@ export interface MapView {
 export interface ViewSize {
   width: number;
   height: number;
+  /**
+   * 논리 1px을 실제 몇 px로 그리는 기기인가 (`PixelRatio.get()`).
+   *
+   * 이걸 모르면 타일을 얼마나 촘촘히 받아야 할지 정할 수 없다. 기본값 2는
+   * 받아 오는 타일이 `@2x`(512px)라서다 — 2배 화면에서 논리 256px로 그리면
+   * 원본과 실제 화소가 정확히 1:1이 된다.
+   *
+   * 계산을 순수하게 두려고 값으로 받는다. 여기서 react-native를 부르면
+   * 이 파일이 노드에서 테스트되지 않는다.
+   */
+  pixelRatio?: number;
 }
 
 /** 경로가 상자에 닿지 않게 남기는 여백 (px). 선 끝과 점이 모서리에 붙으면 답답하다. */
@@ -99,13 +110,27 @@ function fitZoom(path: LatLng[], { width, height }: ViewSize): number {
  * 화면 밖 타일을 받으면 남의 무료 서비스를 쓰면서 데이터만 축내게 된다.
  */
 export function mapView(path: LatLng[], size: ViewSize): MapView | null {
-  if (path.length === 0 || size.width <= 0 || size.height <= 0) {
+  // `<= 0`만 보면 NaN이 통과한다. 그러면 배율도 좌표도 전부 NaN인 판이 나오고,
+  // 화면은 아무것도 안 그린 채 오류도 안 낸다 — 재는 값이 아직 안 온 순간이 그렇다.
+  if (path.length === 0 || !(size.width > 0) || !(size.height > 0)) {
     return null;
   }
 
   const fitted = fitZoom(path, size);
-  // 타일은 정수 배율로만 존재한다. 나머지 소수분은 타일을 키워 그려서 메운다.
-  const zoom = Math.floor(fitted);
+
+  /*
+   * 타일은 정수 배율로만 존재한다. 어느 쪽으로 반올림할지를 **기기 화소로 정한다.**
+   *
+   * 한쪽으로만 밀면 둘 중 하나를 잃는다. 내림이면 타일을 최대 두 배로 늘려 그려서
+   * 3배 화면에서 512짜리가 1500px까지 벌어지고(흐려진다), 올림이면 절반으로 줄여
+   * 그려서 타일에 구워진 글자가 절반 크기가 된다(안 읽힌다).
+   *
+   * 그래서 타일 하나가 실제 화소 512에 가장 가깝게 놓이는 배율을 고른다.
+   * 그게 원본과 화면이 1:1이 되는 지점이고, 늘어나지도 줄어들지도 않는다.
+   *   tilePx × pixelRatio = 512  →  zoom = fitted + log2(pixelRatio / 2)
+   */
+  const dpr = size.pixelRatio != null && size.pixelRatio > 0 ? size.pixelRatio : 2;
+  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(fitted + Math.log2(dpr / 2))));
   const tilePx = TILE_SIZE * 2 ** (fitted - zoom);
 
   const points = path.map((at) => toWorld(at, zoom));

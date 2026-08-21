@@ -180,6 +180,16 @@ const MAP_CREDIT = getApiConfig().mapTiles.attribution;
 /** 폰 안쪽 폭에서 좌우 여백을 뺀 값. 화면들이 쓰는 지도 폭이다. */
 const MAP_W = 390 - spacing.lg * 2;
 
+/*
+ * 지도 두 판. **여기 한 군데서만 정한다.**
+ *
+ * 타일은 그림을 그리기 전에 미리 받아 두는데(아래 loadTiles), 크기를 화면 함수에
+ * 따로 적어 두면 한쪽만 바뀌는 날 미리 받은 타일이 전부 어긋난다 — 배율이 한 단계
+ * 달라지면 타일 번호가 통째로 달라지고, 그림은 지도 없이 조용히 그려진다.
+ */
+const ROUTE_MAP = { width: MAP_W, height: 200 };
+const WALK_MAP = { width: MAP_W, height: 220, progress: 0.55 };
+
 async function loadTiles(view) {
   await Promise.all(
     view.tiles.map(async (tile) => {
@@ -193,6 +203,8 @@ async function loadTiles(view) {
         const buffer = Buffer.from(await response.arrayBuffer());
         tileCache.set(key, `data:image/png;base64,${buffer.toString('base64')}`);
       } catch {
+        // 못 받은 자리는 비워 둔다. 다만 조용히 넘어가면 지도 없는 그림이 스토어에
+        // 올라가므로, 몇 장이 비었는지는 아래에서 반드시 말한다.
         tileCache.set(key, null);
       }
     })
@@ -205,7 +217,7 @@ async function loadTiles(view) {
  * `progress`를 주면 걸어온 길이 흐려지고 지금 자리에 점이 찍힌다(걷는 화면).
  * 안 주면 경로 한 줄만 그린다(경로 화면).
  */
-function routeMap(pathPoints, tint, { width, height, progress } = {}) {
+function routeMap(pathPoints, tint, { width, height, progress }) {
   const view = mapView(pathPoints, { width, height });
   const pts = pathPoints.map((at) => view.project(at));
   const d = (points) =>
@@ -361,7 +373,7 @@ function route() {
     <div style="${font(type.display)};color:${colors.ink};margin-top:${spacing.xl}px">${ARRIVE_EARLY_MIN}분 전에 닿는 길이에요.</div>
 
     <div style="margin-top:${spacing.lg}px">
-      ${routeMap(WALK_PATH, MOOD_TINT.pensive, { width: MAP_W, height: 200 })}
+      ${routeMap(WALK_PATH, MOOD_TINT.pensive, ROUTE_MAP)}
 
       <div style="margin-top:${spacing.md}px">
         <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(27 * 60)}</div>
@@ -392,7 +404,7 @@ function route() {
 
 function walk() {
   return screen(`
-    ${routeMap(WALK_PATH, MOOD_TINT.pensive, { width: MAP_W, height: 220, progress: 0.55 })}
+    ${routeMap(WALK_PATH, MOOD_TINT.pensive, WALK_MAP)}
 
     <div style="flex:1"></div>
 
@@ -546,8 +558,17 @@ function landscape() {
  * 타일을 먼저 받아 둔다. 그림 만들기는 동기 함수들이라, 여기서 한 번에 채워 놓고
  * 아래에서는 캐시만 읽는다. 실패하면 캐시에 null이 들어가고 그 자리는 비워진다.
  */
-for (const height of [200, 220]) {
-  await loadTiles(mapView(WALK_PATH, { width: MAP_W, height }));
+for (const spec of [ROUTE_MAP, WALK_MAP]) {
+  await loadTiles(mapView(WALK_PATH, spec));
+}
+
+const missingTiles = [...tileCache.values()].filter((uri) => uri == null).length;
+if (missingTiles > 0) {
+  console.warn(
+    `\n[!] 지도 타일 ${missingTiles}장을 못 받았어요 (전체 ${tileCache.size}장).`
+  );
+  console.warn('    경로 화면과 걷는 화면이 지도 없이 그려집니다 — 스토어에 올리지 마세요.');
+  console.warn('    네트워크를 확인하고 다시 실행하세요.\n');
 }
 
 const SHOTS = [

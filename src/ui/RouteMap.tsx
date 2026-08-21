@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, PixelRatio, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from '@granite-js/native/react-native-svg';
 import { mapAttribution, mapView, tileUrl } from './mercator';
 import { splitAtRatio, type Point } from './routeShape';
-import { colors, spacing, type } from './theme';
+import { colors, radius, spacing, type } from './theme';
 import { distanceM } from '../domain/geo';
 import type { LatLng } from '../domain/types';
 
@@ -38,9 +38,15 @@ export function RouteMap({
    */
   const [width, setWidth] = useState(0);
 
+  /*
+    기기 화소 밀도를 넘긴다. 이걸로 타일 한 장이 실제 화소 512(우리가 받는 `@2x`
+    원본 크기)에 가장 가깝게 놓이는 배율이 정해진다 — 늘어나 흐려지지도, 줄어들어
+    글자가 안 읽히지도 않는 지점이다.
+  */
+  const pixelRatio = PixelRatio.get();
   const view = useMemo(
-    () => (width > 0 ? mapView(path, { width, height }) : null),
-    [path, width, height]
+    () => mapView(path, { width, height, pixelRatio }),
+    [path, width, height, pixelRatio]
   );
 
   const points = useMemo(
@@ -133,13 +139,24 @@ const styles = StyleSheet.create({
   // 지도는 면이라 이 앱에서 유일하게 칠해진 자리다. 모서리를 둥글려 종이 위에 얹는다.
   box: { overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
   tile: { position: 'absolute' },
+  /*
+    지워서도, 안 보이게 해서도 안 된다. OSM(ODbL)과 CARTO 둘 다 표기를 요구한다.
+
+    10px에 inkFaint로 뒀다가 고쳤다 — 이 앱은 11px에 inkFaint를 이미 한 번 시험하고
+    "화면에서 안 읽힌다"고 버렸는데(`theme.ts`), 그보다 더 흐린 글씨를 하필 무늬가
+    많은 타일 위에 얹고 있었다. 크기를 되돌리고, 흰 바탕을 깔아 지도와 분리한다.
+  */
   credit: {
     position: 'absolute',
-    right: spacing.sm,
+    right: spacing.xs,
     bottom: spacing.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.82)',
     ...type.caption,
-    fontSize: 10,
-    lineHeight: 14,
-    color: colors.inkFaint,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.inkSoft,
   },
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_SIZE, mapView, toWorld } from '../../ui/mercator';
+import { mapView, toWorld } from '../../ui/mercator';
 import type { LatLng } from '../types';
 
 /** 성수동 일대. 실제로 걸을 만한 크기의 경로. */
@@ -57,6 +57,13 @@ describe('mapView', () => {
     expect(mapView(PATH, { width: 0, height: 220 })).toBeNull();
   });
 
+  /* 재는 값이 아직 안 온 순간. 통과시키면 배율도 좌표도 전부 NaN인 판이 나온다. */
+  it('크기가 숫자가 아니면 판을 만들지 않는다', () => {
+    expect(mapView(PATH, { width: NaN, height: 220 })).toBeNull();
+    expect(mapView(PATH, { width: 350, height: NaN })).toBeNull();
+    expect(mapView(PATH, { width: undefined, height: 220 } as never)).toBeNull();
+  });
+
   /*
    * 정수 배율로만 고르면 한 뼘 넘칠 때마다 경로가 절반으로 작아진다.
    * 실제로 화면 폭의 20%만 쓰는 그림이 나왔고, 그래서 소수 배율을 쓴다.
@@ -96,15 +103,26 @@ describe('mapView', () => {
   });
 
   /*
-   * 타일을 키워 그려도 뭉개지지 않는 건 `@2x`(512px)를 받아 256으로 그리기 때문이다.
-   * 그 한 단계분 안에 있어야 원본 해상도를 넘지 않는다.
+   * 타일 한 장이 실제 화소 512(받아 오는 `@2x` 원본 크기)에 가깝게 놓여야 한다.
+   * 늘어나면 흐려지고, 줄어들면 타일에 구워진 글자가 안 읽힌다.
+   * 반올림이라 최악이 √2배 — 어느 쪽으로도 한 단계를 다 잃지 않는다.
    */
-  it('타일을 원본 해상도 안에서만 키운다', () => {
-    const view = mapView(PATH, SIZE);
-    if (view == null) throw new Error('판이 있어야 한다');
+  it('기기 화소에 맞춰 타일을 고른다', () => {
+    for (const pixelRatio of [1, 2, 2.75, 3]) {
+      const view = mapView(PATH, { ...SIZE, pixelRatio });
+      if (view == null) throw new Error('판이 있어야 한다');
 
-    expect(view.tilePx).toBeGreaterThanOrEqual(TILE_SIZE);
-    expect(view.tilePx).toBeLessThan(TILE_SIZE * 2);
+      const drawnPx = view.tilePx * pixelRatio;
+      expect(drawnPx).toBeGreaterThan(512 / Math.SQRT2);
+      expect(drawnPx).toBeLessThan(512 * Math.SQRT2);
+    }
+  });
+
+  it('밀도를 안 주면 2배 화면으로 친다', () => {
+    const view = mapView(PATH, SIZE);
+    const same = mapView(PATH, { ...SIZE, pixelRatio: 2 });
+    expect(view?.zoom).toBe(same?.zoom);
+    expect(view?.tilePx).toBeCloseTo(same?.tilePx ?? -1, 9);
   });
 
   it('화면을 덮는 타일만 고른다', () => {
