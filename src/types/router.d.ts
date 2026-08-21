@@ -11,6 +11,8 @@ declare module '@granite-js/react-native' {
     '/walk': undefined;
     '/arrive': undefined;
     '/trace': undefined;
+    /** 라우터가 반드시 요구하는 경로. 없으면 첫 렌더에서 던진다. */
+    '/_404': undefined;
   }
 }
 

@@ -15,18 +15,22 @@ export default defineConfig({
     appsInToss({
       appType: 'general',
       /*
-       * `target`을 적지 않는다. 적으면 안 된다.
+       * `target`을 적지 않는다.
        *
        * ait build는 런타임 두 벌(0.84.0 · 0.72.6)을 만드는데, 0.72.6 쪽만
        * CLI가 임시 설정에 target을 주입하고 0.84.0 쪽은 **이 파일을 그대로** 쓴다
        * (RUNTIME_BUILD_DEFINITIONS의 configTargetVersion 유무).
        * 그래서 여기에 '0.72.6'을 적어 두면 0.84.0 번들까지 0.72 호환 변환을 받아
-       * 두 번들이 바이트까지 같아진다 — 실제로 그랬고, 토스(0.84 런타임)에서
-       * 흰 화면에 "잠시 문제가 생겼어요"로 죽었다.
+       * 두 번들이 바이트까지 같아진다 — 실제로 그랬다. 런타임을 나눠 만드는
+       * 의미가 사라지므로 비워 둔다.
+       *
+       * (한때 이게 흰 화면의 원인이라고 적어 뒀지만 아니었다. 진짜 원인은
+       *  `pages/_404.tsx`가 없어서 라우터가 첫 렌더에서 던진 것이다.
+       *  docs/release.md의 '흰 화면' 항목에 남겨 뒀다.)
        *
        * 비워 두면 플러그인 기본값 0.84.0이 쓰인다(REACT_NATIVE_VERSION).
-       * package.json의 react-native(0.72.6)와 달라도 된다 —
-       * 그 간극을 메우는 게 reactCompatibilityPlugin과 reverse 플러그인이 하는 일이다.
+       * package.json의 react-native도 0.84.0으로 맞춰 둔다 — 개발 서버는
+       * 그 버전의 JS를 번들에 그대로 넣기 때문에 어긋나면 샌드박스가 죽는다.
        */
       brand: {
         /**
