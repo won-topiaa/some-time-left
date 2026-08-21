@@ -47,6 +47,7 @@
 꺼져 있어서 `npm run deploy  # 설명`을 붙여넣으면 설명이 **인자로 넘어간다.**
 
 배포 절차는 [`docs/release.md`](docs/release.md)에 있다.
+막혔을 때 볼 것은 [`docs/apps-in-toss-gotchas.md`](docs/apps-in-toss-gotchas.md).
 `ait deploy`는 빌드를 하지 않고 이미 있는 `.ait`을 올리기만 해서,
 `npm run deploy`가 `predeploy`로 빌드를 먼저 돌리게 묶어 뒀다.
 
@@ -456,3 +457,5 @@ configureApi({
 - [`docs/market-research.md`](docs/market-research.md) — 경쟁 지형, 화이트스페이스, 감성 진단
 - [`docs/concept-decisions.md`](docs/concept-decisions.md) — 확정된 제품 결정과 그 근거
 - [`docs/release.md`](docs/release.md) — 앱인토스 콘솔 등록과 배포 절차
+- [`docs/apps-in-toss-gotchas.md`](docs/apps-in-toss-gotchas.md) — 이번에 막혔던 자리들.
+  **새 미니앱을 시작할 때 이것부터 읽는다**
