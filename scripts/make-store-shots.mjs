@@ -27,9 +27,9 @@ import { colors, radius, spacing, type } from '../src/ui/theme.ts';
 import { MOOD_TINT } from '../src/ui/moodTint.ts';
 import { MOODS } from '../src/domain/mood.ts';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../src/domain/copy.ts';
-import { ARRIVE_EARLY_SEC, dayLabel, formatClock, formatDuration } from '../src/domain/time.ts';
+import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, dayLabel, formatClock, formatDuration } from '../src/domain/time.ts';
 import { formatTotalDistance } from '../src/domain/trace.ts';
-import { VIEWBOX, projectPath, toSvgPath } from '../src/ui/routeShape.ts';
+import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from '../src/ui/routeShape.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, '..', 'assets', 'store');
@@ -197,7 +197,7 @@ function home() {
       <!-- 편지의 첫 줄. 가장 작고 가장 옅게. -->
       <div style="${font(type.caption)};color:${colors.inkFaint};margin-bottom:${spacing.sm}px">지금 28도, 맑아요</div>
       <div style="${font(type.display)};color:${colors.ink}">시간이 좀 남았네요.</div>
-      <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.sm}px">약속 3분 전에 도착하게 해드릴게요.</div>
+      <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.sm}px">약속 ${ARRIVE_EARLY_MIN}분 전에 도착하게 해드릴게요.</div>
     </div>
 
     <div style="${font(type.caption)};color:${colors.inkSoft};margin-bottom:${spacing.sm}px">어디로 가세요?</div>
@@ -263,7 +263,7 @@ function mood() {
 
 function route() {
   return screen(`
-    <div style="${font(type.display)};color:${colors.ink};margin-top:${spacing.xl}px">3분 전에 닿는 길이에요.</div>
+    <div style="${font(type.display)};color:${colors.ink};margin-top:${spacing.xl}px">${ARRIVE_EARLY_MIN}분 전에 닿는 길이에요.</div>
 
     <div style="margin-top:${spacing.lg}px">
       <div style="height:180px">${ribbon(WALK_PATH, MOOD_TINT.pensive)}</div>
@@ -272,8 +272,8 @@ function route() {
         <div style="${font(type.numeral, { fontSize: 44, lineHeight: 52 })};color:${colors.ink}">${formatDuration(27 * 60)}</div>
         <!--
           도착 시각. 앱이 화면에 적는 줄이라 여기서도 적는다.
-          맞는 길이면 약속 3분 전이 나오므로 그 값을 그대로 쓴다 —
-          숫자를 손으로 적어 두면 3분이 바뀌는 날 이 그림만 옛말을 하게 된다.
+          맞는 길이면 약속보다 그만큼 앞선 시각이 나오므로 그 값을 그대로 쓴다 —
+          숫자를 손으로 적어 두면 상수가 바뀌는 날 이 그림만 옛말을 하게 된다.
         -->
         <div style="${font(type.caption)};color:${colors.inkSoft};margin-top:${spacing.xs}px">${formatClock(APPOINTMENT_MS - ARRIVE_EARLY_SEC * 1000)} 도착</div>
         <div style="${font(type.caption)};color:${colors.inkFaint};margin-top:2px">2.1km · ${formatClock(APPOINTMENT_MS)} 약속</div>
@@ -295,8 +295,30 @@ function route() {
   `);
 }
 
+/**
+ * 걷는 중 리본. 앱의 `RoutePreview progress={...}`와 같은 그림 —
+ * 걸어온 길은 흐려지고 남은 길에만 색이 남으며, 지금 자리에 점이 찍힌다.
+ */
+function walkedRibbon(pathPoints, tint, ratio) {
+  const pts = projectPath(pathPoints);
+  const split = splitAtRatio(pts, ratio);
+  const line = (d, color) =>
+    `<path d="${d}" stroke="${color}" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  return `<svg viewBox="0 0 ${VIEWBOX} ${VIEWBOX}" width="100%" height="100%">
+    ${line(toSvgPath(split.walked), colors.inkGhost)}
+    ${line(toSvgPath(split.ahead), tint)}
+    <circle cx="${pts[0].x}" cy="${pts[0].y}" r="3" fill="${colors.surface}" stroke="${colors.inkGhost}" stroke-width="1.5"/>
+    <circle cx="${pts[pts.length - 1].x}" cy="${pts[pts.length - 1].y}" r="4" fill="${tint}"/>
+    <circle cx="${split.at.x}" cy="${split.at.y}" r="5.5" fill="${colors.surface}"/>
+    <circle cx="${split.at.x}" cy="${split.at.y}" r="3.5" fill="${tint}"/>
+  </svg>`;
+}
+
 function walk() {
   return screen(`
+    <div style="height:200px">${walkedRibbon(WALK_PATH, MOOD_TINT.pensive, 0.55)}</div>
+
     <div style="flex:1"></div>
 
     <div style="text-align:center;margin-bottom:${spacing.xl}px">
@@ -311,8 +333,12 @@ function walk() {
         display:flex;align-items:center;justify-content:center;
         ${font(type.title)};color:${colors.ink}">조금 천천히 걸어도 돼요</div>
 
+    <!-- 페이스 안내의 근거. 앱이 지금 속도로 계산해 적는 줄이다. -->
+    <div style="${font(type.caption)};color:${colors.inkSoft};text-align:center;
+        margin-top:${spacing.md}px">이 속도면 ${formatClock(APPOINTMENT_MS - ARRIVE_EARLY_SEC * 1000)} 도착 · ${formatClock(APPOINTMENT_MS)} 약속</div>
+
     <div style="${font(type.caption)};color:${colors.inkFaint};text-align:center;
-        margin-top:${spacing.xl}px">성수역 3번 출구까지 3분 전에 도착하도록 맞추고 있어요.</div>
+        margin-top:${spacing.lg}px">성수역 3번 출구까지 ${ARRIVE_EARLY_MIN}분 전에 도착하도록 맞추고 있어요.</div>
 
     <div style="flex:1"></div>
 
@@ -425,14 +451,14 @@ function landscape() {
       display:flex;align-items:center;gap:${spacing.xxl}px;padding:0 ${spacing.xxl}px;
       box-sizing:border-box;overflow:hidden">
     <div style="width:300px;flex:none">
-      <div style="${font(type.display)};color:${colors.ink}">약속 3분 전에<br/>도착하는 길</div>
+      <div style="${font(type.display)};color:${colors.ink}">약속 ${ARRIVE_EARLY_MIN}분 전에<br/>도착하는 길</div>
       <div style="${font(type.body)};color:${colors.inkSoft};margin-top:${spacing.md}px">
         일찍 도착해 애매하게 남는 시간을<br/>걷기로 채워요. 기분만 고르면<br/>나머지는 앱이 정해요.</div>
     </div>
     <div style="display:flex;gap:${spacing.lg}px">
       ${step('기분을 고르면', mood(), 60)}
       ${step('길과 이유를 주고', route(), 40)}
-      ${step('3분 전에 맞춰줘요', walk(), 70)}
+      ${step(`${ARRIVE_EARLY_MIN}분 전에 맞춰줘요`, walk(), 70)}
     </div>
   </div>`;
 }
@@ -474,7 +500,7 @@ const SHOTS = [
     ...PORTRAIT,
     html: portrait({
       headline: '빠르면 천천히, 늦으면 조금 빠르게',
-      sub: '걷는 속도를 3분 전에 맞춰줘요.',
+      sub: `걷는 속도를 ${ARRIVE_EARLY_MIN}분 전에 맞춰줘요.`,
       body: walk(),
     }),
   },
@@ -482,7 +508,7 @@ const SHOTS = [
     name: '05-arrive',
     ...PORTRAIT,
     html: portrait({
-      headline: '남은 3분은 기록의 시간',
+      headline: `남은 ${ARRIVE_EARLY_MIN}분은 기록의 시간`,
       sub: '안 적고 닫아도 괜찮아요.',
       body: arrive(),
     }),

@@ -4,7 +4,9 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss/framework';
 import { distanceM, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
-import { ARRIVE_EARLY_SEC, arrivalAt, formatDuration } from '../domain/time';
+import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
+import { RoutePreview } from '../ui/RoutePreview';
+import { moodTint } from '../ui/moodTint';
 import { colors, radius, spacing, type } from '../ui/theme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
@@ -36,9 +38,16 @@ function Walk() {
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
   const [remainingM, setRemainingM] = useState<number | null>(null);
+  /**
+   * 경로 위 진행 비율 (0~1). `progress` ref와 같은 값을 화면용으로 들고 있는다.
+   *
+   * ref만으로는 리본이 다시 그려지지 않는다 — 걷는 화면의 그림이 멈춰 있으면
+   * 따라갈 수 있는 그림이 아니라 벽에 걸린 그림이 된다.
+   */
+  const [alongRatio, setAlongRatio] = useState(0);
   const [speedMps, setSpeedMps] = useState(DEFAULT_WALK_SPEED_MPS);
   // 계획을 세운 시계와 같은 시계로 센다. 기기 시계가 몇 분 틀어져 있으면
-  // 화면마다 남은 시간이 달라지고, 3분을 약속한 앱이 스스로 거짓말을 하게 된다.
+  // 화면마다 남은 시간이 달라지고, 분 단위를 약속한 앱이 스스로 거짓말을 하게 된다.
   const offset = trip.clockOffsetMs;
   const [nowMs, setNowMs] = useState(() => Date.now() + offset);
   // 위치를 놓쳤는가. 놓친 채로 페이스를 코칭하면 잘 걷는 사람에게 서두르라고 한다.
@@ -75,7 +84,7 @@ function Walk() {
    * 화면이 보이는 동안만 잠들지 않게 한다.
    *
    * 도착 화면으로 넘어가도 이 화면은 스택 아래에 그대로 살아 있어서, unmount에만
-   * 걸어 두면 한 줄을 적는 3분 내내 화면이 안 꺼지고 고정밀 GPS도 계속 돈다.
+   * 걸어 두면 한 줄을 적는 내내 화면이 안 꺼지고 고정밀 GPS도 계속 돈다.
    * 그래서 사라질 때(blur) 놓고, 다시 보일 때(focus) 잡는다.
    */
   const [focused, setFocused] = useState(true);
@@ -114,7 +123,7 @@ function Walk() {
   }, [offset]);
 
   useEffect(() => {
-    // 화면이 가려져 있으면 위치를 받을 이유가 없다. 3분 동안 고정밀 GPS를
+    // 화면이 가려져 있으면 위치를 받을 이유가 없다. 도착 화면 동안 고정밀 GPS를
     // 켜 둔 채로 두면 배터리만 먹고, 안 보이는 화면을 몇 초마다 다시 그린다.
     if (path.length === 0 || !focused) {
       return;
@@ -153,6 +162,7 @@ function Walk() {
           ...(movedM != null ? { maxAdvanceM: movedM * 1.5 + 20 } : {}),
         });
         progress.current = Math.max(progress.current, walked.alongRatio);
+        setAlongRatio(progress.current);
         setRemainingM(walked.remainingM);
       },
       // 조용히 삼키면 잘 걷는 사람에게 서두르라고 재촉하게 된다. 모르면 모른다고 한다.
@@ -179,7 +189,7 @@ function Walk() {
     navigation.navigate('/arrive');
   }, [navigation, update, trip.route, remainingM]);
 
-  // 도착하면 바로 3분 화면으로. 자동은 딱 한 번이다.
+  // 도착하면 바로 도착 화면으로. 자동은 딱 한 번이다.
   useEffect(() => {
     if (autoArrived.current || remainingM == null || remainingM > ARRIVED_RADIUS_M) {
       return;
@@ -191,9 +201,10 @@ function Walk() {
   /**
    * 무엇까지 세는가.
    *
-   * 보통은 약속 3분 전이다 — 길이 그 시각에 닿도록 골라졌으니 그게 곧 도착 시각이다.
+   * 보통은 약속 ARRIVE_EARLY_MIN분 전이다 — 길이 그 시각에 닿도록 골라졌으니
+   * 그게 곧 도착 시각이다.
    * 다만 약속보다 눈에 띄게 일찍 닿게 되는 계획이면(`arrivesEarly`) 둘이 갈라진다.
-   * 87분이 남았는데 44분짜리 길을 걷는다면 약속 3분 전까지 세는 건 43분을 부풀리는 것이고,
+   * 87분이 남았는데 44분짜리 길을 걷는다면 약속 앞까지 세는 건 43분을 부풀리는 것이고,
    * 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다. 그럴 땐 실제로 닿을 시각을 센다.
    */
   const plannedArrivalMs =
@@ -217,6 +228,22 @@ function Walk() {
 
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
+      {/*
+        따라갈 수 있는 그림.
+
+        걸어온 길은 흐려지고 남은 길에만 기분 색이 남는다. 지금 자리에 점이 찍혀서
+        어느 쪽으로 가는 중인지, 얼마나 왔는지가 숫자를 읽기 전에 먼저 보인다.
+        (거리 타일이 깔린 지도는 아니다 — 아래 주석 참고.)
+      */}
+      {path.length >= 2 && (
+        <RoutePreview
+          path={path}
+          height={200}
+          tint={trip.mood != null ? moodTint(trip.mood) : colors.ink}
+          progress={alongRatio}
+        />
+      )}
+
       {/* 위아래 여백으로 가운데를 잡고, 맨 아래에만 도망갈 문을 둔다. */}
       <View style={styles.spacer} />
 
@@ -245,19 +272,35 @@ function Walk() {
       )}
 
       {/*
-        지킬 수 있는 말만 한다. 일찍 닿게 되는 계획은 3분 전에 맞추는 게 아니라
+        "빠르게요"만으로는 얼마나 급한지 알 수 없다. 지금 속도로 걸으면 몇 시에
+        닿는지를 옆에 두면, 걷는 사람이 스스로 판단할 수 있다 — 이 앱이 하려는 게
+        재촉이 아니라 그 판단을 대신 해두는 것이므로 근거도 같이 내놓는다.
+
+        위치를 못 잡고 있을 땐 적지 않는다. 모르는 값으로 만든 시각은 거짓말이다.
+      */}
+      {!blind && (
+        <Text style={styles.projection}>
+          이 속도면 {formatClock(nowMs + advice.predictedSec * 1000)} 도착
+          {trip.arriveAtMs != null && ` · ${formatClock(trip.arriveAtMs)} 약속`}
+        </Text>
+      )}
+
+      {/*
+        지킬 수 있는 말만 한다. 일찍 닿게 되는 계획은 약속 바로 앞에 맞추는 게 아니라
         그냥 넉넉히 걷는 것이므로, 그때는 그렇게 말한다.
       */}
       <Text style={styles.footnote}>
         {trip.destinationName !== '' ? `${trip.destinationName}까지 ` : ''}
-        {trip.arrivesEarly ? '넉넉히 걷고 있어요.' : '3분 전에 도착하도록 맞추고 있어요.'}
+        {trip.arrivesEarly
+          ? '넉넉히 걷고 있어요.'
+          : `${ARRIVE_EARLY_MIN}분 전에 도착하도록 맞추고 있어요.`}
       </Text>
 
       <View style={styles.spacer} />
 
       {/*
         도착 판정은 GPS 하나에 걸려 있다. 실내로 들어갔거나 위치가 흔들리면
-        영영 안 잡히고, 그러면 3분 화면도 기록도 없다 — 직접 열 문을 하나 둔다.
+        영영 안 잡히고, 그러면 도착 화면도 기록도 없다 — 직접 열 문을 하나 둔다.
       */}
       <Pressable
         style={({ pressed }) => [styles.manual, pressed && styles.pressed]}
@@ -308,11 +351,21 @@ const styles = StyleSheet.create({
   },
   adviceText: { ...type.title, color: colors.ink },
   adviceSub: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
+  /*
+    페이스 카드가 낸 말의 근거라서 카드 바로 아래 붙인다.
+    아래 footnote보다 한 단계 진하게 — 이건 읽으라고 둔 숫자다.
+  */
+  projection: {
+    ...type.caption,
+    color: colors.inkSoft,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
   footnote: {
     ...type.caption,
     color: colors.inkFaint,
     textAlign: 'center',
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
   // 도망갈 문. 재촉하지 않도록 가장 옅게, 그러나 눌린다는 건 보이게.
   manual: { paddingVertical: spacing.md, alignItems: 'center' },

@@ -11,19 +11,21 @@ import {
 } from '../time';
 
 const MIN = 60;
+/** 약속보다 몇 분 먼저 닿기로 했는가. 숫자를 적어 두면 상수를 바꾸는 날 테스트만 옛말을 한다. */
+const EARLY_MIN = ARRIVE_EARLY_SEC / MIN;
 
 describe('planWalk', () => {
   const now = Date.UTC(2026, 7, 17, 3, 0, 0);
   const at = (minutesFromNow: number) => now + minutesFromNow * 60_000;
 
-  it('여유가 넉넉하면 3분 전 도착에 맞춰 경로를 늘린다', () => {
-    // 30분 뒤 약속, 최단 20분 → 3분 전 도착이려면 27분짜리 경로
+  it('여유가 넉넉하면 약속 앞 도착에 맞춰 경로를 늘린다', () => {
+    // 30분 뒤 약속, 최단 20분 → 약속 EARLY_MIN분 전에 닿는 경로
     const plan = planWalk({ nowMs: now, arriveAtMs: at(30), shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
-    expect(plan.targetWalkSec).toBe(27 * MIN);
-    expect(plan.slackSec).toBe(7 * MIN);
+    expect(plan.targetWalkSec).toBe((30 - EARLY_MIN) * MIN);
+    expect(plan.slackSec).toBe((30 - EARLY_MIN - 20) * MIN);
     expect(plan.capped).toBe(false);
   });
 
@@ -31,23 +33,27 @@ describe('planWalk', () => {
     const plan = planWalk({ nowMs: now, arriveAtMs: at(30), shortestSec: 20 * MIN });
     if (plan.kind !== 'stretch') throw new Error('stretch여야 한다');
 
-    // 27분을 걸으면 약속 3분 전에 도착한다
+    // 목표대로 걸으면 약속 EARLY_MIN분 전에 도착한다
     const arrivalMs = now + plan.targetWalkSec * 1000;
     expect(at(30) - arrivalMs).toBe(ARRIVE_EARLY_SEC * 1000);
   });
 
   it('여유가 1분 남짓이면 우회하지 않고 곧장 간다', () => {
-    // 24분 뒤 약속, 최단 20분 → 예산 21분, 여유 1분
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(24), shortestSec: 20 * MIN });
+    // 최단 20분 + 여유 1분 + 먼저 닿을 시간 → 우회할 게 없다
+    const plan = planWalk({
+      nowMs: now,
+      arriveAtMs: at(20 + 1 + EARLY_MIN),
+      shortestSec: 20 * MIN,
+    });
 
     expect(plan.kind).toBe('straight');
     if (plan.kind !== 'straight') return;
     expect(plan.reason).toBe('no-slack');
   });
 
-  it('3분 전은 못 맞추지만 정시엔 닿으면 솔직하게 곧장 가라고 한다', () => {
-    // 22분 뒤 약속, 최단 20분 → 3분 전(19분 예산)에는 못 맞춤
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(22), shortestSec: 20 * MIN });
+  it('먼저 닿기는 못 하지만 정시엔 닿으면 솔직하게 곧장 가라고 한다', () => {
+    // 최단 20분인데 약속까지 21분 → EARLY_MIN분을 빼면 예산이 최단에 못 미친다
+    const plan = planWalk({ nowMs: now, arriveAtMs: at(21), shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('straight');
     if (plan.kind !== 'straight') return;
@@ -79,7 +85,7 @@ describe('planWalk', () => {
 
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
-    expect(plan.targetWalkSec).toBe(47 * MIN);
+    expect(plan.targetWalkSec).toBe((50 - EARLY_MIN) * MIN);
   });
 });
 
@@ -216,10 +222,10 @@ describe('arrivalAt', () => {
   });
 
   /*
-   * 이 앱이 화면에서 지켜야 하는 관계. 목표대로 걸으면 약속 3분 전에 닿는다 —
+   * 이 앱이 화면에서 지켜야 하는 관계. 목표대로 걸으면 약속보다 그만큼 먼저 닿는다 —
    * 화면이 이 값을 그대로 적으므로, 어긋나면 사용자가 먼저 본다.
    */
-  it('목표대로 걸으면 약속 3분 전에 닿는다', () => {
+  it('목표대로 걸으면 약속보다 그만큼 먼저 닿는다', () => {
     const appointment = now + 40 * 60_000;
     const plan = planWalk({ nowMs: now, arriveAtMs: appointment, shortestSec: 20 * MIN });
 

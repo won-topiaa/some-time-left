@@ -21,7 +21,7 @@ export const Route = createRoute('/arrive', {
  * 이 앱의 시그니처 화면.
  *
  * 이름이 'Some Time Left'인데 정작 그 남은 시간에 뭘 하는지가 없으면 안 된다.
- * 도착해서 남은 3분이 곧 한 줄을 적는 시간이다.
+ * 도착해서 약속까지 남은 시간이 곧 한 줄을 적는 시간이다.
  */
 function Arrive() {
   const navigation = useNavigation();
@@ -30,7 +30,7 @@ function Arrive() {
   const keyboardHeight = useKeyboardHeight();
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
-  // 계획을 세운 시계로 센다. 기기 시계가 틀어져 있으면 "3분 남았어요" 밑에
+  // 계획을 세운 시계로 센다. 기기 시계가 틀어져 있으면 "몇 분 남았어요" 밑에
   // 0:00이 떠 있는 화면이 만들어진다.
   const offset = trip.clockOffsetMs;
   const [nowMs, setNowMs] = useState(() => Date.now() + offset);

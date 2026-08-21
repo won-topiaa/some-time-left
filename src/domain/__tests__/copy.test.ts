@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { alongRouteHint, arrivalPrompt, memoryRecall, planHeadline, routeReason } from '../copy';
 import { MOODS, dominantFeature, weightsFor } from '../mood';
 import { FEATURE_KEYS } from '../types';
+import { ARRIVE_EARLY_MIN } from '../time';
 
 /**
  * 이 한 줄이 자동 추천의 생명줄이라, 여섯 기분 × 여섯 성질을 전부 통과시킨다.
@@ -55,7 +56,7 @@ describe('planHeadline', () => {
       slackSec: 420,
       capped: false,
     });
-    expect(headline).toContain('3분 전');
+    expect(headline).toContain(`${ARRIVE_EARLY_MIN}분 전`);
     // 같은 화면에 27분이 두 번 나오면 주인공이 둘이 된다.
     expect(headline).not.toContain('27분');
   });
@@ -70,7 +71,7 @@ describe('planHeadline', () => {
     const noEarly = planHeadline({ kind: 'straight', reason: 'no-early', targetWalkSec: 1200 });
     const noSlack = planHeadline({ kind: 'straight', reason: 'no-slack', targetWalkSec: 1200 });
     expect(noEarly).not.toBe(noSlack);
-    expect(noEarly).toContain('3분 전은 어렵겠어요');
+    expect(noEarly).toContain(`${ARRIVE_EARLY_MIN}분 전은 어렵겠어요`);
   });
 
   it('늦으면 얼마나 늦는지 말한다', () => {

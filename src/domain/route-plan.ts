@@ -1,5 +1,5 @@
 /**
- * 후보 경로들 중에서 "3분 전 도착"에 맞고 기분에도 맞는 하나를 고른다.
+ * 후보 경로들 중에서 "약속보다 먼저 도착"에 맞고 기분에도 맞는 하나를 고른다.
  *
  * 두 축을 곱한다.
  * - fit:   목표 소요 시간에 얼마나 정확히 맞는가
@@ -13,7 +13,7 @@ import type { RouteCandidate, ScoredRoute } from './types';
 
 /** 늦는 쪽 오차의 허용 폭 (초). 좁을수록 지각에 가혹해진다. */
 const LATE_SIGMA_SEC = 60;
-/** 일찍 도착하는 쪽 오차의 허용 폭 (초). 3분보다 더 일찍 도착하는 건 덜 나쁘다. */
+/** 일찍 도착하는 쪽 오차의 허용 폭 (초). 목표보다 더 일찍 도착하는 건 덜 나쁘다. */
 const EARLY_SIGMA_SEC = 180;
 
 /** 기분 점수가 최종 점수에 기여하는 최대 비율. 나머지는 fit이 가져간다. */
@@ -40,31 +40,36 @@ export interface RankOptions {
 const REPEAT_PENALTY = 0.85;
 
 /**
- * 대안으로 내놓아도 되는 늦음의 한계 (초).
+ * 목표보다 오래 걸리는 길은 **내놓지 않는다.** 한 뼘도 봐주지 않는다.
  *
- * 목표대로 걸으면 약속 3분 전에 닿는다. 여기서 1분을 더 쓰면 2분 전이다.
- * 그 아래로는 "3분 전에 도착하는 앱"이라고 말할 수 없다.
+ * 목표(`targetWalkSec`)는 이미 약속보다 `ARRIVE_EARLY_SEC`(5분) 앞에 닿도록
+ * 잡아 둔 값이다. 여기서 조금씩 넘겨 주기 시작하면 그 5분이 바로 그 자리에서
+ * 녹는다 — 실제로 걷는 사람에게는 신호 대기와 도로망 오차가 그 위에 또 얹힌다.
+ * 여유를 주는 자리는 여기가 아니라 5분이라는 숫자 자체다.
  */
-export const LATE_TOLERANCE_SEC = 60;
+export function arrivesOnTime(durationSec: number, targetSec: number): boolean {
+  return durationSec <= targetSec;
+}
 
 /**
  * 대안으로 내놓아도 되는 이름의 한계 (초).
  *
- * 늦는 것보다 덜 나쁘지만 공짜는 아니다. 8분 전에 닿는 길은 약속이 다른 앱의 것이고,
+ * 늦는 것보다 덜 나쁘지만 공짜는 아니다. 10분 전에 닿는 길은 약속이 다른 앱의 것이고,
  * 무엇보다 사용자가 이 앱을 켠 이유(자투리 시간을 걷기로 쓰는 것)를 그만큼 돌려주지 않는다.
  */
 export const EARLY_TOLERANCE_SEC = 5 * 60;
 
 /**
- * 이 길로 가도 "3분 전 도착"이 지켜지는가.
+ * 이 길이 "다른 길"로 내놓을 만한가.
+ *
+ * 제때 닿는 것에 더해, 너무 일찍 닿지도 않아야 한다.
  *
  * 점수(`score`)와 별개로 둔다. 점수는 후보들 사이의 **순서**를 정할 뿐이라
  * 전부 나쁘면 그중 제일 나은 것이 1등이 된다. 약속을 지키는지는 순위가 아니라
  * 문턱이어야 한다 — 그래서 비교가 아니라 이 함수가 판단한다.
  */
 export function keepsPromise(durationSec: number, targetSec: number): boolean {
-  const error = durationSec - targetSec;
-  return error <= LATE_TOLERANCE_SEC && -error <= EARLY_TOLERANCE_SEC;
+  return arrivesOnTime(durationSec, targetSec) && targetSec - durationSec <= EARLY_TOLERANCE_SEC;
 }
 
 export function rankRoutes(
@@ -103,6 +108,21 @@ export function rankRoutes(
  * 그래서 보여줄 게 없으면 없는 것으로 둔다 — 화면은 "다른 길" 버튼을 감춘다.
  * 나쁜 선택지를 주는 것보다 선택지가 없는 편이 정직하다.
  */
+/**
+ * 처음 보여줄 한 장.
+ *
+ * `nextRoute`보다 문턱이 하나 낮다 — 너무 일찍 닿는 것은 봐주고, **늦는 것만 막는다.**
+ * 여유가 두 시간 남은 날에는 어느 후보도 목표에 못 미치는데, 그때 빈 화면을 주면
+ * 걷지도 못하고 왜 안 되는지도 모른다. 일찍 닿는 건 아쉬운 일이지 실패가 아니다.
+ *
+ * 늦는 길이 여기로 새지 않는 건 후보 목록에 **최단 경로가 항상 들어 있기** 때문이다
+ * (`useRouteSuggestion`). 늘리는 계획이 섰다는 건 최단이 목표 안에 든다는 뜻이므로,
+ * 최악의 경우에도 이 함수는 최단 경로를 돌려준다.
+ */
+export function firstRoute(ranked: ScoredRoute[], targetSec: number): ScoredRoute | null {
+  return ranked.find((r) => arrivesOnTime(r.candidate.durationSec, targetSec)) ?? null;
+}
+
 export function nextRoute(
   ranked: ScoredRoute[],
   shownRouteIds: string[],

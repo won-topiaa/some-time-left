@@ -6,7 +6,7 @@ import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
 import { useWeather } from '../state/useWeather';
-import { dayLabel, formatClock, resolveAppointment } from '../domain/time';
+import { ARRIVE_EARLY_MIN, dayLabel, formatClock, resolveAppointment } from '../domain/time';
 import { NO_CARRIED, loadCarried, loadRecords } from '../data/records';
 import { formatTotalDistance, traceSummary } from '../domain/trace';
 import type { Place } from '../data/places';
@@ -153,7 +153,7 @@ function Home() {
           */}
           {weather != null && <Text style={styles.weather}>{weather}</Text>}
           <Text style={styles.hello}>시간이 좀 남았네요.</Text>
-          <Text style={styles.sub}>약속 3분 전에 도착하게 해드릴게요.</Text>
+          <Text style={styles.sub}>약속 {ARRIVE_EARLY_MIN}분 전에 도착하게 해드릴게요.</Text>
         </View>
 
         <Text style={styles.label}>어디로 가세요?</Text>

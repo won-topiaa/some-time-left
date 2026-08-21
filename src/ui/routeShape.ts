@@ -81,3 +81,69 @@ export function toSvgPath(points: Point[]): string {
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
     .join(' ');
 }
+
+/**
+ * 그려진 선 위에서 지금 어디쯤인가.
+ *
+ * 걷는 화면이 "따라갈 수 있는 그림"이 되려면 걸어온 만큼과 남은 만큼이
+ * 갈라져야 한다. 선 하나만 있으면 방향도 위치도 알 수 없다.
+ *
+ * 길이는 **그려진 좌표계**에서 잰다. 미터로 재면 그림과 어긋난 자리에 점이 찍힌다 —
+ * 여기서 필요한 건 실제 거리가 아니라 그림 위의 자리다.
+ */
+export interface SplitPath {
+  /** 걸어온 부분. 점이 하나 이하면 아직 시작 언저리다. */
+  walked: Point[];
+  /** 남은 부분. 현재 위치에서 시작한다. */
+  ahead: Point[];
+  /** 지금 있는 자리 */
+  at: Point;
+}
+
+function lengthsOf(points: Point[]): { steps: number[]; total: number } {
+  const steps: number[] = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const step = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    steps.push(step);
+    total += step;
+  }
+  return { steps, total };
+}
+
+export function splitAtRatio(points: Point[], ratio: number): SplitPath | null {
+  if (points.length < 2) {
+    return null;
+  }
+
+  const clamped = Math.min(1, Math.max(0, ratio));
+  const { steps, total } = lengthsOf(points);
+
+  if (!(total > 0)) {
+    return { walked: [points[0]], ahead: [...points], at: points[0] };
+  }
+
+  let remaining = total * clamped;
+
+  for (let i = 0; i < steps.length; i++) {
+    if (remaining > steps[i]) {
+      remaining -= steps[i];
+      continue;
+    }
+
+    // 이 구간 안에 있다. 남은 만큼을 선분 위에서 비례로 찍는다.
+    const t = steps[i] === 0 ? 0 : remaining / steps[i];
+    const from = points[i];
+    const to = points[i + 1];
+    const at = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+
+    return {
+      walked: [...points.slice(0, i + 1), at],
+      ahead: [at, ...points.slice(i + 1)],
+      at,
+    };
+  }
+
+  const last = points[points.length - 1];
+  return { walked: [...points], ahead: [last], at: last };
+}

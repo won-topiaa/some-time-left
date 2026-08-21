@@ -6,7 +6,7 @@
  */
 
 import { moodById } from './mood';
-import { formatDuration } from './time';
+import { ARRIVE_EARLY_MIN, formatDuration } from './time';
 import type { FeatureKey, MoodId } from './types';
 import type { WalkPlan } from './time';
 
@@ -52,10 +52,10 @@ export function planHeadline(plan: WalkPlan): string {
     case 'stretch':
       return plan.capped
         ? '시간이 꽤 남았어요.\n넉넉히 걸어볼까요?'
-        : '3분 전에 닿는 길이에요.';
+        : `${ARRIVE_EARLY_MIN}분 전에 닿는 길이에요.`;
     case 'straight':
       return plan.reason === 'no-early'
-        ? '3분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.'
+        ? `${ARRIVE_EARLY_MIN}분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.`
         : '여유가 딱 그만큼이에요. 오늘은 그냥 곧장 가요.';
     case 'too-late':
       return `최단으로 가도 ${formatDuration(plan.shortBySec)} 늦어요.`;
@@ -63,10 +63,10 @@ export function planHeadline(plan: WalkPlan): string {
 }
 
 /**
- * 도착 3분 전 화면. 이 앱의 시그니처 순간.
+ * 도착하고 약속까지 남은 시간의 화면. 이 앱의 시그니처 순간.
  *
  * 숫자는 말하지 않는다. 바로 위에 남은 시간이 큰 숫자로 떠 있는데 여기서 또
- * "3분 남았어요"라고 하면, 빨리 걸어 8분 일찍 닿은 사람에게는 두 값이 어긋난다.
+ * "5분 남았어요"라고 하면, 빨리 걸어 8분 일찍 닿은 사람에게는 두 값이 어긋난다.
  * 화면의 주인공은 그 숫자 하나이고, 이 문장은 그다음에 무엇을 할지만 건넨다.
  */
 export function arrivalPrompt(companion: string | null): string {

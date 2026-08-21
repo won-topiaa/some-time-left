@@ -1,12 +1,25 @@
 /**
- * "3분 전 도착"을 시간 예산으로 번역하는 계층.
+ * "약속보다 먼저 도착"을 시간 예산으로 번역하는 계층.
  *
- * 이 앱의 모든 것이 여기서 시작한다. 3분은 설정값이 아니라 정체성이므로
+ * 이 앱의 모든 것이 여기서 시작한다. 몇 분 전인지는 설정값이 아니라 정체성이므로
  * 상수로 고정하고, UI에서 사용자에게 바꾸게 하지 않는다.
  */
 
-/** 약속 시각보다 얼마나 먼저 도착할 것인가. 제품의 정체성이므로 고정. */
-export const ARRIVE_EARLY_SEC = 3 * 60;
+/**
+ * 약속 시각보다 얼마나 먼저 도착할 것인가. 제품의 정체성이므로 고정.
+ *
+ * 3분이었다가 5분이 됐다. 3분은 실제로 걸어 보니 너무 얇았다 — 신호 하나,
+ * 횡단보도 한 번, 도로망 추정 오차 몇십 초면 그대로 약속 시각을 넘긴다.
+ * 5분으로 잡으면 그 정도가 다 흡수되고, 넘치더라도 여전히 약속 전에 닿는다.
+ * **먼저 도착하는 앱이 늦는 것보다 나쁜 실패는 없다.**
+ *
+ * 화면 문구는 이 상수에서 뽑아 쓴다(`copy.ts`). 손으로 적어 두면
+ * 숫자를 바꾸는 날 화면만 옛말을 하게 된다.
+ */
+export const ARRIVE_EARLY_SEC = 5 * 60;
+
+/** "5분" 처럼 사람에게 말할 때의 단위. 문구가 상수에서 갈라지지 않게 한 군데서 낸다. */
+export const ARRIVE_EARLY_MIN = Math.round(ARRIVE_EARLY_SEC / 60);
 
 /**
  * 최단 경로 대비 최대 몇 배까지 늘릴 것인가.
@@ -29,7 +42,7 @@ export type WalkPlan =
     }
   | {
       kind: 'straight';
-      /** 'no-slack': 여유가 없음 / 'no-early': 3분 전은 못 맞추지만 정시엔 도착 */
+      /** 'no-slack': 여유가 없음 / 'no-early': 약속 전 여유는 못 맞추지만 정시엔 도착 */
       reason: 'no-slack' | 'no-early';
       targetWalkSec: number;
     }
@@ -54,7 +67,7 @@ export interface PlanInput {
  * 네 갈래로 갈린다.
  * - 여유가 넉넉함 → 늘린다 (stretch)
  * - 여유가 거의 없음 → 곧장 간다 (straight / no-slack)
- * - 3분 전은 못 맞추지만 정시엔 도착 → 곧장 간다 (straight / no-early)
+ * - 약속 전 여유는 못 맞추지만 정시엔 도착 → 곧장 간다 (straight / no-early)
  * - 최단으로도 늦음 → 정직하게 말한다 (too-late)
  */
 export function planWalk({ nowMs, arriveAtMs, shortestSec }: PlanInput): WalkPlan {
@@ -64,11 +77,11 @@ export function planWalk({ nowMs, arriveAtMs, shortestSec }: PlanInput): WalkPla
     return { kind: 'too-late', shortBySec: shortestSec - untilAppointmentSec };
   }
 
-  // 3분 전에 도착하려면 실제로 걸을 수 있는 시간
+  // 약속보다 ARRIVE_EARLY_SEC 먼저 닿으려면 실제로 걸을 수 있는 시간
   const budgetSec = untilAppointmentSec - ARRIVE_EARLY_SEC;
 
   if (budgetSec < shortestSec) {
-    // 정시엔 닿지만 3분 전은 무리. 앱이 해줄 게 없으니 솔직하게.
+    // 정시엔 닿지만 여유를 두고는 무리. 앱이 해줄 게 없으니 솔직하게.
     return { kind: 'straight', reason: 'no-early', targetWalkSec: shortestSec };
   }
 
@@ -92,7 +105,7 @@ export function planWalk({ nowMs, arriveAtMs, shortestSec }: PlanInput): WalkPla
 /**
  * 지금 나서면 몇 시에 닿는가 (epoch ms).
  *
- * 화면이 소요 시간만 보여주면 "3분 전"은 앱만 아는 약속이 된다. 사용자가 그걸
+ * 화면이 소요 시간만 보여주면 "몇 분 전"은 앱만 아는 약속이 된다. 사용자가 그걸
  * 검산하려면 머릿속에서 지금 시각에 분을 더해야 하는데, 그건 이 앱이 대신 하기로 한 일이다.
  * 다른 길을 눌러 시간이 달라져도 이 숫자가 그대로면 약속이 지켜진 것이 눈에 보인다.
  */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { weightsFor } from '../mood';
-import { durationFit, keepsPromise, nextRoute, rankRoutes } from '../route-plan';
+import { arrivesOnTime, durationFit, firstRoute, keepsPromise, nextRoute, rankRoutes } from '../route-plan';
 import type { RouteCandidate, RouteFeatures } from '../types';
 
 const MIN = 60;
@@ -126,23 +126,25 @@ describe('rankRoutes', () => {
 });
 
 describe('nextRoute', () => {
+  const target = 27 * MIN;
+
   it('"다른 길"을 누르면 아직 안 보여준 다음 후보를 준다', () => {
     const ranked = rankRoutes(
-      [candidate('a', 27 * MIN), candidate('b', 27 * MIN + 30), candidate('c', 28 * MIN)],
-      { targetSec: 27 * MIN, weights: weightsFor('plain') }
+      [candidate('a', target), candidate('b', target - 30), candidate('c', target - 60)],
+      { targetSec: target, weights: weightsFor('plain') }
     );
 
-    const second = nextRoute(ranked, [ranked[0].candidate.id], 27 * MIN);
+    const second = nextRoute(ranked, [ranked[0].candidate.id], target);
     expect(second?.candidate.id).toBe(ranked[1].candidate.id);
   });
 
   it('더 보여줄 게 없으면 null', () => {
-    const ranked = rankRoutes([candidate('a', 27 * MIN)], {
-      targetSec: 27 * MIN,
+    const ranked = rankRoutes([candidate('a', target)], {
+      targetSec: target,
       weights: weightsFor('plain'),
     });
 
-    expect(nextRoute(ranked, ['a'], 27 * MIN)).toBeNull();
+    expect(nextRoute(ranked, ['a'], target)).toBeNull();
   });
 
   /*
@@ -150,32 +152,93 @@ describe('nextRoute', () => {
    * 넓게 퍼지는데, 점수만 따라 내려가면 "다른 길"을 누를수록 안 맞는 길이 나온다.
    * 몇 번 누른 사람이 약속에 늦으면 이 앱은 존재 이유를 잃는다.
    */
-  it('약속에 늦는 길은 다른 길로도 내놓지 않는다', () => {
-    const ranked = rankRoutes([candidate('a', 27 * MIN), candidate('late', 40 * MIN)], {
-      targetSec: 27 * MIN,
+  it('목표를 넘기는 길은 다른 길로도 내놓지 않는다', () => {
+    const ranked = rankRoutes([candidate('a', target), candidate('late', 40 * MIN)], {
+      targetSec: target,
       weights: weightsFor('plain'),
     });
 
     expect(ranked.map((r) => r.candidate.id)).toContain('late');
-    expect(nextRoute(ranked, ['a'], 27 * MIN)).toBeNull();
+    expect(nextRoute(ranked, ['a'], target)).toBeNull();
   });
 
-  it('너무 일찍 닿는 길도 내놓지 않는다', () => {
-    const ranked = rankRoutes([candidate('a', 27 * MIN), candidate('early', 15 * MIN)], {
-      targetSec: 27 * MIN,
+  /* 한 뼘도 봐주지 않는다. 1초를 봐주기 시작하면 봐주지 않을 이유가 사라진다. */
+  it('1초를 넘겨도 내놓지 않는다', () => {
+    const ranked = rankRoutes([candidate('a', target), candidate('over', target + 1)], {
+      targetSec: target,
       weights: weightsFor('plain'),
     });
 
-    expect(nextRoute(ranked, ['a'], 27 * MIN)).toBeNull();
+    expect(nextRoute(ranked, ['a'], target)).toBeNull();
   });
 
-  it('조금 어긋나는 정도는 대안으로 받는다', () => {
-    const ranked = rankRoutes([candidate('a', 27 * MIN), candidate('near', 27 * MIN + 45)], {
-      targetSec: 27 * MIN,
+  it('너무 일찍 닿는 길도 다른 길로는 내놓지 않는다', () => {
+    const ranked = rankRoutes([candidate('a', target), candidate('early', 15 * MIN)], {
+      targetSec: target,
       weights: weightsFor('plain'),
     });
 
-    expect(nextRoute(ranked, ['a'], 27 * MIN)?.candidate.id).toBe('near');
+    expect(nextRoute(ranked, ['a'], target)).toBeNull();
+  });
+
+  it('목표 안에서 조금 이른 정도는 대안으로 받는다', () => {
+    const ranked = rankRoutes([candidate('a', target), candidate('near', target - 45)], {
+      targetSec: target,
+      weights: weightsFor('plain'),
+    });
+
+    expect(nextRoute(ranked, ['a'], target)?.candidate.id).toBe('near');
+  });
+});
+
+describe('firstRoute', () => {
+  const target = 27 * MIN;
+
+  it('처음 한 장은 너무 이른 것까지 봐준다', () => {
+    const ranked = rankRoutes([candidate('early', 12 * MIN)], {
+      targetSec: target,
+      weights: weightsFor('plain'),
+    });
+
+    // "다른 길"로는 안 나오지만
+    expect(nextRoute(ranked, [], target)).toBeNull();
+    // 빈 화면을 주느니 이 길이라도 보여준다
+    expect(firstRoute(ranked, target)?.candidate.id).toBe('early');
+  });
+
+  /* 늦는 것만은 어느 쪽으로도 새지 않는다. */
+  it('늦는 길은 처음 한 장으로도 내놓지 않는다', () => {
+    const ranked = rankRoutes([candidate('late', 40 * MIN)], {
+      targetSec: target,
+      weights: weightsFor('plain'),
+    });
+
+    expect(firstRoute(ranked, target)).toBeNull();
+  });
+
+  it('제때 닿는 것 중 점수가 가장 높은 것을 준다', () => {
+    const ranked = rankRoutes(
+      [candidate('late', 40 * MIN), candidate('fit', target), candidate('early', 10 * MIN)],
+      { targetSec: target, weights: weightsFor('plain') }
+    );
+
+    expect(firstRoute(ranked, target)?.candidate.id).toBe('fit');
+  });
+});
+
+describe('arrivesOnTime', () => {
+  const target = 27 * MIN;
+
+  it('목표에 딱 맞으면 제때다', () => {
+    expect(arrivesOnTime(target, target)).toBe(true);
+  });
+
+  it('1초라도 넘기면 아니다', () => {
+    expect(arrivesOnTime(target + 1, target)).toBe(false);
+  });
+
+  it('짧은 건 얼마든 제때다', () => {
+    expect(arrivesOnTime(1 * MIN, target)).toBe(true);
   });
 });
 
@@ -186,9 +249,8 @@ describe('keepsPromise', () => {
     expect(keepsPromise(target, target)).toBe(true);
   });
 
-  it('1분까지 늦는 건 받고, 그 너머는 안 받는다', () => {
-    expect(keepsPromise(target + 60, target)).toBe(true);
-    expect(keepsPromise(target + 61, target)).toBe(false);
+  it('목표를 넘기면 지키지 못한다', () => {
+    expect(keepsPromise(target + 1, target)).toBe(false);
   });
 
   it('5분까지 이른 건 받고, 그 너머는 안 받는다', () => {
@@ -198,7 +260,7 @@ describe('keepsPromise', () => {
 
   /* 늦는 쪽이 이른 쪽보다 훨씬 좁아야 한다. 늦으면 약속이 깨지고, 이르면 아깝기만 하다. */
   it('늦는 쪽에 더 가혹하다', () => {
-    expect(keepsPromise(target + 3 * MIN, target)).toBe(false);
+    expect(keepsPromise(target + 1 * MIN, target)).toBe(false);
     expect(keepsPromise(target - 3 * MIN, target)).toBe(true);
   });
 });

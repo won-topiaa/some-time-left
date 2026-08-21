@@ -78,7 +78,7 @@ export interface ScoredRoute {
   dominantFeature: FeatureKey;
 }
 
-/** 도착 후 3분 동안 남기는 기록. */
+/** 도착하고 약속까지 남은 시간 동안 남기는 기록. */
 export interface WalkRecord {
   id: string;
   /** 만난 사람 또는 모임 */

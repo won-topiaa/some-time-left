@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import Svg, { Circle, Path } from '@granite-js/native/react-native-svg';
 import { View, StyleSheet } from 'react-native';
 import { colors } from './theme';
-import { VIEWBOX, projectPath, toSvgPath } from './routeShape';
+import { VIEWBOX, projectPath, splitAtRatio, toSvgPath } from './routeShape';
 import type { LatLng } from '../domain/types';
 
 /**
@@ -19,13 +19,25 @@ export function RoutePreview({
   path,
   height = 180,
   tint = colors.ink,
+  progress,
 }: {
   path: LatLng[];
   height?: number;
   tint?: string;
+  /**
+   * 지금까지 온 만큼 (0~1). 주면 걸어온 길이 흐려지고 지금 자리에 점이 찍힌다.
+   *
+   * 걷는 화면이 이걸 준다. 선 하나만 있으면 어느 쪽으로 가는 중인지도 모르는데,
+   * 갈라 놓으면 남은 선이 곧 앞으로 갈 길이 되어 따라갈 수 있는 그림이 된다.
+   */
+  progress?: number;
 }) {
   const points = useMemo(() => projectPath(path), [path]);
   const d = useMemo(() => toSvgPath(points), [points]);
+  const split = useMemo(
+    () => (progress == null ? null : splitAtRatio(points, progress)),
+    [points, progress]
+  );
 
   if (points.length < 2) {
     return <View style={[styles.box, { height }]} />;
@@ -38,17 +50,47 @@ export function RoutePreview({
     <View style={[styles.box, { height }]}>
       {/* 비율을 지켜 그린다 — 늘리면 남북으로 곧은 길과 동서로 곧은 길이 같아 보인다. */}
       <Svg width="100%" height="100%" viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}>
-        <Path
-          d={d}
-          stroke={tint}
-          strokeWidth={2.5}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {split == null ? (
+          <Path
+            d={d}
+            stroke={tint}
+            strokeWidth={2.5}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : (
+          <>
+            {/* 걸어온 길은 물러난다. 지운 게 아니라 지나온 것이므로 남겨는 둔다. */}
+            <Path
+              d={toSvgPath(split.walked)}
+              stroke={colors.inkGhost}
+              strokeWidth={2.5}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {/* 남은 길이 이 화면의 주인공이다. 기분 색은 앞으로 갈 길에만 남는다. */}
+            <Path
+              d={toSvgPath(split.ahead)}
+              stroke={tint}
+              strokeWidth={2.5}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        )}
         {/* 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게. */}
         <Circle cx={start.x} cy={start.y} r={3} fill={colors.surface} stroke={colors.inkGhost} strokeWidth={1.5} />
         <Circle cx={end.x} cy={end.y} r={4} fill={tint} />
+        {split != null && (
+          <>
+            {/* 지금 있는 자리. 종이 위에 얹힌 것처럼 테두리를 둘러 선과 구분한다. */}
+            <Circle cx={split.at.x} cy={split.at.y} r={5.5} fill={colors.surface} />
+            <Circle cx={split.at.x} cy={split.at.y} r={3.5} fill={tint} />
+          </>
+        )}
       </Svg>
     </View>
   );

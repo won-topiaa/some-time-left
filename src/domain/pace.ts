@@ -10,7 +10,7 @@ export type PaceAction = 'slower' | 'keep' | 'faster' | 'hurry';
 export interface PaceInput {
   /** 남은 거리 (m) */
   remainingM: number;
-  /** 목표 도착 시각까지 남은 시간 (초). 약속 시각이 아니라 3분 전 기준. */
+  /** 목표 도착 시각까지 남은 시간 (초). 약속 시각이 아니라 그보다 앞선 목표 기준. */
   remainingSec: number;
   /** 최근 측정된 보행 속도 (m/s) */
   currentSpeedMps: number;
@@ -22,6 +22,13 @@ export interface PaceAdvice {
   requiredSpeedMps: number;
   /** 현재 속도를 유지하면 목표보다 이만큼 어긋난다 (초, 양수면 늦음) */
   predictedDeltaSec: number;
+  /**
+   * 지금 속도를 유지하면 도착까지 이만큼 걸린다 (초).
+   *
+   * 화면이 이걸 시각으로 바꿔 적는다. "빠르게요"만으로는 얼마나 급한지 알 수 없고,
+   * 걷는 사람이 스스로 판단할 근거가 없다 — 시각 하나면 다 전해진다.
+   */
+  predictedSec: number;
   message: string;
 }
 
@@ -50,40 +57,21 @@ export function paceAdvice({
 
   const predictedSec = remainingM / effectiveSpeed;
   const predictedDeltaSec = Math.round(predictedSec - remainingSec);
+  const common = { requiredSpeedMps, predictedDeltaSec, predictedSec };
 
   if (predictedDeltaSec > HURRY_THRESHOLD_SEC) {
-    return {
-      action: 'hurry',
-      requiredSpeedMps,
-      predictedDeltaSec,
-      message: '조금 서둘러야 해요.',
-    };
+    return { ...common, action: 'hurry', message: '조금 서둘러야 해요.' };
   }
 
   if (predictedDeltaSec > KEEP_TOLERANCE_SEC) {
-    return {
-      action: 'faster',
-      requiredSpeedMps,
-      predictedDeltaSec,
-      message: '지금보다 조금만 빠르게요.',
-    };
+    return { ...common, action: 'faster', message: '지금보다 조금만 빠르게요.' };
   }
 
   if (predictedDeltaSec < -KEEP_TOLERANCE_SEC) {
-    return {
-      action: 'slower',
-      requiredSpeedMps,
-      predictedDeltaSec,
-      message: '조금 천천히 걸어도 돼요.',
-    };
+    return { ...common, action: 'slower', message: '조금 천천히 걸어도 돼요.' };
   }
 
-  return {
-    action: 'keep',
-    requiredSpeedMps,
-    predictedDeltaSec,
-    message: '지금 속도 그대로면 딱 맞아요.',
-  };
+  return { ...common, action: 'keep', message: '지금 속도 그대로면 딱 맞아요.' };
 }
 
 /**

@@ -107,7 +107,7 @@ def draw_icon(size: int = SIZE, dark: bool = False) -> Image.Image:
     inner = outer - ring
     d.ellipse([sx - inner, sy - inner, sx + inner, sy + inner], fill=hole)
 
-    # 도착점 — 차 있다. 3분 전에 닿는 그 지점.
+    # 도착점 — 차 있다. 약속보다 먼저 닿는 그 지점.
     ex, ey = pts[-1]
     er = int(n * 0.062)
     d.ellipse([ex - er, ey - er, ex + er, ey + er], fill=ink)

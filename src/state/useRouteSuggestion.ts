@@ -6,7 +6,7 @@ import { isTmapConfigured } from '../config';
 import { loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
-import { keepsPromise, nextRoute, rankRoutes } from '../domain/route-plan';
+import { arrivesOnTime, firstRoute, nextRoute, rankRoutes } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
@@ -31,8 +31,8 @@ export interface Suggestion {
   /**
    * 계획대로 길을 늘렸는가.
    *
-   * 경유지가 하나도 안 붙어 최단 경로로 물러섰으면 false다. 그때는 3분 전 도착을
-   * 지킬 수 없으므로 화면이 그렇게 말하면 안 된다.
+   * 경유지가 하나도 안 붙어 최단 경로로 물러섰으면 false다. 그때는 자투리 시간을
+   * 걷기로 채우지 못한 것이므로 화면이 늘렸다고 말하면 안 된다.
    */
   stretched: boolean;
   /**
@@ -41,11 +41,11 @@ export interface Suggestion {
    */
   clockOffsetMs: number;
   /**
-   * 지금 보여주는 길로 가면 "3분 전 도착"이 지켜지는가.
+   * 지금 보여주는 길로 가면 약속보다 먼저 닿는가.
    *
    * `stretched`와 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 **그 길로 가면
-   * 제때 닿는지**다. 후보가 전부 안 맞는 날에는 늘리는 데 성공하고도 약속을 못 지킨다.
-   * 화면은 이 값이 false면 "3분 전에 닿는 길이에요"라고 말하지 않는다.
+   * 제때 닿는지**다. 최단 경로가 늘 후보에 있으므로 늘리는 계획에서는 참이지만,
+   * 화면은 이 값이 false면 "먼저 닿는 길이에요"라고 말하지 않는다.
    */
   onTime: boolean;
 }
@@ -57,7 +57,7 @@ export interface SuggestionInput {
 }
 
 /**
- * 기기 시계는 믿지 않는다. 3분을 약속하는 앱에서 시계가 몇 분 틀어져 있으면
+ * 기기 시계는 믿지 않는다. 분 단위를 약속하는 앱에서 시계가 몇 분 틀어져 있으면
  * 그 자체로 제품이 거짓말을 하게 된다.
  *
  * 계획만 서버 시각으로 세우고 이후 화면이 기기 시계로 세면 어긋남이 그대로 돌아오므로,
@@ -108,7 +108,7 @@ export function useRouteSuggestion({
       let nowMs: number;
       try {
         const [position, clock] = await Promise.all([
-          // 이 좌표가 최단 시간의 기준점이 되고, 거기서 "3분 전 도착"이 계산된다.
+          // 이 좌표가 최단 시간의 기준점이 되고, 거기서 도착 시각이 계산된다.
           // 수백 미터 어긋나면 그만큼(도보로 몇 분) 계획이 통째로 밀린다.
           getCurrentLocation({ accuracy: Accuracy.High }),
           now(),
@@ -164,11 +164,20 @@ export function useRouteSuggestion({
 
         if (cancelled) return;
 
-        // 경유지가 하나도 안 붙는 날이 있다(전부 도로망 밖이거나 호출이 다 실패).
-        // 그때 빈 손으로 두면 걷기 화면이 좌표 없이 열려 도착을 영영 못 잡는다.
-        // 늘리진 못해도 최단 경로는 있으니, 그걸로라도 걷게 한다.
-        const usable = candidates.length > 0 ? candidates : [shortest];
-        // 물러선 사실을 화면에 알린다. 늘리지 못했는데 "3분 전에 닿는 길"이라고 하면
+        /*
+         * 최단 경로를 **항상** 후보에 넣는다.
+         *
+         * 두 가지를 한꺼번에 막는다.
+         * 1. 경유지가 하나도 안 붙는 날(전부 도로망 밖이거나 호출이 다 실패)에도
+         *    걷기 화면이 좌표 없이 열리지 않는다.
+         * 2. 늘린 후보가 전부 목표를 넘겨 버려도 **늦지 않는 길이 하나는 남는다.**
+         *    늘리는 계획이 섰다는 건 최단이 목표 안에 든다는 뜻이므로, 최단은
+         *    정의상 언제나 제때 닿는다. 이게 "늦는 길은 안 내놓는다"의 바닥이다.
+         *
+         * 점수에서 밀려 1등이 되는 일은 없다 — 목표보다 한참 짧으면 fit이 0에 가깝다.
+         */
+        const usable = [shortest, ...candidates];
+        // 물러선 사실을 화면에 알린다. 늘리지 못했는데 "골라 온 길"이라고 하면
         // 15분에서 두 시간까지 일찍 도착하는 길에 그 약속을 붙이게 된다.
         setStretched(candidates.length > 0);
 
@@ -204,16 +213,17 @@ export function useRouteSuggestion({
   const targetSec = plan != null && plan.kind !== 'too-late' ? plan.targetWalkSec : 0;
 
   /*
-   * 첫 한 장은 문턱을 넘지 못해도 보여준다.
+   * 첫 한 장은 "너무 이른 것"까지는 봐준다(`firstRoute`). 여유가 두 시간 남은 날에는
+   * 어느 후보도 목표에 못 미치는데, 그때 빈 화면을 주면 걷지도 못하고 왜 안 되는지도
+   * 모른다. 일찍 닿는 건 아쉬운 일이지 실패가 아니다.
    *
-   * 후보가 전부 안 맞는 날이 있는데, 그때 빈 화면을 주면 사용자는 걷지도 못하고
-   * 왜 안 되는지도 모른다. 대신 그 길에 약속을 얹지 않는다 — `onTime`이 false가 되고
-   * 화면과 걷는 화면이 둘 다 다른 말을 한다.
+   * **늦는 것만은 어느 쪽으로도 새지 않는다.** 두 함수 모두 목표를 넘긴 길을
+   * 돌려주지 않고, 후보에 늘 최단 경로가 있어서 돌려줄 것이 없는 경우도 없다.
    *
-   * "다른 길"은 다르다. 그건 사용자가 더 나은 걸 청한 것이므로, 더 나쁜 걸 주느니
-   * 없다고 하는 게 맞다.
+   * "다른 길"은 문턱이 하나 더 높다. 사용자가 더 나은 걸 청한 것이므로,
+   * 더 나쁜 걸 주느니 없다고 하는 게 맞다.
    */
-  const current = nextRoute(ranked, shownIds, targetSec) ?? ranked[0] ?? null;
+  const current = nextRoute(ranked, shownIds, targetSec) ?? firstRoute(ranked, targetSec) ?? null;
 
   const showAnother = useCallback(() => {
     if (current != null) {
@@ -240,6 +250,6 @@ export function useRouteSuggestion({
     retry,
     stretched,
     clockOffsetMs,
-    onTime: current != null && keepsPromise(current.candidate.durationSec, targetSec),
+    onTime: current != null && arrivesOnTime(current.candidate.durationSec, targetSec),
   };
 }
