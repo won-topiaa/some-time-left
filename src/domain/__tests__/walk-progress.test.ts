@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { pathLengthM, walkProgress } from '../geo';
+import { pathLengthM, splitPath, walkProgress } from '../geo';
+import type { LatLng } from '../types';
 
 /**
  * 이 앱이 만드는 길은 일부러 늘린 길이라 제 옆을 스치거나 왔던 길을 되짚는다.
@@ -92,5 +93,68 @@ describe('walkProgress', () => {
 
   it('빈 경로는 0으로 둔다', () => {
     expect(walkProgress([], at(0, 0))).toEqual({ remainingM: 0, alongRatio: 0 });
+  });
+});
+
+describe('splitPath', () => {
+  /** 동서로 곧은 길. 위도가 같아 구간 길이가 서로 같다. */
+  const straight: LatLng[] = [
+    { lat: 37.5, lng: 127.0 },
+    { lat: 37.5, lng: 127.01 },
+    { lat: 37.5, lng: 127.02 },
+  ];
+
+  it('점이 하나 이하면 나눌 게 없다', () => {
+    expect(splitPath([], 0.5)).toBeNull();
+    expect(splitPath([{ lat: 37.5, lng: 127 }], 0.5)).toBeNull();
+  });
+
+  it('한가운데면 가운데 점에서 갈린다', () => {
+    const split = splitPath(straight, 0.5);
+    expect(split?.at.lng).toBeCloseTo(127.01, 9);
+  });
+
+  it('0과 1은 양 끝', () => {
+    expect(splitPath(straight, 0)?.at.lng).toBeCloseTo(127.0, 9);
+    expect(splitPath(straight, 1)?.at.lng).toBeCloseTo(127.02, 9);
+  });
+
+  it('범위를 벗어난 값은 끝으로 잘린다', () => {
+    expect(splitPath(straight, -1)?.at.lng).toBeCloseTo(127.0, 9);
+    expect(splitPath(straight, 2)?.at.lng).toBeCloseTo(127.02, 9);
+  });
+
+  it('걸어온 길과 남은 길이 지금 자리에서 맞닿는다', () => {
+    const split = splitPath(straight, 0.25);
+    if (split == null) throw new Error('나뉘어야 한다');
+
+    expect(split.walked[split.walked.length - 1]).toEqual(split.at);
+    expect(split.ahead[0]).toEqual(split.at);
+  });
+
+  /*
+   * 미터로 잰다. 도 단위로 재면 남북 1도와 동서 1도를 같게 보게 되는데,
+   * 서울에서 동서 1도는 남북의 0.8배라 ㄱ자 길에서 점이 밀린다.
+   */
+  it('실제 거리로 나눈다', () => {
+    const corner: LatLng[] = [
+      { lat: 37.5, lng: 127.0 },
+      { lat: 37.51, lng: 127.0 }, // 남북 — 더 길다
+      { lat: 37.51, lng: 127.01 }, // 동서 — 더 짧다
+    ];
+    const split = splitPath(corner, 0.5);
+    if (split == null) throw new Error('나뉘어야 한다');
+
+    // 절반 지점은 아직 모서리에 못 미친다 — 첫 구간이 더 길기 때문.
+    expect(split.at.lat).toBeLessThan(37.51);
+    expect(split.at.lng).toBeCloseTo(127.0, 9);
+  });
+
+  it('길이가 없는 경로는 첫 점에 머문다', () => {
+    const same: LatLng[] = [
+      { lat: 37.5, lng: 127.0 },
+      { lat: 37.5, lng: 127.0 },
+    ];
+    expect(splitPath(same, 0.7)?.at).toEqual(same[0]);
   });
 });

@@ -171,6 +171,49 @@ export function interpolate(a: LatLng, b: LatLng, t: number): LatLng {
   return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
 }
 
+export interface PathSplit {
+  /** 걸어온 부분. 지금 자리에서 끝난다. */
+  walked: LatLng[];
+  /** 남은 부분. 지금 자리에서 시작한다. */
+  ahead: LatLng[];
+  /** 지금 있는 자리 */
+  at: LatLng;
+}
+
+/**
+ * 경로를 지금 자리에서 둘로 나눈다.
+ *
+ * `walkProgress`가 주는 비율은 **미터**로 잰 것이므로 여기서도 미터로 잰다.
+ * 화면 좌표로 나누는 `routeShape.splitAtRatio`와 짝이지만, 이쪽은 좌표계를 거치지
+ * 않는다 — 지도(MapLibre)에는 위경도를 그대로 넘기기 때문이다.
+ */
+export function splitPath(path: LatLng[], ratio: number): PathSplit | null {
+  if (path.length < 2) {
+    return null;
+  }
+
+  const steps = path.slice(1).map((point, i) => distanceM(path[i], point));
+  const total = steps.reduce((sum, step) => sum + step, 0);
+
+  if (!(total > 0)) {
+    return { walked: [path[0]], ahead: [...path], at: path[0] };
+  }
+
+  let remaining = total * Math.min(1, Math.max(0, ratio));
+
+  for (let i = 0; i < steps.length; i++) {
+    if (remaining > steps[i]) {
+      remaining -= steps[i];
+      continue;
+    }
+    const at = interpolate(path[i], path[i + 1], steps[i] === 0 ? 0 : remaining / steps[i]);
+    return { walked: [...path.slice(0, i + 1), at], ahead: [at, ...path.slice(i + 1)], at };
+  }
+
+  const last = path[path.length - 1];
+  return { walked: [...path], ahead: [last], at: last };
+}
+
 export interface SideOfLine {
   /**
    * 선분 기준 부호 있는 수직 거리 (m).

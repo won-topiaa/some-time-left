@@ -73,8 +73,28 @@ export interface ApiConfig {
    * `{z}` `{x}` `{y}`를 좌표로 바꿔 부른다. 키가 필요해지면 주소 뒤에 붙이면 된다.
    */
   mapTiles: {
+    /**
+     * 어느 방식으로 그릴 것인가.
+     *
+     * `raster` — 타일 이미지를 직접 깐다(`RouteMapRaster`). 가볍고 빠르다.
+     *            지금 쓰는 CARTO는 키 없이 받아지지만 **문서상으로는 키를 요구하고
+     *            상업적 사용에 별도 라이선스를 둔다.**
+     * `vector` — 웹뷰 안에서 MapLibre가 그린다(`RouteMapVector`). OpenFreeMap은
+     *            키도 등록도 요청 한도도 상업적 제한도 없다. 대신 웹뷰가 하나 뜨고
+     *            번들에 1MB가 붙는다.
+     *
+     * 둘 다 두는 이유: 조건은 벡터가 낫고 무게는 래스터가 낫다. 실기기에서
+     * 나란히 보고 정할 수 있어야 하고, 한쪽이 막히는 날 한 줄로 옮길 수 있어야 한다.
+     */
+    kind: 'raster' | 'vector';
+    /** 래스터용. `{z}` `{x}` `{y}`를 좌표로 바꿔 부른다. */
     urlTemplate: string;
-    /** 지도 위에 반드시 적어야 하는 출처. 제공자를 바꾸면 이것도 같이 바꾼다. */
+    /** 벡터용. MapLibre 스타일 문서 주소. */
+    vectorStyleUrl: string;
+    /**
+     * 래스터판이 화면에 적는 출처. 제공자를 바꾸면 이것도 같이 바꾼다.
+     * 벡터판은 스타일 문서가 출처를 들고 있어서 MapLibre가 알아서 적는다.
+     */
     attribution: string;
   };
   /** 브이월드 — 건물 공간 질의 (건축물대장은 좌표로 못 찾는다) */
@@ -122,8 +142,18 @@ const config: ApiConfig = {
     baseUrl: 'https://api.open-meteo.com',
   },
   mapTiles: {
+    /*
+     * 기본값은 아직 래스터다.
+     *
+     * 벡터판이 실기기에서 검증되기 전까지는 확인된 쪽을 기본으로 둔다 —
+     * 조건은 벡터가 깨끗하지만, 켜지지 않는 지도는 조건이 아무리 좋아도 지도가 아니다.
+     * 샌드박스에서 확인하면 이 한 줄을 'vector'로 바꾼다.
+     */
+    kind: 'raster',
     // `@2x`는 고해상도 타일(512px). 논리 크기보다 크게 받아 두면 확대해도 안 뭉개진다.
     urlTemplate: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+    // OpenFreeMap Positron. 키도, 등록도, 요청 한도도, 상업적 제한도 없다.
+    vectorStyleUrl: 'https://tiles.openfreemap.org/styles/positron',
     // CARTO는 자사 표기를 요구하고, 데이터 출처인 OSM은 ODbL이 요구한다. 지우지 않는다.
     attribution: '© CARTO © OpenStreetMap',
   },
