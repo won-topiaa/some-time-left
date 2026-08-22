@@ -1,3 +1,4 @@
+import { SEOUL_HOTSPOTS } from '../seoul/hotspots';
 import { describe, expect, it } from 'vitest';
 import {
   NEUTRAL_QUIET,
@@ -40,7 +41,9 @@ describe('parseProxyAreas', () => {
 
     expect(areas).toHaveLength(1);
     expect(areas[0].level).toBe('붐빔');
-    expect(areas[0].at.lat).toBeCloseTo(37.4979, 3);
+    // 좌표는 목록에서 온다. 숫자를 손으로 적어 두면 목록을 갱신하는 날 테스트만 옛말을 한다.
+    const gangnam = SEOUL_HOTSPOTS.find((h) => h.areaName === '강남역');
+    expect(areas[0].at).toEqual(gangnam?.at);
   });
 
   it('우리 좌표 목록에 없는 장소는 버린다 — 경로와 대조할 수 없다', () => {

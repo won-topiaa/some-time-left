@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONGESTION_WORD, nearestHotspot, parseProxyAreas } from '../seoul/congestion';
-import type { Hotspot } from '../seoul/hotspots';
+import { SEOUL_HOTSPOTS, type Hotspot } from '../seoul/hotspots';
 
 /** 성수카페거리(37.5445, 127.0557)와 그 이웃들. */
 const HOTSPOTS: Hotspot[] = [
@@ -66,5 +66,33 @@ describe('parseProxyAreas — 프록시 응답 읽기', () => {
       HOTSPOTS
     );
     expect(areas).toHaveLength(0);
+  });
+});
+
+describe('SEOUL_HOTSPOTS — 생성된 목록', () => {
+  it('서울시가 다루는 121곳이 전부 있다', () => {
+    expect(SEOUL_HOTSPOTS).toHaveLength(121);
+  });
+
+  it('이름이 겹치지 않고, 좌표가 전부 서울 언저리다', () => {
+    const names = new Set(SEOUL_HOTSPOTS.map((h) => h.areaName));
+    expect(names.size).toBe(SEOUL_HOTSPOTS.length);
+
+    for (const h of SEOUL_HOTSPOTS) {
+      expect(h.at.lat).toBeGreaterThan(37.3);
+      expect(h.at.lat).toBeLessThan(37.75);
+      expect(h.at.lng).toBeGreaterThan(126.7);
+      expect(h.at.lng).toBeLessThan(127.25);
+    }
+  });
+
+  /*
+   * 가운뎃점이 핵심이다. AREA_NM은 '광화문·덕수궁'처럼 U+00B7을 쓰는데,
+   * 비슷한 문자(ㆍ U+318D, • U+2022)로 잘못 들어오면 조회가 조용히 빈손이 된다.
+   */
+  it("가운뎃점은 '·'(U+00B7) 하나만 쓴다", () => {
+    for (const h of SEOUL_HOTSPOTS) {
+      expect(h.areaName).not.toMatch(/[\u318d\u2022\u30fb]/);
+    }
   });
 });

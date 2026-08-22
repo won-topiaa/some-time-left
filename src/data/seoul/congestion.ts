@@ -73,13 +73,43 @@ export function parseProxyAreas(
   });
 }
 
-/** 경로가 지나는 장소들. API가 한 번에 한 곳씩만 받으므로 먼저 추려야 한다. */
+/**
+ * 경로가 지나는 장소들. API가 한 번에 한 곳씩만 받으므로 먼저 추려야 한다.
+ *
+ * 상자 비교를 먼저 한다. 목록이 121곳으로 늘면서 경로 점 하나하나와 다 재면
+ * 수십만 번의 하버사인이 되는데, Hermes에는 JIT이 없어 그게 화면 멈춤이 된다
+ * (공원 거르기 `parksNear`와 같은 이유·같은 방법). 경로를 담는 사각형 밖의
+ * 장소는 곱셈 네 번으로 떨어져 나간다.
+ */
 export function hotspotsAlong(
   path: LatLng[],
   hotspots: Hotspot[] = SEOUL_HOTSPOTS
 ): Hotspot[] {
-  return hotspots.filter((hotspot) =>
-    path.some((point) => distanceM(point, hotspot.at) <= HOTSPOT_RADIUS_M)
+  if (path.length === 0) {
+    return [];
+  }
+
+  const latPad = HOTSPOT_RADIUS_M / 111_320;
+  const lngPad =
+    HOTSPOT_RADIUS_M / (111_320 * Math.max(0.2, Math.cos((path[0].lat * Math.PI) / 180)));
+
+  const box = path.reduce(
+    (acc, p) => ({
+      minLat: Math.min(acc.minLat, p.lat),
+      maxLat: Math.max(acc.maxLat, p.lat),
+      minLng: Math.min(acc.minLng, p.lng),
+      maxLng: Math.max(acc.maxLng, p.lng),
+    }),
+    { minLat: Infinity, maxLat: -Infinity, minLng: Infinity, maxLng: -Infinity }
+  );
+
+  return hotspots.filter(
+    (hotspot) =>
+      hotspot.at.lat >= box.minLat - latPad &&
+      hotspot.at.lat <= box.maxLat + latPad &&
+      hotspot.at.lng >= box.minLng - lngPad &&
+      hotspot.at.lng <= box.maxLng + lngPad &&
+      path.some((point) => distanceM(point, hotspot.at) <= HOTSPOT_RADIUS_M)
   );
 }
 
