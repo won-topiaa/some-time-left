@@ -118,6 +118,23 @@ function Home() {
   const canProceed = trip.destination != null && arriveAtMs != null;
 
   /**
+   * 다음 버튼이 왜 안 눌리는지.
+   *
+   * 없으면 화면이 조용히 죽은 버튼만 보여준다 — 목적지를 적기만 하고 **결과를
+   * 안 골랐거나**, 시각이 안 읽히는 값(둘 중 하나가 비었거나 분이 60 이상)일 때가
+   * 그렇다. 사용자는 무엇이 모자란지 알 방법이 없다. 모르는 채로 두지 않는다.
+   *
+   * 아직 아무것도 안 한 사람에게는 말하지 않는다. 시작하자마자 부족하다고
+   * 말하는 화면은 재촉이 된다.
+   */
+  const touched = query.trim() !== '' || hourText !== '' || minuteText !== '';
+  const missing = canProceed || !touched
+    ? null
+    : trip.destination == null
+      ? '검색 결과에서 장소를 한 번 골라주세요.'
+      : '몇 시 몇 분인지 채워주세요.';
+
+  /**
    * 시를 두 자리까지 적었으면 분으로 넘겨준다.
    * 한 손으로 적는 화면이라 칸을 손가락으로 옮기게 하지 않는다.
    */
@@ -295,6 +312,8 @@ function Home() {
           <Text style={[styles.ctaText, !canProceed && styles.ctaTextOff]}>다음</Text>
         </Pressable>
 
+        {missing != null && <Text style={styles.missing}>{missing}</Text>}
+
         {/*
           지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 가장 옅게.
           다만 얼마나 쌓였는지는 여기서 보인다 — 걷고 돌아올 때마다 이 숫자가 늘고,
@@ -315,6 +334,13 @@ function Home() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+  // 죽은 버튼 밑에 이유 한 줄. 재촉이 아니라 안내라서 가장 옅게 둔다.
+  missing: {
+    ...type.caption,
+    color: colors.inkFaint,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
   content: { paddingBottom: spacing.lg },
   header: { marginBottom: spacing.xl },
   weather: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.sm },

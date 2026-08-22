@@ -182,8 +182,23 @@ export function resolveAppointment(input: ClockInput, nowMs: number): number | n
   if (!Number.isInteger(hour12) || !Number.isInteger(minute)) {
     return null;
   }
-  if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) {
+  if (hour12 < 0 || hour12 > 23 || minute < 0 || minute > 59) {
     return null;
+  }
+
+  /*
+   * 24시간으로 적는 사람을 받아준다.
+   *
+   * 오후 6시 반 약속에 "18:30"을 적는 건 아주 흔한 일인데, 1~12만 받던 때는
+   * 그게 조용히 null이 되어 **다음 버튼이 이유 없이 죽었다.** 화면에는 아무 말도
+   * 안 나오니 사용자는 무엇이 잘못됐는지 알 방법이 없었다.
+   *
+   * 0시와 13~23시는 오전/오후가 이미 정해진 값이라 토글보다 이쪽이 이긴다 —
+   * "18시"라고 적어 놓고 오전을 골랐다면 적은 쪽이 뜻이 분명하다.
+   */
+  if (hour12 === 0 || hour12 > 12) {
+    const at = atKstClock(nowMs, hour12, minute);
+    return at > nowMs ? at : at + DAY_MS;
   }
 
   const base = hour12 % 12;

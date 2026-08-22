@@ -175,10 +175,42 @@ describe('resolveAppointment — 사람이 적은 시각', () => {
     expect(at).toBe(kst(2026, 8, 21, 15, 0));
   });
 
+  /*
+   * 오후 6시 반 약속에 "18:30"을 적는 건 아주 흔한 일이다.
+   * 1~12만 받던 때는 그게 조용히 null이 되어 다음 버튼이 이유 없이 죽었다.
+   */
+  it('24시간으로 적어도 받는다', () => {
+    expect(resolveAppointment({ hour12: 18, minute: 30, period: null }, AT_3PM)).toBe(
+      kst(2026, 8, 20, 18, 30)
+    );
+    expect(resolveAppointment({ hour12: 23, minute: 5, period: null }, AT_3PM)).toBe(
+      kst(2026, 8, 20, 23, 5)
+    );
+  });
+
+  it('0시는 자정으로 읽는다', () => {
+    expect(resolveAppointment({ hour12: 0, minute: 10, period: null }, AT_3PM)).toBe(
+      kst(2026, 8, 21, 0, 10)
+    );
+  });
+
+  it('24시간으로 적었으면 오전/오후 토글보다 적은 쪽이 이긴다', () => {
+    // "18시"라고 적어 놓고 오전을 골랐다면 적은 쪽이 뜻이 분명하다.
+    expect(resolveAppointment({ hour12: 18, minute: 0, period: 'am' }, AT_3PM)).toBe(
+      kst(2026, 8, 20, 18, 0)
+    );
+  });
+
+  it('24시간으로 적어도 지난 시각은 내일로 넘긴다', () => {
+    expect(resolveAppointment({ hour12: 14, minute: 0, period: null }, AT_3PM)).toBe(
+      kst(2026, 8, 21, 14, 0)
+    );
+  });
+
   it('범위를 벗어나면 null', () => {
     for (const bad of [
-      { hour12: 0, minute: 0 },
-      { hour12: 13, minute: 0 },
+      { hour12: 24, minute: 0 },
+      { hour12: -1, minute: 0 },
       { hour12: 6, minute: 60 },
       { hour12: 6, minute: -1 },
       { hour12: 6.5, minute: 0 },
