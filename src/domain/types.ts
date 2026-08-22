@@ -90,6 +90,14 @@ export interface WalkRecord {
   arrivedAt: number;
   destinationName: string;
   /**
+   * 목적지 좌표.
+   *
+   * 첫 화면이 "최근에 간 곳"을 한 번 눌러 다시 고르게 하려면 이름만으로는
+   * 부족하다 — 좌표가 없으면 검색을 다시 시켜야 하고, 그러면 눌러서 얻는 게 없다.
+   * 이 값이 없는 옛 기록은 그 칩에서 빠질 뿐 나머지는 그대로 쓰인다.
+   */
+  destination?: LatLng;
+  /**
    * 걸은 길의 좌표.
    *
    * 저장할 때 성기게 솎는다(`compactPath`). 이 좌표가 하는 일은 두 가지 —

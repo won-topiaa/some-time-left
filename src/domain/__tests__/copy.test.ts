@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { alongRouteHint, arrivalPrompt, memoryRecall, planHeadline, routeReason } from '../copy';
+import {
+  alongRouteHint,
+  arrivalPrompt,
+  memoryRecall,
+  planHeadline,
+  routeReason,
+  walkShareText,
+} from '../copy';
 import { MOODS, dominantFeature, weightsFor } from '../mood';
 import { FEATURE_KEYS } from '../types';
 import { ARRIVE_EARLY_MIN } from '../time';
@@ -126,6 +133,46 @@ describe('dominantFeature — 모르는 걸 이유로 대지 않는다', () => {
   it('여섯 기분 모두 이유를 하나씩 낸다', () => {
     for (const mood of MOODS) {
       expect(FEATURE_KEYS).toContain(dominantFeature(unknown, weightsFor(mood.id)));
+    }
+  });
+});
+
+describe('walkShareText — 남에게 보내는 한 덩어리', () => {
+  const base = {
+    destinationName: '성수역 3번 출구',
+    companion: '',
+    mood: 'pensive' as const,
+    note: '',
+  };
+
+  it('어디까지 얼마나 걸었는지 말한다', () => {
+    const text = walkShareText(base, 2430);
+    expect(text).toContain('성수역 3번 출구');
+    expect(text).toContain('2.43km');
+  });
+
+  it('만난 사람이 있으면 그 사람이 먼저 온다', () => {
+    expect(walkShareText({ ...base, companion: '지수' }, 1000)).toContain('지수 만나러');
+  });
+
+  /* 남긴 한 줄이 있으면 그게 주인공이다 — 화면에서 그랬던 것과 같다. */
+  it('남긴 한 줄을 그대로 싣는다', () => {
+    const text = walkShareText({ ...base, note: '바람이 좋았다' }, 1000);
+    expect(text).toContain('"바람이 좋았다"');
+  });
+
+  it('한 줄이 없으면 빈 따옴표를 넣지 않는다', () => {
+    expect(walkShareText(base, 1000)).not.toContain('""');
+  });
+
+  it('목적지 이름이 없어도 문장이 된다', () => {
+    expect(walkShareText({ ...base, destinationName: '' }, 1000)).toContain('어딘가까지');
+  });
+
+  it('어느 기분이든 끝에 그날의 기분이 붙는다', () => {
+    for (const mood of MOODS) {
+      const text = walkShareText({ ...base, mood: mood.id }, 1000);
+      expect(text).toContain(mood.label);
     }
   });
 });

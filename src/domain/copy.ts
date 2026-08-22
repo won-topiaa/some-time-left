@@ -7,7 +7,7 @@
 
 import { moodById } from './mood';
 import { ARRIVE_EARLY_MIN, formatDuration } from './time';
-import type { FeatureKey, MoodId } from './types';
+import type { FeatureKey, MoodId, WalkRecord } from './types';
 import type { WalkPlan } from './time';
 
 /**
@@ -98,4 +98,35 @@ export function memoryRecall(note: string, daysAgo: number): string {
  */
 export function alongRouteHint(name: string): string {
   return `가는 길에 ${name}, 잠깐 들러도 좋고요`;
+}
+
+/**
+ * 걸은 길 한 번을 남에게 보내는 문장.
+ *
+ * 이미지가 아니라 글이다. 토스가 주는 공유는 텍스트 한 덩어리라(`share({ message })`),
+ * 그릇에 맞는 것을 담는다 — 리본을 그려 이미지로 만들려면 화면을 캡처하는 별도
+ * 장치가 필요하고, 그건 이 기능이 주는 값보다 훨씬 무겁다.
+ *
+ * 자랑이 아니라 기록의 말투를 지킨다. 숫자를 앞세우지 않고, 남긴 한 줄이 있으면
+ * 그게 주인공이 된다 — 화면에서 그랬던 것과 같다.
+ */
+export function walkShareText(
+  record: Pick<WalkRecord, 'destinationName' | 'companion' | 'mood' | 'note'>,
+  distanceM: number
+): string {
+  const where = record.destinationName.trim() !== '' ? record.destinationName : '어딘가';
+  const km = (distanceM / 1000).toFixed(2);
+
+  const lines = [
+    record.companion.trim() !== ''
+      ? `${record.companion} 만나러 ${where}까지, ${km}km 걸었어요.`
+      : `${where}까지 ${km}km 걸었어요.`,
+  ];
+
+  if (record.note.trim() !== '') {
+    lines.push('', `"${record.note.trim()}"`);
+  }
+
+  lines.push('', `— 자투리 시간 · ${moodById(record.mood).label} 걸었던 날`);
+  return lines.join('\n');
 }

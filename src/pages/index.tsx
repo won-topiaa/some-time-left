@@ -8,7 +8,13 @@ import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
 import { useWeather } from '../state/useWeather';
 import { ARRIVE_EARLY_MIN, dayLabel, formatClock, resolveAppointment } from '../domain/time';
-import { NO_CARRIED, loadCarried, loadRecords } from '../data/records';
+import {
+  NO_CARRIED,
+  loadCarried,
+  loadRecords,
+  recentPlaces,
+  type RecentPlace,
+} from '../data/records';
 import { formatTotalDistance, traceSummary } from '../domain/trace';
 import type { Place } from '../data/places';
 
@@ -50,6 +56,8 @@ function Home() {
   const weather = useWeather();
   // 지금까지 걸은 거리. 없으면 null이라 아무것도 덧붙이지 않는다.
   const [walkedKm, setWalkedKm] = useState<string | null>(null);
+  /** 최근에 간 곳. 좌표가 남아 있는 기록에서만 온다. */
+  const [recent, setRecent] = useState<RecentPlace[]>([]);
 
   /**
    * 쌓인 걸 첫 화면에서도 보이게 한다.
@@ -59,6 +67,12 @@ function Home() {
    * 숫자를 그 문에 얹으면 주인공을 뺏지 않으면서 쌓인 게 보인다.
    * 걷고 돌아올 때마다 늘어나야 하므로 화면이 다시 보일 때 함께 새로 읽는다.
    */
+  const refreshRecent = useCallback(() => {
+    recentPlaces()
+      .then(setRecent)
+      .catch(() => setRecent([]));
+  }, []);
+
   const refreshWalked = useCallback(() => {
     Promise.all([loadRecords().catch(() => []), loadCarried().catch(() => NO_CARRIED)])
       .then(([records, carried]) => {
@@ -86,14 +100,16 @@ function Home() {
 
   // 첫 진입에도 한 번 읽는다 — 'focus'는 이미 보이고 있는 첫 화면에는 안 올 수 있다.
   useEffect(refreshWalked, [refreshWalked]);
+  useEffect(refreshRecent, [refreshRecent]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       refreshNow();
       refreshWalked();
+      refreshRecent();
     });
     return unsubscribe;
-  }, [navigation, refreshNow, refreshWalked]);
+  }, [navigation, refreshNow, refreshWalked, refreshRecent]);
 
   /**
    * 적은 시각을 실제 시각으로. 못 읽으면 null이고, 그때는 다음 버튼이 잠긴다.
@@ -227,6 +243,29 @@ function Home() {
             {!searching && results.length === 0 && query.trim().length >= 2 && (
               <Text style={styles.searching}>찾는 곳이 없어요. 다르게 적어 볼까요?</Text>
             )}
+
+            {/*
+              최근에 간 곳.
+
+              매주 같은 곳에서 만나는 사람이 매번 같은 이름을 검색하는 건 이 앱이
+              없애기로 한 종류의 수고다. 적기 시작하면 감춘다 — 검색 결과와
+              나란히 두면 무엇을 고르는 자리인지 흐려진다.
+            */}
+            {recent.length > 0 && query.trim() === '' && (
+              <View style={styles.recent}>
+                {recent.map((place) => (
+                  <Pressable
+                    key={place.name}
+                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                    onPress={() => update({ destinationName: place.name, destination: place.at })}
+                  >
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      {place.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </>
         )}
 
@@ -337,6 +376,20 @@ function Home() {
 const createStyles = (colors: Palette, type: TypeScale) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+    /*
+      최근에 간 곳. 칩은 이 앱에서 유일하게 테두리로 자기를 알리는 요소라,
+      면을 칠하지 않는다는 원칙을 여기서도 지킨다.
+    */
+    recent: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+    chip: {
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.line,
+      maxWidth: '100%',
+    },
+    chipText: { ...type.caption, color: colors.inkSoft },
     // 죽은 버튼 밑에 이유 한 줄. 재촉이 아니라 안내라서 가장 옅게 둔다.
     missing: {
       ...type.caption,

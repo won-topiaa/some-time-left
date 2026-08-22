@@ -9,6 +9,7 @@ import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useThem
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RouteGlyph } from '../ui/RoutePreview';
+import { openRecord } from './record';
 import type { WalkRecord } from '../domain/types';
 
 export const Route = createRoute('/trace', {
@@ -143,7 +144,20 @@ function Trace() {
           {month.records.map((record) => {
             const tint = moodTint(record.mood, scheme);
             return (
-              <View key={record.id} style={styles.row}>
+              /*
+                눌러서 그날을 다시 본다.
+
+                리본은 무늬라 한눈에 모아 보기엔 좋지만 그날 어디를 걸었는지는
+                말해주지 않는다. 누르면 같은 길이 실제 지도 위에 다시 깔린다.
+              */
+              <Pressable
+                key={record.id}
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                onPress={() => {
+                  openRecord(record.id);
+                  navigation.navigate('/record');
+                }}
+              >
                 <RouteGlyph path={record.path} tint={tint} />
 
                 <View style={styles.rowBody}>
@@ -160,7 +174,7 @@ function Trace() {
                     <Text style={styles.rowNote}>{record.note}</Text>
                   )}
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </View>

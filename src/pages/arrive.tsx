@@ -5,7 +5,9 @@ import { useScreenInsets } from '../ui/screenInsets';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../domain/copy';
 import { saveRecord } from '../data/records';
+import { share } from '@apps-in-toss/framework';
 import { CONGESTION_WORD } from '../data/seoul/congestion';
+import { walkShareText } from '../domain/copy';
 import {
   lookupDestinationCongestion,
   type DestinationCongestion,
@@ -76,6 +78,20 @@ function Arrive() {
     return Math.max(0, Math.round((trip.arriveAtMs - nowMs) / 1000));
   }, [trip.arriveAtMs, nowMs]);
 
+  /** 방금 걸은 길을 남에게 보내는 문장. 재료가 없으면 버튼도 없다. */
+  const shareMessage =
+    trip.route != null && trip.mood != null
+      ? walkShareText(
+          {
+            destinationName: trip.destinationName,
+            companion: trip.companion,
+            mood: trip.mood,
+            note: note.trim(),
+          },
+          trip.walkedDistanceM ?? trip.route.candidate.distanceM
+        )
+      : null;
+
   const mm = Math.floor(leftSec / 60);
   const ss = String(leftSec % 60).padStart(2, '0');
 
@@ -105,6 +121,8 @@ function Arrive() {
         note: note.trim(),
         arrivedAt: now,
         destinationName: trip.destinationName,
+        // 좌표까지 남긴다. 첫 화면이 "최근에 간 곳"으로 다시 고르게 하려면 필요하다.
+        ...(trip.destination != null ? { destination: trip.destination } : {}),
         // 실제로 걸은 만큼만. 중간에 끝냈다면 나머지는 걷지 않은 길이다.
         path: trip.walkedPath ?? trip.route.candidate.path,
         routeId: trip.route.candidate.id,
@@ -210,6 +228,25 @@ function Arrive() {
         <Text style={styles.saveFailed}>기록을 저장하지 못했어요. 한 번만 다시 눌러주세요.</Text>
       )}
 
+      {/*
+        방금 걸은 길을 보낸다.
+
+        닫기 버튼 위에 둔다 — 공유가 이 화면의 목적이 아니기 때문이다. 한 줄을 적는
+        것이 주인공이고, 이건 적고 나서 마음이 동하면 누르는 자리다.
+      */}
+      {shareMessage != null && (
+        <Pressable
+          style={({ pressed }) => [styles.share, pressed && styles.pressed]}
+          onPress={() => {
+            // 실패해도 아무 말 안 한다. 공유 시트를 닫은 것도 실패로 오므로,
+            // 여기서 오류를 띄우면 취소한 사람에게 사과하게 된다.
+            share({ message: shareMessage }).catch(() => {});
+          }}
+        >
+          <Text style={styles.shareText}>이 길 공유하기</Text>
+        </Pressable>
+      )}
+
       <Pressable
         style={({ pressed }) => [
           styles.cta,
@@ -230,6 +267,8 @@ function Arrive() {
 const createStyles = (colors: Palette, type: TypeScale) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+    share: { paddingVertical: spacing.md, alignItems: 'center' },
+    shareText: { ...type.caption, color: colors.inkSoft, textDecorationLine: 'underline' },
     // 실패는 조용히 말하되 보이게. 이 앱에서 붉은색을 쓰는 유일한 자리가 아니도록 잉크로.
     saveFailed: { ...type.caption, color: colors.inkSoft, textAlign: 'center', marginBottom: spacing.sm },
     content: { paddingBottom: spacing.lg },

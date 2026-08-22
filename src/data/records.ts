@@ -8,7 +8,7 @@
 import { Storage } from '@apps-in-toss/framework';
 import { compactPath, pathLengthM } from '../domain/geo';
 import { NO_CARRIED, addToCarried, type CarriedTotals } from '../domain/trace';
-import type { WalkRecord } from '../domain/types';
+import type { LatLng, WalkRecord } from '../domain/types';
 
 export { NO_CARRIED, type CarriedTotals };
 
@@ -129,3 +129,40 @@ export async function loadCarried(): Promise<CarriedTotals> {
 }
 
 
+
+/** 첫 화면에 띄울 최근 목적지의 최대 개수. 세 개가 넘으면 검색보다 고르는 게 더 일이 된다. */
+const RECENT_PLACES = 3;
+
+export interface RecentPlace {
+  name: string;
+  at: LatLng;
+}
+
+/**
+ * 최근에 간 곳.
+ *
+ * 매주 같은 곳에서 만나는 사람이 매번 같은 이름을 검색하는 건 이 앱이 없애기로 한
+ * 종류의 수고다. 좌표가 남아 있는 기록만 쓴다 — 이름만으로는 다시 검색을 시켜야 해서
+ * 눌러도 얻는 게 없다(옛 기록에는 좌표가 없다).
+ *
+ * 같은 곳은 한 번만. 이름이 같으면 같은 곳으로 본다.
+ */
+export async function recentPlaces(): Promise<RecentPlace[]> {
+  const records = await loadRecords();
+  const seen = new Set<string>();
+  const places: RecentPlace[] = [];
+
+  for (const record of records) {
+    const name = record.destinationName.trim();
+    if (name === '' || record.destination == null || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    places.push({ name, at: record.destination });
+    if (places.length === RECENT_PLACES) {
+      break;
+    }
+  }
+
+  return places;
+}
