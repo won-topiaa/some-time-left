@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { weightsFor } from '../mood';
 import { arrivesOnTime, durationFit, firstRoute, keepsPromise, nextRoute, rankRoutes } from '../route-plan';
+import { ARRIVE_EARLY_SEC, PROMISE_FLOOR_SEC } from '../time';
 import type { RouteCandidate, RouteFeatures } from '../types';
 
 const MIN = 60;
@@ -162,9 +163,10 @@ describe('nextRoute', () => {
     expect(nextRoute(ranked, ['a'], target)).toBeNull();
   });
 
-  /* 한 뼘도 봐주지 않는다. 1초를 봐주기 시작하면 봐주지 않을 이유가 사라진다. */
-  it('1초를 넘겨도 내놓지 않는다', () => {
-    const ranked = rankRoutes([candidate('a', target), candidate('over', target + 1)], {
+  /* 바닥(3분 전)을 넘기면 약속에 늦는다. 거기서부터는 봐주지 않는다. */
+  it('바닥을 넘기는 길은 내놓지 않는다', () => {
+    const over = target + (ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC) + 1;
+    const ranked = rankRoutes([candidate('a', target), candidate('over', over)], {
       targetSec: target,
       weights: weightsFor('plain'),
     });
@@ -228,13 +230,24 @@ describe('firstRoute', () => {
 
 describe('arrivesOnTime', () => {
   const target = 27 * MIN;
+  /** 목표(5분 전)와 바닥(3분 전)의 차이. 이만큼은 넘겨도 약속 전에 닿는다. */
+  const SLACK = ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC;
 
   it('목표에 딱 맞으면 제때다', () => {
     expect(arrivesOnTime(target, target)).toBe(true);
   });
 
-  it('1초라도 넘기면 아니다', () => {
-    expect(arrivesOnTime(target + 1, target)).toBe(false);
+  /*
+   * 폭이 0이었을 때 후보가 거의 전멸했다 — 경유지를 흩뿌려 만든 길들은 목표
+   * 언저리로 흩어지는데 1초만 넘겨도 버리니 남는 게 없었고, 기분을 무엇으로
+   * 골라도 늘 최단 경로 하나만 나왔다.
+   */
+  it('바닥까지는 받는다', () => {
+    expect(arrivesOnTime(target + SLACK, target)).toBe(true);
+  });
+
+  it('바닥을 넘기면 안 받는다 — 그 너머는 약속에 늦는다', () => {
+    expect(arrivesOnTime(target + SLACK + 1, target)).toBe(false);
   });
 
   it('짧은 건 얼마든 제때다', () => {
@@ -249,8 +262,8 @@ describe('keepsPromise', () => {
     expect(keepsPromise(target, target)).toBe(true);
   });
 
-  it('목표를 넘기면 지키지 못한다', () => {
-    expect(keepsPromise(target + 1, target)).toBe(false);
+  it('바닥을 넘기면 지키지 못한다', () => {
+    expect(keepsPromise(target + (ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC) + 1, target)).toBe(false);
   });
 
   it('5분까지 이른 건 받고, 그 너머는 안 받는다', () => {
@@ -258,10 +271,10 @@ describe('keepsPromise', () => {
     expect(keepsPromise(target - 5 * MIN - 1, target)).toBe(false);
   });
 
-  /* 늦는 쪽이 이른 쪽보다 훨씬 좁아야 한다. 늦으면 약속이 깨지고, 이르면 아깝기만 하다. */
+  /* 늦는 쪽이 이른 쪽보다 좁아야 한다. 늦으면 약속이 깨지고, 이르면 아깝기만 하다. */
   it('늦는 쪽에 더 가혹하다', () => {
-    expect(keepsPromise(target + 1 * MIN, target)).toBe(false);
-    expect(keepsPromise(target - 3 * MIN, target)).toBe(true);
+    expect(keepsPromise(target + 5 * MIN, target)).toBe(false);
+    expect(keepsPromise(target - 5 * MIN, target)).toBe(true);
   });
 });
 

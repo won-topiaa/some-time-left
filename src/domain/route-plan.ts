@@ -9,6 +9,7 @@
  */
 
 import { dominantFeature, scoreFeatures, type FeatureWeights } from './mood';
+import { ARRIVE_EARLY_SEC, PROMISE_FLOOR_SEC } from './time';
 import type { RouteCandidate, ScoredRoute } from './types';
 
 /** 늦는 쪽 오차의 허용 폭 (초). 좁을수록 지각에 가혹해진다. */
@@ -40,15 +41,23 @@ export interface RankOptions {
 const REPEAT_PENALTY = 0.85;
 
 /**
- * 목표보다 오래 걸리는 길은 **내놓지 않는다.** 한 뼘도 봐주지 않는다.
+ * 목표를 넘겨도 받아 주는 폭 (초). 목표는 5분 전, 바닥은 3분 전이므로 그 차이다.
  *
- * 목표(`targetWalkSec`)는 이미 약속보다 `ARRIVE_EARLY_SEC`(5분) 앞에 닿도록
- * 잡아 둔 값이다. 여기서 조금씩 넘겨 주기 시작하면 그 5분이 바로 그 자리에서
- * 녹는다 — 실제로 걷는 사람에게는 신호 대기와 도로망 오차가 그 위에 또 얹힌다.
- * 여유를 주는 자리는 여기가 아니라 5분이라는 숫자 자체다.
+ * 이 폭이 0이었을 때 후보가 거의 전멸했다 — 경유지를 흩뿌려 만든 길들은 목표
+ * 언저리로 흩어지는데, 1초만 넘겨도 버리니 남는 게 없었다. 기분을 무엇으로 골라도
+ * 늘 같은 길(최단 경로)만 나왔다.
+ */
+const LATE_SLACK_SEC = ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC;
+
+/**
+ * 이 길로 가도 **약속 전에 닿는가.**
+ *
+ * 목표(`targetWalkSec`)는 약속보다 5분 앞에 닿도록 잡은 값이고, 여기서 최대
+ * `LATE_SLACK_SEC`까지는 받는다 — 그래도 3분 전에는 닿는다. 그 너머는 안 받는다.
+ * 이 함수가 이 앱의 유일한 약속이다.
  */
 export function arrivesOnTime(durationSec: number, targetSec: number): boolean {
-  return durationSec <= targetSec;
+  return durationSec <= targetSec + LATE_SLACK_SEC;
 }
 
 /**

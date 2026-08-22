@@ -24,6 +24,27 @@ import { DEFAULT_WALK_SPEED_MPS } from '../domain/pace';
 /** 보정 재시도를 할지 판단하는 기준 — 목표 대비 이만큼 어긋나면 (초). */
 const REFINE_THRESHOLD_SEC = 120;
 
+/**
+ * 목표보다 이만큼 **밑을 겨눈다** (0~1 비율).
+ *
+ * 정확히 목표를 겨누면 만들어진 길들이 목표 위아래로 흩어지고, 위로 벗어난 절반은
+ * 문턱에서 버려진다. 게다가 한쪽으로 쏠린다 — 경유지는 우리가 잡은 보행 속도로
+ * 거리를 환산해 찍는데, 도보 API가 알려주는 소요 시간은 대체로 그보다 길게 나온다.
+ * 그래서 겨눈 자리보다 위로 몰린다.
+ *
+ * 조금 밑을 겨누면 흩어진 것들이 목표 아래에 놓인다. 일찍 닿는 건 아쉬운 일이지만
+ * 늦는 건 실패라, 어느 쪽으로 치우칠지는 고민할 것이 없다.
+ */
+const AIM_UNDER_RATIO = 0.05;
+
+/** 짧은 길에서도 겨냥이 의미를 갖도록 하는 최소 폭 (초). */
+const AIM_UNDER_MIN_SEC = 45;
+
+/** 후보를 만들 때 실제로 겨누는 시간. */
+export function aimSec(targetSec: number): number {
+  return Math.max(0, targetSec - Math.max(AIM_UNDER_MIN_SEC, targetSec * AIM_UNDER_RATIO));
+}
+
 /** 한 번에 띄우는 후보 개수. TMAP 호출 수와 직결되므로 과하게 늘리지 않는다. */
 const CANDIDATE_COUNT = 6;
 
@@ -76,11 +97,14 @@ export class TmapRouteProvider implements RouteProvider {
     departAtMs,
     previousPaths = [],
   }: RouteRequest): Promise<RouteCandidate[]> {
+    // 목표가 아니라 그 조금 밑을 겨눈다. 흩어진 것들이 목표 위로 넘어가지 않도록.
+    const aim = aimSec(targetSec);
+
     const build = (scale: number) =>
       this.fetchRound({
         origin,
         destination,
-        targetSec,
+        targetSec: aim,
         departAtMs,
         previousPaths,
         scale,
@@ -89,12 +113,12 @@ export class TmapRouteProvider implements RouteProvider {
     const first = await build(1);
 
     // 도로망은 직선이 아니라서 첫 추정은 빗나가는 게 정상이다.
-    const best = closestTo(first, targetSec);
-    if (best == null || Math.abs(best.durationSec - targetSec) <= REFINE_THRESHOLD_SEC) {
+    const best = closestTo(first, aim);
+    if (best == null || Math.abs(best.durationSec - aim) <= REFINE_THRESHOLD_SEC) {
       return first;
     }
 
-    const second = await build(refineScale(best.durationSec, targetSec, 1)).catch(
+    const second = await build(refineScale(best.durationSec, aim, 1)).catch(
       () => [] as RouteCandidate[]
     );
 
