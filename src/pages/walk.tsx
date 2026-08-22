@@ -39,6 +39,15 @@ function Walk() {
   const screen = useScreenInsets();
   const [remainingM, setRemainingM] = useState<number | null>(null);
   /**
+   * 마지막으로 위치가 **실제로 들어온** 시각 (기기 시계).
+   *
+   * onError만 믿으면 안 된다 — 지하도나 실내에 들어가면 오류 없이 그냥
+   * 측정이 끊긴다. 그때 남은 거리는 마지막 값에 얼어 있는데 남은 시간은 계속
+   * 줄어드니, 계획대로 걷는 사람에게 "서둘러야 해요"라고 재촉하게 된다.
+   * 측정 시각과 비교해 오래 조용하면 모르는 상태로 물러선다.
+   */
+  const lastFixAtMs = useRef<number | null>(null);
+  /**
    * 경로 위 진행 비율 (0~1). `progress` ref와 같은 값을 화면용으로 들고 있는다.
    *
    * ref만으로는 리본이 다시 그려지지 않는다 — 걷는 화면의 그림이 멈춰 있으면
@@ -161,6 +170,7 @@ function Walk() {
         previous.current = { at, ms };
 
         setLocationLost(false);
+        lastFixAtMs.current = Date.now();
         const walked = walkProgress(path, at, {
           since: progress.current,
           // 길이 굽어 있으므로 직선 거리보다 조금 더 갔을 수 있다. 여유를 둔다.
@@ -242,8 +252,11 @@ function Walk() {
 
   // 위치를 못 잡고 있으면 페이스는 추측일 뿐이다. 추측으로 재촉하지 않는다.
   // 첫 측정을 기다리는 정상 구간은 지나 보내고, 그 뒤로도 없으면 그렇다고 말한다.
+  // 한 번 잡혔더라도 오래 조용하면(지하도·실내) 같은 이유로 모른다고 말한다.
   const blind =
-    locationLost || (remainingM == null && nowMs - startedAtMs > LOCATION_GRACE_MS);
+    locationLost ||
+    (remainingM == null && nowMs - startedAtMs > LOCATION_GRACE_MS) ||
+    (lastFixAtMs.current != null && Date.now() - lastFixAtMs.current > LOCATION_GRACE_MS);
 
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>

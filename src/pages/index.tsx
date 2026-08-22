@@ -151,7 +151,6 @@ function Home() {
     update({
       destinationName: place.name,
       destination: place.at,
-      destinationPoiId: place.poiId ?? null,
     });
     setQuery('');
   };
@@ -178,7 +177,7 @@ function Home() {
           <Pressable
             style={({ pressed }) => [styles.picked, pressed && styles.pressed]}
             onPress={() =>
-              update({ destinationName: '', destination: null, destinationPoiId: null })
+              update({ destinationName: '', destination: null })
             }
           >
             <Text style={styles.pickedName}>{trip.destinationName}</Text>

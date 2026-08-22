@@ -23,6 +23,18 @@ function RouteScreen() {
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
+  /**
+   * 도착 시각 표시용 '지금'.
+   *
+   * 렌더 시점의 Date.now()를 그대로 쓰면 이 화면에서 고민하는 동안 숫자가
+   * 멈춰 있다 — 6분을 고민하면 도착 시각이 6분 낙관이 되고, 걷기 화면이
+   * 다시 잰 값과 어긋난다. 분 단위 표시라 30초면 충분히 자주다.
+   */
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   const {
     loading,
     error,
@@ -187,7 +199,7 @@ function RouteScreen() {
               */}
               <Text style={styles.arrival}>
                 {formatClock(
-                  arrivalAt(Date.now() + clockOffsetMs, route.candidate.durationSec)
+                  arrivalAt(nowMs + clockOffsetMs, route.candidate.durationSec)
                 )}{' '}
                 도착
               </Text>

@@ -60,10 +60,28 @@ export function configFromEnv(env: Record<string, string | undefined>): ProxyCon
     seoulBaseUrl: env.SEOUL_BASE_URL ?? 'http://openapi.seoul.go.kr:8088',
     seoulKey: key,
     authToken: token,
-    cacheTtlMs: Number(env.CACHE_TTL_MS ?? 5 * 60 * 1000),
-    timeoutMs: Number(env.UPSTREAM_TIMEOUT_MS ?? 6000),
-    maxAreasPerRequest: Number(env.MAX_AREAS ?? 12),
+    cacheTtlMs: numberEnv('CACHE_TTL_MS', env.CACHE_TTL_MS, 5 * 60 * 1000),
+    timeoutMs: numberEnv('UPSTREAM_TIMEOUT_MS', env.UPSTREAM_TIMEOUT_MS, 6000),
+    maxAreasPerRequest: numberEnv('MAX_AREAS', env.MAX_AREAS, 12),
   };
+}
+
+/**
+ * 숫자 환경변수. **읽을 수 없으면 시작에서 멈춘다.**
+ *
+ * Number()만 쓰면 "5m" 같은 값이 NaN으로 통과해서 셋 다 조용히 망가진다 —
+ * 캐시는 영영 안 만료되고(NaN 비교는 늘 false), 타임아웃은 즉시 발화하고,
+ * 장소 수 제한은 매 요청을 400으로 만든다. 키 검증처럼 여기서도 소리 내어 죽는다.
+ */
+function numberEnv(name: string, raw: string | undefined, fallback: number): number {
+  if (raw == null || raw === '') {
+    return fallback;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name}는 양수여야 합니다. 지금 값: "${raw}" (예: ${fallback})`);
+  }
+  return value;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -73,13 +91,32 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * 시간이 일정한 문자열 비교.
+ *
+ * ===는 첫 불일치에서 끝나서, 응답 시간을 재면 토큰을 앞에서부터 맞혀 갈 수 있다.
+ * 네트워크 흔들림 때문에 실제로 해내긴 어렵지만, 이 프록시의 존재 이유가 서울
+ * 인증키 할당량을 지키는 것이라 문 앞 비교만큼은 제대로 둔다.
+ * 길이가 달라도 같은 시간을 쓰도록 자기 자신과 비교해 시간을 채운다.
+ */
+export function constantTimeEqual(a: string, b: string): boolean {
+  const sameLength = a.length === b.length;
+  const other = sameLength ? b : a;
+
+  let diff = sameLength ? 0 : 1;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ other.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 /** 토큰이 설정돼 있으면 맞는지 본다. 열린 릴레이가 되지 않도록. */
 export function isAuthorized(request: Request, token: string | null): boolean {
   if (token == null) {
     return true;
   }
   const header = request.headers.get('authorization') ?? '';
-  return header === `Bearer ${token}`;
+  return constantTimeEqual(header, `Bearer ${token}`);
 }
 
 /**
@@ -183,14 +220,28 @@ export function createHandler(config: ProxyConfig, now: () => number = Date.now)
   };
 }
 
-/** base64로 품고 있는 아이콘을 PNG로 내보낸다. */
-function iconResponse(): Response {
+/**
+ * 아이콘 바이트. 배포 사이에 안 바뀌므로 **한 번만 푼다** —
+ * 요청마다 41KB base64를 다시 풀면 아이솔레이트의 CPU 예산만 축낸다.
+ */
+let iconBytes: Uint8Array | null = null;
+
+function decodeIcon(): Uint8Array {
+  if (iconBytes != null) {
+    return iconBytes;
+  }
   const binary = atob(ICON_PNG_BASE64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return new Response(bytes, {
+  iconBytes = bytes;
+  return bytes;
+}
+
+/** base64로 품고 있는 아이콘을 PNG로 내보낸다. */
+function iconResponse(): Response {
+  return new Response(decodeIcon(), {
     headers: {
       'content-type': 'image/png',
       // 아이콘은 배포할 때만 바뀐다. 오래 캐시해도 된다.

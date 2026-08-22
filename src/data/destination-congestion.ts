@@ -17,20 +17,26 @@
  */
 
 import { fetchCongestionAt, type AreaCongestion } from './seoul/congestion';
-import type { Place } from './tmap/parse';
+import type { LatLng } from '../domain/types';
 
 export type DestinationCongestion = AreaCongestion;
 
-/** 목적지의 지금 혼잡도. 대상 장소가 아니거나 조회에 실패하면 null. */
+/**
+ * 목적지의 지금 혼잡도. 대상 장소가 아니거나 조회에 실패하면 null.
+ *
+ * 좌표만 받는다. Puzzle 시절에는 poiId와 이름으로 맞췄지만 서울 데이터는
+ * 좌표에서 가장 가까운 장소를 찾으므로, 그 시절의 인자를 계속 받으면
+ * 쓰지도 않는 값을 세 파일이 나르게 된다.
+ */
 export async function lookupDestinationCongestion(
-  destination: Place | null
+  at: LatLng | null
 ): Promise<DestinationCongestion | null> {
-  if (destination == null) {
+  if (at == null) {
     return null;
   }
 
   try {
-    return await fetchCongestionAt(destination.at);
+    return await fetchCongestionAt(at);
   } catch {
     return null;
   }

@@ -52,12 +52,7 @@ function Arrive() {
     }
     let cancelled = false;
 
-    lookupDestinationCongestion({
-      name: trip.destinationName,
-      address: '',
-      at: trip.destination,
-      ...(trip.destinationPoiId != null ? { poiId: trip.destinationPoiId } : {}),
-    }).then((result) => {
+    lookupDestinationCongestion(trip.destination).then((result) => {
       if (!cancelled) {
         setCongestion(result);
       }
@@ -66,7 +61,7 @@ function Arrive() {
     return () => {
       cancelled = true;
     };
-  }, [trip.destination, trip.destinationName, trip.destinationPoiId]);
+  }, [trip.destination]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now() + offset), 1000);

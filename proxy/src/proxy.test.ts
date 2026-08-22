@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TtlCache } from './cache';
 import { isValidAreaName, normalizePopulation, populationUrl, toCongestionLevel } from './seoul';
+import { constantTimeEqual } from './handler';
 import {
   MIN_TOKEN_LENGTH,
   areasFromUrl,
@@ -354,5 +355,41 @@ describe('GET /icon.png', () => {
     const handle = createHandler(config);
     const response = await handle(new Request('https://p.test/population?area=강남역'));
     expect(response.status).toBe(401);
+  });
+});
+
+describe('constantTimeEqual — 문 앞 비교', () => {
+  it('같으면 참, 다르면 거짓', () => {
+    expect(constantTimeEqual('Bearer abc', 'Bearer abc')).toBe(true);
+    expect(constantTimeEqual('Bearer abc', 'Bearer abd')).toBe(false);
+  });
+
+  it('길이가 달라도 조용히 거짓', () => {
+    expect(constantTimeEqual('', 'Bearer abc')).toBe(false);
+    expect(constantTimeEqual('Bearer ab', 'Bearer abc')).toBe(false);
+  });
+});
+
+describe('configFromEnv — 숫자 환경변수', () => {
+  const BASE = { SEOUL_OPEN_DATA_KEY: 'k', ALLOW_ANONYMOUS: 'true' };
+
+  /*
+   * Number()만 쓰면 "5m" 같은 값이 NaN으로 통과한다. 캐시는 영영 안 만료되고
+   * 타임아웃은 즉시 발화하고 장소 수 제한은 매 요청을 400으로 만든다 —
+   * 셋 다 소리 없이 망가지는 종류라 시작에서 멈추는 게 맞다.
+   */
+  it('읽을 수 없는 숫자는 시작에서 던진다', () => {
+    expect(() => configFromEnv({ ...BASE, CACHE_TTL_MS: '5m' })).toThrow(/CACHE_TTL_MS/);
+    expect(() => configFromEnv({ ...BASE, UPSTREAM_TIMEOUT_MS: '6s' })).toThrow(/UPSTREAM_TIMEOUT_MS/);
+    expect(() => configFromEnv({ ...BASE, MAX_AREAS: 'ten' })).toThrow(/MAX_AREAS/);
+    expect(() => configFromEnv({ ...BASE, MAX_AREAS: '0' })).toThrow(/MAX_AREAS/);
+  });
+
+  it('제대로 된 숫자는 그대로 쓴다', () => {
+    expect(configFromEnv({ ...BASE, MAX_AREAS: '20' }).maxAreasPerRequest).toBe(20);
+  });
+
+  it('비워 두면 기본값', () => {
+    expect(configFromEnv(BASE).maxAreasPerRequest).toBe(12);
   });
 });

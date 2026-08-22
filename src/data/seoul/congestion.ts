@@ -169,16 +169,20 @@ export async function fetchCongestionAlong(path: LatLng[]): Promise<AreaCongesti
   return fetchCongestionAreas(hotspotsAlong(path));
 }
 
-/** 장소 목록의 혼잡도를 프록시에서 한 번에 받는다. */
+/**
+ * 프록시가 한 요청에서 받아 주는 장소 수 (proxy MAX_AREAS 기본값과 같다).
+ *
+ * 넘치면 프록시가 **조용히 앞의 12개만 조회한다** — 응답에는 잘렸다는 표시가
+ * 없어서, 모르고 다 넣으면 뒤쪽 동네들이 전부 "모름(중립값)"이 된다.
+ * 장소가 121곳이 되면서 도심 경로 하나가 12곳을 넘는 일이 실제로 생긴다.
+ */
+const PROXY_MAX_AREAS = 12;
+
+/** 장소 목록의 혼잡도를 프록시에서 받는다. 12곳씩 끊어 나란히 보낸다. */
 async function fetchCongestionAreas(targets: Hotspot[]): Promise<AreaCongestion[]> {
   const { congestionProxy } = getApiConfig();
   if (congestionProxy.baseUrl == null || targets.length === 0) {
     return [];
-  }
-
-  const params = new URLSearchParams();
-  for (const hotspot of targets) {
-    params.append('area', hotspot.areaName);
   }
 
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -186,12 +190,26 @@ async function fetchCongestionAreas(targets: Hotspot[]): Promise<AreaCongestion[
     headers.Authorization = `Bearer ${congestionProxy.token}`;
   }
 
-  const response = await requestJson<ProxyResponse>(
-    `${congestionProxy.baseUrl}/population?${params.toString()}`,
-    { method: 'GET', headers }
+  const chunks: Hotspot[][] = [];
+  for (let i = 0; i < targets.length; i += PROXY_MAX_AREAS) {
+    chunks.push(targets.slice(i, i + PROXY_MAX_AREAS));
+  }
+
+  const responses = await Promise.all(
+    chunks.map((chunk) => {
+      const params = new URLSearchParams();
+      for (const hotspot of chunk) {
+        params.append('area', hotspot.areaName);
+      }
+      return requestJson<ProxyResponse>(
+        `${congestionProxy.baseUrl}/population?${params.toString()}`,
+        { method: 'GET', headers }
+      ).catch(() => ({ areas: [] }) as ProxyResponse);
+      // 한 묶음이 실패해도 나머지는 쓴다. 부분 실패가 전체를 중립으로 만들면 아깝다.
+    })
   );
 
-  return parseProxyAreas(response);
+  return responses.flatMap((response) => parseProxyAreas(response));
 }
 
 /**
