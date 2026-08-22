@@ -4,10 +4,12 @@ import {
   MAX_STRETCH_RATIO,
   arrivalAt,
   dayLabel,
+  departAt,
   formatClock,
   formatDuration,
   planWalk,
   resolveAppointment,
+  waitSec,
 } from '../time';
 
 const MIN = 60;
@@ -265,5 +267,47 @@ describe('arrivalAt', () => {
     if (plan.kind !== 'stretch') return;
 
     expect(arrivalAt(now, plan.targetWalkSec)).toBe(appointment - ARRIVE_EARLY_SEC * 1000);
+  });
+});
+
+describe('departAt — 언제 나서면 되는가', () => {
+  const now = Date.UTC(2026, 7, 17, 3, 0, 0);
+  const at = (minutesFromNow: number) => now + minutesFromNow * 60_000;
+
+  it('고른 길을 걸어 약속 앞에 닿도록 되짚는다', () => {
+    // 90분 뒤 약속, 44분짜리 길 → 약속 EARLY_MIN분 전에 닿으려면 44분 전에 나선다
+    const leave = departAt(at(90), 44 * MIN, now);
+    expect(leave).toBe(at(90 - EARLY_MIN - 44));
+  });
+
+  it('이미 나설 때가 지났으면 null', () => {
+    // 30분 뒤 약속에 27분짜리 길이면 지금이 그 시각이다
+    expect(departAt(at(30), 27 * MIN, now)).toBeNull();
+  });
+
+  it('늦은 날에도 null — 기다리라고 할 이유가 없다', () => {
+    expect(departAt(at(10), 30 * MIN, now)).toBeNull();
+  });
+
+  it('나설 시각에 걸어 나가면 약속보다 그만큼 먼저 닿는다', () => {
+    const appointment = at(120);
+    const walkSec = 40 * MIN;
+    const leave = departAt(appointment, walkSec, now);
+    if (leave == null) throw new Error('나설 시각이 있어야 한다');
+
+    expect(arrivalAt(leave, walkSec)).toBe(appointment - ARRIVE_EARLY_SEC * 1000);
+  });
+});
+
+describe('waitSec — 나설 때까지', () => {
+  const now = Date.UTC(2026, 7, 17, 3, 0, 0);
+
+  it('남은 만큼을 초로 준다', () => {
+    expect(waitSec(now + 35 * 60_000, now)).toBe(35 * MIN);
+  });
+
+  it('지금 나서야 하면 0', () => {
+    expect(waitSec(null, now)).toBe(0);
+    expect(waitSec(now - 60_000, now)).toBe(0);
   });
 });

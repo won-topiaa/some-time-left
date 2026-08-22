@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
-import { arrivalAt, formatClock, formatDuration } from '../domain/time';
+import { arrivalAt, departAt, formatClock, formatDuration, waitSec } from '../domain/time';
 import { radius, spacing } from '../ui/theme';
 import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
@@ -38,6 +38,7 @@ function RouteScreen() {
     const timer = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
   const {
     loading,
     error,
@@ -54,6 +55,19 @@ function RouteScreen() {
     arriveAtMs: trip.arriveAtMs,
     mood: trip.mood,
   });
+
+/**
+   * 지금 나서면 너무 이른 날, 언제 나서면 되는지.
+   *
+   * 여유가 상한을 넘으면 앱은 최단의 2.2배까지만 길을 늘린다. 그래서 87분이
+   * 남았는데 44분짜리 길을 주고 "넉넉히 걸어볼까요"라고 말하는 날이 생기는데,
+   * 그건 대답이 아니라 회피다. 사용자가 정말 알고 싶은 건 몇 시에 나서면 되는지다.
+   */
+  const leaveAtMs =
+    trip.arriveAtMs != null && route != null
+      ? departAt(trip.arriveAtMs, route.candidate.durationSec, nowMs + clockOffsetMs)
+      : null;
+  const waitingSec = waitSec(leaveAtMs, nowMs + clockOffsetMs);
 
   // 가는 길에 스치는 가게 한 곳. 목적이 아니라 곁에 있다고 알려주는 정도.
   // 경로가 바뀌면(다른 길) 다시 찾고, 없으면 없는 채로 둔다.
@@ -162,6 +176,21 @@ function RouteScreen() {
 
         {plan.kind === 'stretch' && !stretched && (
           <Text style={styles.sub}>곧장 가는 길로 보여드릴게요.</Text>
+        )}
+
+        {/*
+          나설 시각.
+
+          이 앱이 "몇 분 전에 도착하는 길"을 약속하는데, 여유가 넘치는 날에는
+          그 약속을 지킬 방법이 길이 아니라 **출발 시각**이다. 여기까지 말해야
+          약속이 끝난다 — 시각과 남은 시간을 함께 준다. 시각만 주면 지금과의
+          거리를 사람이 매번 빼야 하고, 그 뺄셈이 이 앱이 대신 하기로 한 일이다.
+        */}
+        {leaveAtMs != null && (
+          <Text style={styles.leave}>
+            {formatClock(leaveAtMs)}에 나서면 딱 맞아요
+            {waitingSec >= 60 && ` · ${formatDuration(waitingSec)} 뒤`}
+          </Text>
         )}
 
         {/*
@@ -280,6 +309,17 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     // 실패 문구는 가운데 정렬 화면에 놓이므로 위 여백을 두지 않는다.
     errorHeadline: { ...type.title, color: colors.ink, textAlign: 'center' },
     sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+    /*
+      나설 시각은 이 화면에서 유일하게 **행동을 바꾸는** 문장이라 물러서면 안 된다.
+      크기는 본문 그대로 두고 강조색으로만 구별한다 — 크게 만들면 헤드라인과
+      주인공을 다투게 된다.
+    */
+    leave: {
+      ...type.body,
+      color: colors.accent,
+      marginTop: spacing.sm,
+      fontWeight: '600',
+    },
     // 눌린 걸 알리는 유일한 수단. 색을 바꾸지 않고 옅어지기만 한다 —
     // 크롬에 색을 쓰지 않는다는 원칙을 누르는 순간에도 지킨다.
     pressed: { opacity: 0.6 },

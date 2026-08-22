@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { Accuracy, setScreenAwakeMode, startUpdateLocation } from '@apps-in-toss/framework';
-import { distanceM, splitPath, walkProgress } from '../domain/geo';
+import {
+  Accuracy,
+  generateHapticFeedback,
+  setScreenAwakeMode,
+  startUpdateLocation,
+} from '@apps-in-toss/framework';
+import { distanceM, projectToPath, splitPath, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
 import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { RouteMap } from '../ui/RouteMap';
@@ -37,6 +42,15 @@ const LOCATION_GRACE_MS = 20_000;
 const PROMISE_MATCH_MS = 90_000;
 
 /**
+ * 경로에서 이만큼 떨어지면 벗어난 것으로 본다 (m).
+ *
+ * 도심 GPS는 건물 사이에서 수십 미터씩 튄다. 좁게 잡으면 제 길을 걷는 사람에게
+ * 자꾸 벗어났다고 말하게 되는데, 그건 이 앱이 가장 하지 말아야 할 종류의 거짓말이다.
+ * 한 블록쯤 어긋나야 비로소 말한다.
+ */
+const OFF_ROUTE_M = 60;
+
+/**
  * 걷는 중 화면.
  *
  * 경로를 다시 그리는 대신 속도를 미세 조정하게 한다.
@@ -59,6 +73,8 @@ function Walk() {
    * 측정 시각과 비교해 오래 조용하면 모르는 상태로 물러선다.
    */
   const lastFixAtMs = useRef<number | null>(null);
+  /** 경로에서 떨어진 거리 (m). 아직 모르면 null. */
+  const [offRouteM, setOffRouteM] = useState<number | null>(null);
   /**
    * 경로 위 진행 비율 (0~1). `progress` ref와 같은 값을 화면용으로 들고 있는다.
    *
@@ -183,6 +199,10 @@ function Walk() {
 
         setLocationLost(false);
         lastFixAtMs.current = Date.now();
+
+        // 길에서 얼마나 떨어져 있는가. 남은 거리에 이미 섞여 들어가지만,
+        // 숫자가 슬그머니 늘어나는 것만으로는 길을 잘못 들었다는 걸 알 수 없다.
+        setOffRouteM(projectToPath(path, at, progress.current).distanceM);
         const walked = walkProgress(path, at, {
           since: progress.current,
           // 길이 굽어 있으므로 직선 거리보다 조금 더 갔을 수 있다. 여유를 둔다.
@@ -228,6 +248,9 @@ function Walk() {
       return;
     }
     autoArrived.current = true;
+    // 걷는 동안 폰은 주머니에 있는 게 정상이다. 도착을 화면으로만 알리면
+    // 이 앱의 시그니처 순간을 놓친 채로 목적지 앞에 서 있게 된다.
+    generateHapticFeedback({ type: 'success' }).catch(() => {});
     goToArrival();
   }, [remainingM, goToArrival]);
 
@@ -277,6 +300,33 @@ function Walk() {
     (remainingM == null && nowMs - startedAtMs > LOCATION_GRACE_MS) ||
     (lastFixAtMs.current != null && Date.now() - lastFixAtMs.current > LOCATION_GRACE_MS);
 
+  // 위치를 모르면 벗어났는지도 모른다. 모르는 채로 벗어났다고 하지 않는다.
+  const offRoute = !blind && offRouteM != null && offRouteM > OFF_ROUTE_M;
+
+  /**
+   * 길에서 벗어났다고 한 번만 알린다.
+   *
+   * 벗어난 동안 계속 울리면 재촉이 된다. 다시 길로 돌아오면 그때 초기화해서,
+   * 다음에 또 벗어나면 다시 알린다.
+   */
+  const warnedOffRoute = useRef(false);
+  useEffect(() => {
+    if (offRouteM == null || blind) {
+      return;
+    }
+    if (offRouteM <= OFF_ROUTE_M) {
+      warnedOffRoute.current = false;
+      return;
+    }
+    if (!warnedOffRoute.current) {
+      warnedOffRoute.current = true;
+      // 'error'가 아니라 가벼운 두드림이다. 길을 잘못 든 건 사고가 아니라
+      // 흔한 일이고, 놀라게 하는 순간 이 앱의 톤이 통째로 바뀐다.
+      generateHapticFeedback({ type: 'basicMedium' }).catch(() => {});
+    }
+  }, [offRouteM, blind]);
+
+
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
       {/*
@@ -315,6 +365,15 @@ function Walk() {
         <View style={[styles.advice, adviceTone.keep]}>
           <Text style={styles.adviceText}>지금 위치가 잡히지 않아요</Text>
           <Text style={styles.adviceSub}>시간은 계속 재고 있을게요.</Text>
+        </View>
+      ) : offRoute ? (
+        /*
+          길에서 벗어났을 때는 페이스보다 이게 먼저다. 벗어난 채로 "조금만
+          빠르게요"라고 말하면, 잘못 든 길을 더 빨리 걸으라고 하는 셈이 된다.
+        */
+        <View style={[styles.advice, adviceTone.keep]}>
+          <Text style={styles.adviceText}>길에서 조금 벗어났어요</Text>
+          <Text style={styles.adviceSub}>지도의 남은 길을 따라가 주세요.</Text>
         </View>
       ) : (
         <View style={[styles.advice, adviceTone[advice.action]]}>

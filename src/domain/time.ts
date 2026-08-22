@@ -128,6 +128,38 @@ export function arrivalAt(departAtMs: number, durationSec: number): number {
   return departAtMs + durationSec * 1000;
 }
 
+/**
+ * 지금 나서면 너무 이른 날, **언제 나서면 되는가** (epoch ms).
+ *
+ * 여유가 상한을 넘으면(`capped`) 앱은 최단의 2.2배까지만 길을 늘린다. 그래서
+ * 87분 남았는데 44분짜리 길을 주고 "넉넉히 걸어볼까요"라고 말하는 날이 생긴다 —
+ * 그건 대답이 아니라 회피다. 사용자가 정말 알고 싶은 건 **몇 시에 나서면 되는지**다.
+ *
+ * 고른 길을 그대로 걸어서 약속 `ARRIVE_EARLY_SEC` 앞에 닿으려면 언제 출발해야
+ * 하는지를 되짚어 준다. 지금 나서도 되는 날(늦었거나 딱 맞는 날)은 null —
+ * 기다리라고 할 이유가 없으면 말하지 않는다.
+ */
+export function departAt(
+  arriveAtMs: number,
+  walkSec: number,
+  nowMs: number
+): number | null {
+  const leaveAtMs = arriveAtMs - (ARRIVE_EARLY_SEC + walkSec) * 1000;
+
+  // 이미 그 시각을 지났으면 지금이 나설 때다.
+  return leaveAtMs > nowMs ? leaveAtMs : null;
+}
+
+/**
+ * 나설 때까지 남은 시간 (초). 지금 나서야 하면 0.
+ *
+ * 화면이 "35분 뒤에 나서세요"라고 말할 때 쓰는 값이다. 시각만으로는 지금과의
+ * 거리를 매번 사람이 빼야 한다 — 그 뺄셈이 이 앱이 대신 하기로 한 일이다.
+ */
+export function waitSec(leaveAtMs: number | null, nowMs: number): number {
+  return leaveAtMs == null ? 0 : Math.max(0, Math.round((leaveAtMs - nowMs) / 1000));
+}
+
 /** "12분" / "1시간 5분" 처럼 사람이 읽는 길이로. */
 export function formatDuration(sec: number): string {
   const total = Math.max(0, Math.round(sec / 60));
