@@ -4,7 +4,7 @@ import WebView from '@granite-js/native/react-native-webview';
 import { getApiConfig } from '../config';
 import { splitPath } from '../domain/geo';
 import { MAPLIBRE_CSS, MAPLIBRE_JS, MAPLIBRE_LICENSE } from './vendor/maplibre';
-import { colors } from './theme';
+import { type Palette, type Scheme, type TypeScale, useStyles, useTheme } from './useTheme';
 import type { LatLng } from '../domain/types';
 
 /**
@@ -25,14 +25,18 @@ import type { LatLng } from '../domain/types';
 export function RouteMapVector({
   path,
   height = 220,
-  tint = colors.ink,
+  tint,
   progress,
 }: {
   path: LatLng[];
   height?: number;
+  /** 기분 색. 없으면 테마의 잉크색으로 그린다. */
   tint?: string;
   progress?: number;
 }) {
+  const { colors, scheme } = useTheme();
+  const styles = useStyles(createStyles);
+  const stroke = tint ?? colors.ink;
   const webView = useRef<WebView>(null);
 
   /*
@@ -42,7 +46,7 @@ export function RouteMapVector({
    * 진행 상황은 아래에서 `injectJavaScript`로 밀어 넣는다 — 지도는 그대로 두고
    * 선 두 개만 갈아 끼우는 것이라 훨씬 가볍다.
    */
-  const html = useMemo(() => mapHtml(path, tint), [path, tint]);
+  const html = useMemo(() => mapHtml(path, stroke, colors, scheme), [path, stroke, colors, scheme]);
 
   const update = useMemo(() => (progress == null ? null : progressScript(path, progress)), [
     path,
@@ -135,7 +139,7 @@ function progressScript(path: LatLng[], progress: number): string {
   ); true;`;
 }
 
-function mapHtml(path: LatLng[], tint: string): string {
+function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme): string {
   const { mapTiles } = getApiConfig();
   const bounds = path.reduce(
     (box, p) => ({
@@ -164,7 +168,12 @@ function mapHtml(path: LatLng[], tint: string): string {
   html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
   body { background: ${colors.bg}; }
   /* 출처는 지우지 않는다. OpenStreetMap과 OpenMapTiles 둘 다 요구한다. */
-  .maplibregl-ctrl-attrib { font-size: 10px; background: rgba(255,255,255,0.82); }
+  .maplibregl-ctrl-attrib {
+    font-size: 11px;
+    background: ${scheme === 'dark' ? 'rgba(22,24,28,0.82)' : 'rgba(255,255,255,0.82)'};
+    color: ${colors.inkSoft};
+  }
+  .maplibregl-ctrl-attrib a { color: ${colors.inkSoft}; }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-logo { display: none; }
 </style>
 <script>${MAPLIBRE_JS}</script>
@@ -194,6 +203,13 @@ function mapHtml(path: LatLng[], tint: string): string {
 
   var map = new maplibregl.Map({
     container: 'map',
+    /*
+     * 어두운 화면에서도 같은 스타일을 쓴다.
+     *
+     * OpenFreeMap에 어두운 스타일이 있는지 이 작업 환경에서는 확인하지 못했다
+     * (egress 정책에 막혀 있다). 확인 안 된 주소를 넣으면 지도가 통째로 안 뜨므로,
+     * 실기기에서 확인한 뒤에 갈아 끼운다. 래스터판은 CARTO의 어두운 짝을 이미 쓴다.
+     */
     style: ${JSON.stringify(mapTiles.vectorStyleUrl)},
     // 손대지 못하게 둔다. 두 화면 모두 스크롤 안에 있어서 끌기가 겹친다.
     interactive: false,
@@ -280,8 +296,9 @@ function mapHtml(path: LatLng[], tint: string): string {
 </html>`;
 }
 
-const styles = StyleSheet.create({
-  // 지도는 면이라 이 앱에서 유일하게 칠해진 자리다. 모서리를 둥글려 종이 위에 얹는다.
-  box: { overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
-  web: { flex: 1, backgroundColor: colors.bg },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    // 지도는 면이라 이 앱에서 유일하게 칠해진 자리다. 모서리를 둥글려 종이 위에 얹는다.
+    box: { overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
+    web: { flex: 1, backgroundColor: colors.bg },
+  });

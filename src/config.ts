@@ -89,6 +89,8 @@ export interface ApiConfig {
     kind: 'raster' | 'vector';
     /** 래스터용. `{z}` `{x}` `{y}`를 좌표로 바꿔 부른다. */
     urlTemplate: string;
+    /** 어두운 화면에서 쓸 래스터 주소. 같은 규칙으로 좌표를 바꿔 부른다. */
+    darkUrlTemplate: string;
     /** 벡터용. MapLibre 스타일 문서 주소. */
     vectorStyleUrl: string;
     /**
@@ -152,6 +154,8 @@ const config: ApiConfig = {
     kind: 'raster',
     // `@2x`는 고해상도 타일(512px). 논리 크기보다 크게 받아 두면 확대해도 안 뭉개진다.
     urlTemplate: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+    // 같은 CARTO의 어두운 짝. 밝은 쪽을 그대로 쓰면 밤에 지도만 혼자 하얗게 뜬다.
+    darkUrlTemplate: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
     // OpenFreeMap Positron. 키도, 등록도, 요청 한도도, 상업적 제한도 없다.
     vectorStyleUrl: 'https://tiles.openfreemap.org/styles/positron',
     // CARTO는 자사 표기를 요구하고, 데이터 출처인 OSM은 ODbL이 요구한다. 지우지 않는다.

@@ -4,7 +4,8 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { NO_CARRIED, loadCarried, loadRecords, type CarriedTotals } from '../data/records';
 import { formatRecordDate, formatTotalDistance, groupByMonth, traceSummary } from '../domain/trace';
 import { moodById } from '../domain/mood';
-import { colors, spacing, type } from '../ui/theme';
+import { spacing } from '../ui/theme';
+import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RouteGlyph } from '../ui/RoutePreview';
@@ -33,6 +34,8 @@ const LIST_MAX = 60;
  * 한 번 걸었을 땐 거의 무채색이고, 여러 번 걸어야 알록달록해진다.
  */
 function Trace() {
+  const { scheme } = useTheme();
+  const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const screen = useScreenInsets();
   const [records, setRecords] = useState<WalkRecord[] | null>(null);
@@ -123,7 +126,7 @@ function Trace() {
       */}
       <View style={styles.grid}>
         {records.slice(0, GRID_MAX).map((record) => (
-          <RouteGlyph key={record.id} path={record.path} tint={moodTint(record.mood)} size={GLYPH} />
+          <RouteGlyph key={record.id} path={record.path} tint={moodTint(record.mood, scheme)} size={GLYPH} />
         ))}
         {/* 아직 빈 자리는 비워 두되 보이게 둔다. 채우라고 재촉하지는 않는다. */}
         {emptySlots.map((i) => (
@@ -138,7 +141,7 @@ function Trace() {
           <Text style={styles.monthLabel}>{month.label}</Text>
 
           {month.records.map((record) => {
-            const tint = moodTint(record.mood);
+            const tint = moodTint(record.mood, scheme);
             return (
               <View key={record.id} style={styles.row}>
                 <RouteGlyph path={record.path} tint={tint} />
@@ -177,77 +180,78 @@ function Trace() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: spacing.lg },
-  center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    content: { paddingHorizontal: spacing.lg },
+    center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
 
-  label: { ...type.caption, color: colors.inkSoft },
-  numeralRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  numeral: { ...type.numeral, color: colors.ink },
-  unit: { ...type.caption, color: colors.inkFaint, marginLeft: spacing.xs, marginBottom: spacing.sm },
-  micro: { ...type.caption, color: colors.inkFaint, marginTop: spacing.xs },
-  hidden: { ...type.caption, color: colors.inkFaint, marginTop: spacing.lg },
+    label: { ...type.caption, color: colors.inkSoft },
+    numeralRow: { flexDirection: 'row', alignItems: 'flex-end' },
+    numeral: { ...type.numeral, color: colors.ink },
+    unit: { ...type.caption, color: colors.inkFaint, marginLeft: spacing.xs, marginBottom: spacing.sm },
+    micro: { ...type.caption, color: colors.inkFaint, marginTop: spacing.xs },
+    hidden: { ...type.caption, color: colors.inkFaint, marginTop: spacing.lg },
 
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  /**
-   * 채워지지 않은 자리.
-   *
-   * 자리는 지키되 존재를 주장하지 않는다. 흰 원에 테두리를 두르면 64px짜리 면이 생겨
-   * 정작 주인공인 길 모양들보다 눈에 띄고, "면이 아니라 선과 여백"이라는 원칙도 깨진다.
-   * 가운데 아주 작은 점 하나로 "여기 아직 안 채워짐"만 알린다.
-   */
-  emptySlot: {
-    width: GLYPH,
-    height: GLYPH,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.inkGhost,
-  },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginTop: spacing.lg,
+    },
+    /**
+     * 채워지지 않은 자리.
+     *
+     * 자리는 지키되 존재를 주장하지 않는다. 흰 원에 테두리를 두르면 64px짜리 면이 생겨
+     * 정작 주인공인 길 모양들보다 눈에 띄고, "면이 아니라 선과 여백"이라는 원칙도 깨진다.
+     * 가운데 아주 작은 점 하나로 "여기 아직 안 채워짐"만 알린다.
+     */
+    emptySlot: {
+      width: GLYPH,
+      height: GLYPH,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.inkGhost,
+    },
 
-  month: { marginTop: spacing.xl },
-  monthLabel: {
-    ...type.caption,
-    color: colors.inkSoft,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
+    month: { marginTop: spacing.xl },
+    monthLabel: {
+      ...type.caption,
+      color: colors.inkSoft,
+      paddingBottom: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
 
-  // 면을 채우지 않는다. 헤어라인과 여백만으로 나눈다.
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  rowBody: { flex: 1, paddingTop: spacing.xs },
-  rowTitle: { ...type.body, color: colors.ink },
-  // 11px 회색은 읽히지 않는다. 곁다리 정보라도 읽을 수는 있어야 한다.
-  rowMeta: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
-  rowNote: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+    // 면을 채우지 않는다. 헤어라인과 여백만으로 나눈다.
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    rowBody: { flex: 1, paddingTop: spacing.xs },
+    rowTitle: { ...type.body, color: colors.ink },
+    // 11px 회색은 읽히지 않는다. 곁다리 정보라도 읽을 수는 있어야 한다.
+    rowMeta: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
+    rowNote: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
 
-  emptyTitle: { ...type.title, color: colors.ink, textAlign: 'center' },
-  emptyBody: {
-    ...type.body,
-    color: colors.inkFaint,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
+    emptyTitle: { ...type.title, color: colors.ink, textAlign: 'center' },
+    emptyBody: {
+      ...type.body,
+      color: colors.inkFaint,
+      textAlign: 'center',
+      marginTop: spacing.sm,
+    },
 
-  back: { marginTop: spacing.xl, paddingVertical: spacing.md, alignItems: 'center' },
-  backText: { ...type.body, color: colors.inkSoft },
-  pressed: { opacity: 0.6 },
-});
+    back: { marginTop: spacing.xl, paddingVertical: spacing.md, alignItems: 'center' },
+    backText: { ...type.body, color: colors.inkSoft },
+    pressed: { opacity: 0.6 },
+  });

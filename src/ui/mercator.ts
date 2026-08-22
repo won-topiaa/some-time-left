@@ -185,9 +185,12 @@ export function mapView(path: LatLng[], size: ViewSize): MapView | null {
  * 주소는 `config.ts`에 있다. 무료 타일 서비스는 전부 SLA가 없어서, 막히거나 키를
  * 요구하게 되는 날 화면 코드를 고치지 않고 갈아탈 수 있어야 한다.
  */
-export function tileUrl({ x, y, zoom }: Tile): string {
-  return getApiConfig()
-    .mapTiles.urlTemplate.replace('{z}', String(zoom))
+export function tileUrl({ x, y, zoom }: Tile, scheme: 'light' | 'dark' = 'light'): string {
+  const { mapTiles } = getApiConfig();
+  const template = scheme === 'dark' ? mapTiles.darkUrlTemplate : mapTiles.urlTemplate;
+
+  return template
+    .replace('{z}', String(zoom))
     .replace('{x}', String(x))
     .replace('{y}', String(y));
 }

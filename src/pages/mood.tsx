@@ -2,7 +2,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
 import { MOODS } from '../domain/mood';
-import { colors, radius, spacing, type } from '../ui/theme';
+import { radius, spacing } from '../ui/theme';
+import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { useTrip } from '../state/TripContext';
@@ -17,6 +18,8 @@ export const Route = createRoute('/mood', {
  * 경사·혼잡도 같은 조건은 여기에 없다. 기분만 고르면 나머지는 앱이 정한다.
  */
 function Mood() {
+  const { scheme } = useTheme();
+  const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
@@ -48,7 +51,7 @@ function Mood() {
             onPress={() => choose(mood.id)}
           >
             {/* 기분마다 제 색을 가진 점. 여기서 고른 색이 길에 입혀지고 기록에 남는다. */}
-            <View style={[styles.dot, { backgroundColor: moodTint(mood.id) }]} />
+            <View style={[styles.dot, { backgroundColor: moodTint(mood.id, scheme) }]} />
             <Text style={styles.rowText}>{mood.label}</Text>
           </Pressable>
         ))}
@@ -59,36 +62,37 @@ function Mood() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-  },
-  pressed: { opacity: 0.6 },
-  question: {
-    ...type.display,
-    color: colors.ink,
-    marginBottom: spacing.xl,
-  },
-  // 맨 윗줄에도 선을 둬서 여섯 줄이 한 덩어리로 보이게 한다.
-  cards: { borderTopWidth: 1, borderTopColor: colors.line },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    // 손가락이 닿는 자리는 넉넉히. 줄로 나눠도 누르기 편해야 한다.
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  dot: { width: 10, height: 10, borderRadius: radius.pill },
-  rowText: { ...type.title, color: colors.ink },
-  footnote: {
-    ...type.caption,
-    color: colors.inkFaint,
-    marginTop: spacing.lg,
-    textAlign: 'center',
-  },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.lg,
+      justifyContent: 'center',
+    },
+    pressed: { opacity: 0.6 },
+    question: {
+      ...type.display,
+      color: colors.ink,
+      marginBottom: spacing.xl,
+    },
+    // 맨 윗줄에도 선을 둬서 여섯 줄이 한 덩어리로 보이게 한다.
+    cards: { borderTopWidth: 1, borderTopColor: colors.line },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      // 손가락이 닿는 자리는 넉넉히. 줄로 나눠도 누르기 편해야 한다.
+      paddingVertical: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    dot: { width: 10, height: 10, borderRadius: radius.pill },
+    rowText: { ...type.title, color: colors.ink },
+    footnote: {
+      ...type.caption,
+      color: colors.inkFaint,
+      marginTop: spacing.lg,
+      textAlign: 'center',
+    },
+  });

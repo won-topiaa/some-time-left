@@ -4,7 +4,8 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
 import { arrivalAt, formatClock, formatDuration } from '../domain/time';
-import { colors, radius, spacing, type } from '../ui/theme';
+import { radius, spacing } from '../ui/theme';
+import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RouteMap } from '../ui/RouteMap';
@@ -20,6 +21,8 @@ export const Route = createRoute('/route', {
  * 그래서 이 화면의 주인공은 지도가 아니라 "왜 이 길인지" 한 줄이다.
  */
 function RouteScreen() {
+  const { colors, scheme } = useTheme();
+  const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
@@ -182,7 +185,7 @@ function RouteScreen() {
             <RouteMap
               path={route.candidate.path}
               height={200}
-              tint={trip.mood != null ? moodTint(trip.mood) : colors.ink}
+              tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
             />
 
             <View style={styles.meta}>
@@ -268,50 +271,51 @@ function RouteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
-  center: { alignItems: 'center', justifyContent: 'center' },
-  searching: { ...type.body, color: colors.inkSoft, marginTop: spacing.md },
-  headline: { ...type.display, color: colors.ink, marginTop: spacing.xl },
-  // 실패 문구는 가운데 정렬 화면에 놓이므로 위 여백을 두지 않는다.
-  errorHeadline: { ...type.title, color: colors.ink, textAlign: 'center' },
-  sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
-  // 눌린 걸 알리는 유일한 수단. 색을 바꾸지 않고 옅어지기만 한다 —
-  // 크롬에 색을 쓰지 않는다는 원칙을 누르는 순간에도 지킨다.
-  pressed: { opacity: 0.6 },
-  back: { paddingVertical: spacing.sm, alignItems: 'center' },
-  backText: { ...type.caption, color: colors.inkFaint },
-  // 면을 채우지 않는다. 배경 위에 그대로 두고 선과 여백으로만 나눈다.
-  card: { marginTop: spacing.lg },
-  meta: { marginTop: spacing.md },
-  // 걷는 시간이 이 화면의 주인공. 굵기 대신 크기로 말한다.
-  duration: { ...type.numeral, fontSize: 44, lineHeight: 52, color: colors.ink },
-  /*
-    도착 시각은 약속을 검산하는 줄이라 곁다리 수치보다 한 단계 앞에 둔다.
-    그래도 주인공은 위의 큰 숫자이므로 크기를 키우지 않고 색만 진하게 한다.
-  */
-  arrival: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
-  metaSub: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
-  // 추천 이유는 이 앱의 생명줄이라 또렷하게 두되, 색이 아니라 자리로 강조한다.
-  reason: {
-    ...type.body,
-    color: colors.ink,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
-  nearby: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
-  // 자동 추천이 틀렸을 때의 도망갈 곳이다. 눌러진다는 게 보여야 한다.
-  ghost: { paddingVertical: spacing.md, alignItems: 'center' },
-  ghostText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
-  // 위쪽은 흐르고, 버튼만 아래에 붙는다.
-  flow: { flexGrow: 1 },
-  cta: {
-    backgroundColor: colors.ink,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  ctaText: { ...type.title, color: colors.surface },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+    center: { alignItems: 'center', justifyContent: 'center' },
+    searching: { ...type.body, color: colors.inkSoft, marginTop: spacing.md },
+    headline: { ...type.display, color: colors.ink, marginTop: spacing.xl },
+    // 실패 문구는 가운데 정렬 화면에 놓이므로 위 여백을 두지 않는다.
+    errorHeadline: { ...type.title, color: colors.ink, textAlign: 'center' },
+    sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+    // 눌린 걸 알리는 유일한 수단. 색을 바꾸지 않고 옅어지기만 한다 —
+    // 크롬에 색을 쓰지 않는다는 원칙을 누르는 순간에도 지킨다.
+    pressed: { opacity: 0.6 },
+    back: { paddingVertical: spacing.sm, alignItems: 'center' },
+    backText: { ...type.caption, color: colors.inkFaint },
+    // 면을 채우지 않는다. 배경 위에 그대로 두고 선과 여백으로만 나눈다.
+    card: { marginTop: spacing.lg },
+    meta: { marginTop: spacing.md },
+    // 걷는 시간이 이 화면의 주인공. 굵기 대신 크기로 말한다.
+    duration: { ...type.numeral, fontSize: 44, lineHeight: 52, color: colors.ink },
+    /*
+      도착 시각은 약속을 검산하는 줄이라 곁다리 수치보다 한 단계 앞에 둔다.
+      그래도 주인공은 위의 큰 숫자이므로 크기를 키우지 않고 색만 진하게 한다.
+    */
+    arrival: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
+    metaSub: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
+    // 추천 이유는 이 앱의 생명줄이라 또렷하게 두되, 색이 아니라 자리로 강조한다.
+    reason: {
+      ...type.body,
+      color: colors.ink,
+      marginTop: spacing.md,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    nearby: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
+    // 자동 추천이 틀렸을 때의 도망갈 곳이다. 눌러진다는 게 보여야 한다.
+    ghost: { paddingVertical: spacing.md, alignItems: 'center' },
+    ghostText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
+    // 위쪽은 흐르고, 버튼만 아래에 붙는다.
+    flow: { flexGrow: 1 },
+    cta: {
+      backgroundColor: colors.ink,
+      borderRadius: radius.md,
+      paddingVertical: spacing.md + 2,
+      alignItems: 'center',
+    },
+    ctaText: { ...type.title, color: colors.surface },
+  });

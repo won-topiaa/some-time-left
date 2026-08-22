@@ -10,7 +10,8 @@ import {
   lookupDestinationCongestion,
   type DestinationCongestion,
 } from '../data/destination-congestion';
-import { colors, radius, spacing, type } from '../ui/theme';
+import { radius, spacing } from '../ui/theme';
+import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useTrip } from '../state/TripContext';
 
 export const Route = createRoute('/arrive', {
@@ -24,6 +25,8 @@ export const Route = createRoute('/arrive', {
  * 도착해서 약속까지 남은 시간이 곧 한 줄을 적는 시간이다.
  */
 function Arrive() {
+  const { colors } = useTheme();
+  const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const { trip, update, reset } = useTrip();
   const screen = useScreenInsets();
@@ -224,39 +227,40 @@ function Arrive() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
-  // 실패는 조용히 말하되 보이게. 이 앱에서 붉은색을 쓰는 유일한 자리가 아니도록 잉크로.
-  saveFailed: { ...type.caption, color: colors.inkSoft, textAlign: 'center', marginBottom: spacing.sm },
-  content: { paddingBottom: spacing.lg },
-  // 이 화면의 주인공. 색으로 강조하지 않고 크기로만 말한다 —
-  // 파란 숫자는 알림처럼 읽히고, 먹색 숫자는 그냥 남은 시간으로 읽힌다.
-  countdownLabel: { ...type.caption, color: colors.inkSoft, marginTop: spacing.lg },
-  countdown: {
-    ...type.numeral,
-    fontSize: 64,
-    lineHeight: 72,
-    color: colors.ink,
-  },
-  prompt: { ...type.title, color: colors.ink, marginTop: spacing.md },
-  congestion: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
-  noteBox: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.xl,
-    minHeight: 120,
-  },
-  note: { ...type.body, color: colors.ink, minHeight: 96, textAlignVertical: 'top' },
-  hint: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
-  // 버튼은 먹색. 레퍼런스 세 앱 모두 크롬에 색을 쓰지 않는다 —
-  // 색은 사용자가 쌓은 것에서만 나온다.
-  cta: {
-    backgroundColor: colors.ink,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  ctaText: { ...type.title, color: colors.surface },
-  pressed: { opacity: 0.6 },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+    // 실패는 조용히 말하되 보이게. 이 앱에서 붉은색을 쓰는 유일한 자리가 아니도록 잉크로.
+    saveFailed: { ...type.caption, color: colors.inkSoft, textAlign: 'center', marginBottom: spacing.sm },
+    content: { paddingBottom: spacing.lg },
+    // 이 화면의 주인공. 색으로 강조하지 않고 크기로만 말한다 —
+    // 파란 숫자는 알림처럼 읽히고, 먹색 숫자는 그냥 남은 시간으로 읽힌다.
+    countdownLabel: { ...type.caption, color: colors.inkSoft, marginTop: spacing.lg },
+    countdown: {
+      ...type.numeral,
+      fontSize: 64,
+      lineHeight: 72,
+      color: colors.ink,
+    },
+    prompt: { ...type.title, color: colors.ink, marginTop: spacing.md },
+    congestion: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+    noteBox: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      marginTop: spacing.xl,
+      minHeight: 120,
+    },
+    note: { ...type.body, color: colors.ink, minHeight: 96, textAlignVertical: 'top' },
+    hint: { ...type.caption, color: colors.inkFaint, marginTop: spacing.sm },
+    // 버튼은 먹색. 레퍼런스 세 앱 모두 크롬에 색을 쓰지 않는다 —
+    // 색은 사용자가 쌓은 것에서만 나온다.
+    cta: {
+      backgroundColor: colors.ink,
+      borderRadius: radius.md,
+      paddingVertical: spacing.md + 2,
+      alignItems: 'center',
+    },
+    ctaText: { ...type.title, color: colors.surface },
+    pressed: { opacity: 0.6 },
+  });

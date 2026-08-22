@@ -17,7 +17,8 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { colors, radius, spacing, type } from '../ui/theme';
+import { radius, spacing } from '../ui/theme';
+import { type Palette, type TypeScale, useStyles } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
 
 export const Route = createRoute('/_404', {
@@ -25,6 +26,7 @@ export const Route = createRoute('/_404', {
 });
 
 function NotFound() {
+  const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const screen = useScreenInsets();
 
@@ -43,30 +45,31 @@ function NotFound() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headline: { ...type.title, color: colors.ink, textAlign: 'center' },
-  sub: {
-    ...type.caption,
-    color: colors.inkFaint,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-  // 면을 칠하지 않는다. 이 앱에서 버튼은 헤어라인으로만 자기 자리를 알린다.
-  back: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  backText: { ...type.body, color: colors.inkSoft },
-  pressed: { opacity: 0.6 },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headline: { ...type.title, color: colors.ink, textAlign: 'center' },
+    sub: {
+      ...type.caption,
+      color: colors.inkFaint,
+      textAlign: 'center',
+      marginTop: spacing.sm,
+    },
+    // 면을 칠하지 않는다. 이 앱에서 버튼은 헤어라인으로만 자기 자리를 알린다.
+    back: {
+      marginTop: spacing.xl,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.xl,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    backText: { ...type.body, color: colors.inkSoft },
+    pressed: { opacity: 0.6 },
+  });

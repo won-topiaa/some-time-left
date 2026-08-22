@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createRoute, useKeyboardHeight, useNavigation } from '@granite-js/react-native';
-import { colors, radius, spacing, type } from '../ui/theme';
+import { radius, spacing } from '../ui/theme';
+import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
@@ -31,6 +32,8 @@ function digitsOnly(text: string, max: number): string {
 }
 
 function Home() {
+  const { colors } = useTheme();
+  const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
@@ -331,108 +334,109 @@ function Home() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
-  // 죽은 버튼 밑에 이유 한 줄. 재촉이 아니라 안내라서 가장 옅게 둔다.
-  missing: {
-    ...type.caption,
-    color: colors.inkFaint,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-  content: { paddingBottom: spacing.lg },
-  header: { marginBottom: spacing.xl },
-  weather: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.sm },
-  hello: { ...type.display, color: colors.ink },
-  sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
-  label: { ...type.caption, color: colors.inkSoft, marginBottom: spacing.sm },
-  input: {
-    ...type.body,
-    color: colors.ink,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  /** 오전/오후와 시각이 한 줄. 두 덩어리 사이는 여백으로만 나눈다. */
-  clockRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  periods: { flexDirection: 'row', gap: spacing.sm },
-  period: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-  },
-  periodOn: { backgroundColor: colors.ink },
-  periodText: { ...type.body, color: colors.inkSoft },
-  periodTextOn: { ...type.body, color: colors.surface, fontWeight: '600' },
-  /** 시각 두 칸. 목적지·상대 칸과 같은 흰 면이라 적는 자리로 읽힌다. */
-  clock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-  },
-  clockField: {
-    ...type.title,
-    color: colors.ink,
-    // 두 자리가 들어갈 만큼만. 넓으면 숫자가 칸 안에서 떠다닌다.
-    width: 44,
-    paddingVertical: spacing.sm + 2,
-  },
-  colon: { ...type.title, color: colors.inkFaint, marginHorizontal: 2 },
-  /**
-   * 적은 것이 언제로 읽혔는지. 비어 있어도 자리는 지킨다 —
-   * 이 줄이 생겼다 사라지면 아래 칸들이 그때마다 들썩인다.
-   */
-  reading: {
-    ...type.caption,
-    color: colors.inkSoft,
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  picked: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pickedName: { ...type.body, color: colors.ink, flexShrink: 1 },
-  pickedChange: { ...type.caption, color: colors.accent, marginLeft: spacing.sm },
-  results: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    marginBottom: spacing.lg,
-    maxHeight: 220,
-  },
-  result: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  resultName: { ...type.body, color: colors.ink },
-  resultAddress: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
-  searching: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.lg },
-  // 눌린 걸 알리는 유일한 수단. 색을 바꾸지 않고 옅어지기만 한다.
-  pressed: { opacity: 0.6 },
-  // 버튼은 먹색. 색은 크롬이 아니라 쌓인 기록이 낸다.
-  cta: {
-    backgroundColor: colors.ink,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  // 꺼진 버튼도 글자는 읽혀야 한다. inkGhost 위 흰 글자는 대비가 거의 없다.
-  ctaOff: { backgroundColor: colors.line },
-  ctaTextOff: { color: colors.inkFaint },
-  ctaText: { ...type.title, color: colors.surface },
-  trace: { paddingVertical: spacing.md, alignItems: 'center' },
-  traceText: { ...type.caption, color: colors.inkFaint },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+    // 죽은 버튼 밑에 이유 한 줄. 재촉이 아니라 안내라서 가장 옅게 둔다.
+    missing: {
+      ...type.caption,
+      color: colors.inkFaint,
+      textAlign: 'center',
+      marginTop: spacing.sm,
+    },
+    content: { paddingBottom: spacing.lg },
+    header: { marginBottom: spacing.xl },
+    weather: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.sm },
+    hello: { ...type.display, color: colors.ink },
+    sub: { ...type.body, color: colors.inkSoft, marginTop: spacing.sm },
+    label: { ...type.caption, color: colors.inkSoft, marginBottom: spacing.sm },
+    input: {
+      ...type.body,
+      color: colors.ink,
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    /** 오전/오후와 시각이 한 줄. 두 덩어리 사이는 여백으로만 나눈다. */
+    clockRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    periods: { flexDirection: 'row', gap: spacing.sm },
+    period: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surface,
+    },
+    periodOn: { backgroundColor: colors.ink },
+    periodText: { ...type.body, color: colors.inkSoft },
+    periodTextOn: { ...type.body, color: colors.surface, fontWeight: '600' },
+    /** 시각 두 칸. 목적지·상대 칸과 같은 흰 면이라 적는 자리로 읽힌다. */
+    clock: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.sm,
+    },
+    clockField: {
+      ...type.title,
+      color: colors.ink,
+      // 두 자리가 들어갈 만큼만. 넓으면 숫자가 칸 안에서 떠다닌다.
+      width: 44,
+      paddingVertical: spacing.sm + 2,
+    },
+    colon: { ...type.title, color: colors.inkFaint, marginHorizontal: 2 },
+    /**
+     * 적은 것이 언제로 읽혔는지. 비어 있어도 자리는 지킨다 —
+     * 이 줄이 생겼다 사라지면 아래 칸들이 그때마다 들썩인다.
+     */
+    reading: {
+      ...type.caption,
+      color: colors.inkSoft,
+      marginTop: spacing.sm,
+      marginBottom: spacing.lg,
+    },
+    picked: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    pickedName: { ...type.body, color: colors.ink, flexShrink: 1 },
+    pickedChange: { ...type.caption, color: colors.accent, marginLeft: spacing.sm },
+    results: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      marginBottom: spacing.lg,
+      maxHeight: 220,
+    },
+    result: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 4,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    resultName: { ...type.body, color: colors.ink },
+    resultAddress: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
+    searching: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.lg },
+    // 눌린 걸 알리는 유일한 수단. 색을 바꾸지 않고 옅어지기만 한다.
+    pressed: { opacity: 0.6 },
+    // 버튼은 먹색. 색은 크롬이 아니라 쌓인 기록이 낸다.
+    cta: {
+      backgroundColor: colors.ink,
+      borderRadius: radius.md,
+      paddingVertical: spacing.md + 2,
+      alignItems: 'center',
+    },
+    // 꺼진 버튼도 글자는 읽혀야 한다. inkGhost 위 흰 글자는 대비가 거의 없다.
+    ctaOff: { backgroundColor: colors.line },
+    ctaTextOff: { color: colors.inkFaint },
+    ctaText: { ...type.title, color: colors.surface },
+    trace: { paddingVertical: spacing.md, alignItems: 'center' },
+    traceText: { ...type.caption, color: colors.inkFaint },
+  });

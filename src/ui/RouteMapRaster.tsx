@@ -3,7 +3,8 @@ import { Image, PixelRatio, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from '@granite-js/native/react-native-svg';
 import { mapAttribution, mapView, tileUrl } from './mercator';
 import { splitAtRatio, type Point } from './routeShape';
-import { colors, radius, spacing, type } from './theme';
+import { radius, spacing } from './theme';
+import { type Palette, type TypeScale, useStyles, useTheme } from './useTheme';
 import { distanceM } from '../domain/geo';
 import type { LatLng } from '../domain/types';
 
@@ -23,15 +24,19 @@ import type { LatLng } from '../domain/types';
 export function RouteMapRaster({
   path,
   height = 220,
-  tint = colors.ink,
+  tint,
   progress,
 }: {
   path: LatLng[];
   height?: number;
+  /** 기분 색. 없으면 테마의 잉크색으로 그린다. */
   tint?: string;
   /** 지금까지 온 만큼 (0~1). 주면 걸어온 길이 흐려지고 지금 자리에 점이 찍힌다. */
   progress?: number;
 }) {
+  const { colors, scheme } = useTheme();
+  const styles = useStyles(createStyles);
+  const stroke = tint ?? colors.ink;
   /**
    * 폭은 재서 안다. 지도는 화면 폭을 꽉 채우는데, 그 값을 상수로 적어 두면
    * 기기마다 경로가 상자 밖으로 나가거나 한쪽으로 쏠린다.
@@ -71,7 +76,7 @@ export function RouteMapRaster({
       {view?.tiles.map((tile) => (
         <Image
           key={`${tile.zoom}/${tile.x}/${tile.y}`}
-          source={{ uri: tileUrl(tile) }}
+          source={{ uri: tileUrl(tile, scheme) }}
           style={[
             styles.tile,
             // 크기는 판마다 다르다 — 소수 배율을 메우느라 TILE_SIZE보다 커질 수 있다.
@@ -92,7 +97,7 @@ export function RouteMapRaster({
                 strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
 
           {split == null ? (
-            <Path d={toPath(points)} stroke={tint} strokeWidth={4} fill="none"
+            <Path d={toPath(points)} stroke={stroke} strokeWidth={4} fill="none"
                   strokeLinecap="round" strokeLinejoin="round" />
           ) : (
             <>
@@ -100,7 +105,7 @@ export function RouteMapRaster({
               <Path d={toPath(split.walked)} stroke={colors.inkGhost} strokeWidth={4} fill="none"
                     strokeLinecap="round" strokeLinejoin="round" />
               {/* 남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다. */}
-              <Path d={toPath(split.ahead)} stroke={tint} strokeWidth={4} fill="none"
+              <Path d={toPath(split.ahead)} stroke={stroke} strokeWidth={4} fill="none"
                     strokeLinecap="round" strokeLinejoin="round" />
             </>
           )}
@@ -109,12 +114,12 @@ export function RouteMapRaster({
           <Circle cx={points[0].x} cy={points[0].y} r={5}
                   fill={colors.surface} stroke={colors.inkFaint} strokeWidth={2} />
           <Circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={6.5}
-                  fill={tint} stroke={colors.surface} strokeWidth={2} />
+                  fill={stroke} stroke={colors.surface} strokeWidth={2} />
 
           {split != null && (
             <>
               <Circle cx={split.at.x} cy={split.at.y} r={8} fill={colors.surface} />
-              <Circle cx={split.at.x} cy={split.at.y} r={5} fill={tint} />
+              <Circle cx={split.at.x} cy={split.at.y} r={5} fill={stroke} />
             </>
           )}
         </Svg>
@@ -135,28 +140,29 @@ function toPath(points: Point[]): string {
     .join(' ');
 }
 
-const styles = StyleSheet.create({
-  // 지도는 면이라 이 앱에서 유일하게 칠해진 자리다. 모서리를 둥글려 종이 위에 얹는다.
-  box: { overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
-  tile: { position: 'absolute' },
-  /*
-    지워서도, 안 보이게 해서도 안 된다. OSM(ODbL)과 CARTO 둘 다 표기를 요구한다.
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    // 지도는 면이라 이 앱에서 유일하게 칠해진 자리다. 모서리를 둥글려 종이 위에 얹는다.
+    box: { overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
+    tile: { position: 'absolute' },
+    /*
+      지워서도, 안 보이게 해서도 안 된다. OSM(ODbL)과 CARTO 둘 다 표기를 요구한다.
 
-    10px에 inkFaint로 뒀다가 고쳤다 — 이 앱은 11px에 inkFaint를 이미 한 번 시험하고
-    "화면에서 안 읽힌다"고 버렸는데(`theme.ts`), 그보다 더 흐린 글씨를 하필 무늬가
-    많은 타일 위에 얹고 있었다. 크기를 되돌리고, 흰 바탕을 깔아 지도와 분리한다.
-  */
-  credit: {
-    position: 'absolute',
-    right: spacing.xs,
-    bottom: spacing.xs,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    ...type.caption,
-    fontSize: 11,
-    lineHeight: 16,
-    color: colors.inkSoft,
-  },
-});
+      10px에 inkFaint로 뒀다가 고쳤다 — 이 앱은 11px에 inkFaint를 이미 한 번 시험하고
+      "화면에서 안 읽힌다"고 버렸는데(`theme.ts`), 그보다 더 흐린 글씨를 하필 무늬가
+      많은 타일 위에 얹고 있었다. 크기를 되돌리고, 흰 바탕을 깔아 지도와 분리한다.
+    */
+    credit: {
+      position: 'absolute',
+      right: spacing.xs,
+      bottom: spacing.xs,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: radius.sm,
+      backgroundColor: 'rgba(255,255,255,0.82)',
+      ...type.caption,
+      fontSize: 11,
+      lineHeight: 16,
+      color: colors.inkSoft,
+    },
+  });

@@ -27,6 +27,22 @@ export const MOOD_TINT: Record<MoodId, string> = {
   plain: '#9A9086',
 };
 
-export function moodTint(mood: MoodId): string {
-  return MOOD_TINT[mood];
+/**
+ * 어두운 화면에서 쓰는 짝.
+ *
+ * 같은 색을 그대로 쓰면 어두운 바탕에서 전부 가라앉아 서로 구분이 안 된다.
+ * 색상은 그대로 두고 밝기만 올렸다 — 여섯이 나란히 있을 때 어느 하나가 먼저
+ * 눈에 들어오면 안 된다는 규칙은 여기서도 같다.
+ */
+const MOOD_TINT_DARK: Record<MoodId, string> = {
+  pensive: '#8FA3C4',
+  excited: '#E0A183',
+  nervous: '#A6BCA8',
+  tired: '#BAA5B6',
+  hot: '#84AC8B',
+  plain: '#BDB3A7',
+};
+
+export function moodTint(mood: MoodId, scheme: 'light' | 'dark' = 'light'): string {
+  return (scheme === 'dark' ? MOOD_TINT_DARK : MOOD_TINT)[mood];
 }

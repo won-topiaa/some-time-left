@@ -7,7 +7,8 @@ import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/
 import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { RouteMap } from '../ui/RouteMap';
 import { moodTint } from '../ui/moodTint';
-import { colors, radius, spacing, type } from '../ui/theme';
+import { radius, spacing } from '../ui/theme';
+import { type Palette, type Scheme, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
 import type { LatLng } from '../domain/types';
@@ -42,6 +43,9 @@ const PROMISE_MATCH_MS = 90_000;
  * 사람에게는 "다른 길로 가세요"보다 "조금 천천히 걸어도 돼요"가 훨씬 자연스럽다.
  */
 function Walk() {
+  const { colors, scheme } = useTheme();
+  const styles = useStyles(createStyles);
+  const adviceTone = useMemo(() => createAdviceTone(colors, scheme), [colors, scheme]);
   const navigation = useNavigation();
   const { trip, update } = useTrip();
   const screen = useScreenInsets();
@@ -286,7 +290,7 @@ function Walk() {
         <RouteMap
           path={path}
           height={220}
-          tint={trip.mood != null ? moodTint(trip.mood) : colors.ink}
+          tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
           progress={alongRatio}
         />
       )}
@@ -368,57 +372,62 @@ function Walk() {
  * 걷는 중에 흘깃 보는 화면이라 여기서만 색을 쓴다. 다만 경고처럼 보이면 안 된다 —
  * 늦는 게 사고는 아니니까. 채도를 낮춰 종이 위에 색을 얹은 정도로만 둔다.
  */
-const adviceTone = StyleSheet.create({
-  // 네 상태가 서로 구별되면서도 경고처럼 보이지 않게. 바탕(#FAF9F6)보다는 또렷해야
-  // 카드로 읽히므로 keep도 흰색에 테두리를 준다.
-  slower: { backgroundColor: '#E9EEF6' },
-  keep: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
-  faster: { backgroundColor: '#F6EEDD' },
-  hurry: { backgroundColor: '#F4E0D9' },
-});
+const createAdviceTone = (colors: Palette, scheme: Scheme) =>
+  StyleSheet.create({
+    // 네 상태가 서로 구별되면서도 경고처럼 보이지 않게. 바탕보다는 또렷해야
+    // 카드로 읽히므로 keep도 면 색에 테두리를 준다.
+    //
+    // 어두운 화면에서는 같은 파스텔이 그대로 눈을 찌른다. 밝기를 뒤집어
+    // 바탕보다 조금 밝은 정도로만 두고, 색기만 남긴다.
+    slower: { backgroundColor: scheme === 'dark' ? '#232B38' : '#E9EEF6' },
+    keep: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+    faster: { backgroundColor: scheme === 'dark' ? '#332C1F' : '#F6EEDD' },
+    hurry: { backgroundColor: scheme === 'dark' ? '#3A2722' : '#F4E0D9' },
+  });
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-  },
-  spacer: { flex: 1 },
-  top: { alignItems: 'center', marginBottom: spacing.xl },
-  remainingLabel: { ...type.caption, color: colors.inkSoft },
-  // 굵기를 빼고 크기로만. 굵은 숫자는 재촉처럼 읽힌다.
-  remaining: { ...type.numeral, color: colors.ink },
-  // 걸으면서 흘깃 보는 화면이다. 여기서는 작게 만들지 않는다.
-  distance: { ...type.body, color: colors.inkSoft, marginTop: spacing.xs },
-  // 안내가 한 줄이든 두 줄이든 높이가 같아야 위의 큰 숫자가 움직이지 않는다.
-  advice: {
-    borderRadius: radius.lg,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 96,
-  },
-  adviceText: { ...type.title, color: colors.ink },
-  adviceSub: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
-  /*
-    페이스 카드가 낸 말의 근거라서 카드 바로 아래 붙인다.
-    아래 footnote보다 한 단계 진하게 — 이건 읽으라고 둔 숫자다.
-  */
-  projection: {
-    ...type.caption,
-    color: colors.inkSoft,
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
-  footnote: {
-    ...type.caption,
-    color: colors.inkFaint,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-  },
-  // 도망갈 문. 재촉하지 않도록 가장 옅게, 그러나 눌린다는 건 보이게.
-  manual: { paddingVertical: spacing.md, alignItems: 'center' },
-  manualText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
-  pressed: { opacity: 0.6 },
-});
+const createStyles = (colors: Palette, type: TypeScale) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.lg,
+    },
+    spacer: { flex: 1 },
+    top: { alignItems: 'center', marginBottom: spacing.xl },
+    remainingLabel: { ...type.caption, color: colors.inkSoft },
+    // 굵기를 빼고 크기로만. 굵은 숫자는 재촉처럼 읽힌다.
+    remaining: { ...type.numeral, color: colors.ink },
+    // 걸으면서 흘깃 보는 화면이다. 여기서는 작게 만들지 않는다.
+    distance: { ...type.body, color: colors.inkSoft, marginTop: spacing.xs },
+    // 안내가 한 줄이든 두 줄이든 높이가 같아야 위의 큰 숫자가 움직이지 않는다.
+    advice: {
+      borderRadius: radius.lg,
+      paddingVertical: spacing.lg,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 96,
+    },
+    adviceText: { ...type.title, color: colors.ink },
+    adviceSub: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
+    /*
+      페이스 카드가 낸 말의 근거라서 카드 바로 아래 붙인다.
+      아래 footnote보다 한 단계 진하게 — 이건 읽으라고 둔 숫자다.
+    */
+    projection: {
+      ...type.caption,
+      color: colors.inkSoft,
+      textAlign: 'center',
+      marginTop: spacing.md,
+    },
+    footnote: {
+      ...type.caption,
+      color: colors.inkFaint,
+      textAlign: 'center',
+      marginTop: spacing.lg,
+    },
+    // 도망갈 문. 재촉하지 않도록 가장 옅게, 그러나 눌린다는 건 보이게.
+    manual: { paddingVertical: spacing.md, alignItems: 'center' },
+    manualText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
+    pressed: { opacity: 0.6 },
+  });
