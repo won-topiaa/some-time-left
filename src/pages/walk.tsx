@@ -28,6 +28,14 @@ const ARRIVED_RADIUS_M = 40;
 const LOCATION_GRACE_MS = 20_000;
 
 /**
+ * 계획한 도착이 약속 앞 목표와 이만큼 안쪽이면 "그 시각에 맞추고 있다"고 말한다 (ms).
+ *
+ * 후보 경로는 목표를 정확히 맞히지 못하고 그 언저리로 흩어지므로(`aimSec`),
+ * 딱 떨어질 때만 인정하면 이 문장은 거의 안 나온다.
+ */
+const PROMISE_MATCH_MS = 90_000;
+
+/**
  * 걷는 중 화면.
  *
  * 경로를 다시 그리는 대신 속도를 미세 조정하게 한다.
@@ -220,27 +228,34 @@ function Walk() {
   }, [remainingM, goToArrival]);
 
   /**
-   * 무엇까지 세는가.
+   * 무엇까지 세는가 — **실제로 닿을 시각**이다.
    *
-   * 보통은 약속 ARRIVE_EARLY_MIN분 전이다 — 길이 그 시각에 닿도록 골라졌으니
-   * 그게 곧 도착 시각이다. 그때만 그 시각을 센다.
+   * 고른 길을 지금부터 걸으면 언제 닿는지, 그 하나만 센다. 약속 시각을 빌려 오지
+   * 않는다: 87분 남았는데 44분짜리 길을 걷는다면 약속 앞까지 세는 건 43분을
+   * 부풀리는 것이고, 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다.
+   * 일찍 닿는 길을 막지 않기로 한 뒤로는 그 어긋남이 예외가 아니라 흔한 일이 됐다.
    *
-   * 계획이 그 시각과 어긋나 있으면(더 일찍이든 더 늦게든) **실제로 닿을 시각**을 센다.
-   * - 더 일찍: 87분 남았는데 44분짜리 길이면, 약속 앞까지 세는 건 43분을 부풀리는
-   *   것이고 화면은 도착하고 나서도 "43분 남았다"고 말하게 된다.
-   * - 더 늦게: 최단으로도 5분 전엔 못 닿는 날(no-early), 못 지킬 시각을 세면
-   *   계획대로 걷는 사람에게 걷는 내내 "서둘러야 해요"라고 재촉하고, 아직 걷는 중인데
-   *   카운트다운이 먼저 0이 된다. 목표는 빌린 숫자가 아니라 지킬 수 있는 숫자여야 한다.
+   * 반대쪽도 같다. 최단으로도 못 맞추는 날(no-early) 못 지킬 시각을 세면 계획대로
+   * 걷는 사람을 내내 재촉하고, 아직 걷는 중인데 카운트다운이 먼저 0이 된다.
+   *
+   * 길이 없을 때만 약속 앞 시각으로 물러선다 — 그때는 셀 것이 그것뿐이다.
    */
   const plannedArrivalMs =
     trip.route != null ? arrivalAt(startedAtMs, trip.route.candidate.durationSec) : null;
   const promiseMs =
     trip.arriveAtMs != null ? trip.arriveAtMs - ARRIVE_EARLY_SEC * 1000 : null;
+  const targetMs = plannedArrivalMs ?? promiseMs;
+
+  /**
+   * 이 길이 약속 앞 목표 시각에 맞춰 골라졌는가. 화면 맨 아래 한 줄이 이걸로 갈린다.
+   *
+   * 계획이 그 시각을 겨눴더라도 실제로 그 언저리에 닿아야 그렇게 말할 수 있다.
+   */
   const promiseHeld =
     !trip.arrivesEarly &&
     promiseMs != null &&
-    (plannedArrivalMs == null || plannedArrivalMs <= promiseMs);
-  const targetMs = promiseHeld ? promiseMs : (plannedArrivalMs ?? promiseMs);
+    plannedArrivalMs != null &&
+    Math.abs(plannedArrivalMs - promiseMs) <= PROMISE_MATCH_MS;
 
   const remainingSec = targetMs != null ? Math.max(0, (targetMs - nowMs) / 1000) : 0;
 

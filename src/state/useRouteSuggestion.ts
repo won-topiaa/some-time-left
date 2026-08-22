@@ -6,7 +6,7 @@ import { isTmapConfigured } from '../config';
 import { RECENT_WINDOW, loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
-import { firstRoute, keepsPromise, nextRoute, rankRoutes } from '../domain/route-plan';
+import { arrivesOnTime, firstRoute, nextRoute, rankRoutes } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
@@ -41,14 +41,13 @@ export interface Suggestion {
    */
   clockOffsetMs: number;
   /**
-   * 지금 보여주는 길로 가면 **목표한 그 시각에** 닿는가.
+   * 지금 보여주는 길로 가면 **약속 전에** 닿는가.
    *
-   * 늦지 않는 것만으로는 모자란다. 목표보다 한참 일찍 닿는 길도 false다 —
-   * 20분짜리 길을 걸으면서 30분 뒤를 세면, 도착하고 나서도 "10분 남았다"고
-   * 말하는 화면이 된다. `arrivesOnTime`이 아니라 `keepsPromise`인 이유다.
+   * 일찍 닿는 것은 실패가 아니다 — 걷는 화면이 지금 속도로 몇 시에 닿을지 계속
+   * 알려주므로 그 사실은 이미 사용자 앞에 있다. 늦는 것만 막는다.
    *
-   * `stretched`와도 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 그 길로 가면
-   * 계획한 시각에 닿는지다. 화면은 이 값이 false면 그 시각을 약속하지 않는다.
+   * `stretched`와 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 그 길로 가면
+   * 제때 닿는지다.
    */
   onTime: boolean;
 }
@@ -224,15 +223,9 @@ export function useRouteSuggestion({
   const targetSec = plan != null && plan.kind !== 'too-late' ? plan.targetWalkSec : 0;
 
   /*
-   * 첫 한 장은 "너무 이른 것"까지는 봐준다(`firstRoute`). 여유가 두 시간 남은 날에는
-   * 어느 후보도 목표에 못 미치는데, 그때 빈 화면을 주면 걷지도 못하고 왜 안 되는지도
-   * 모른다. 일찍 닿는 건 아쉬운 일이지 실패가 아니다.
-   *
-   * **늦는 것만은 어느 쪽으로도 새지 않는다.** 두 함수 모두 목표를 넘긴 길을
-   * 돌려주지 않고, 후보에 늘 최단 경로가 있어서 돌려줄 것이 없는 경우도 없다.
-   *
-   * "다른 길"은 문턱이 하나 더 높다. 사용자가 더 나은 걸 청한 것이므로,
-   * 더 나쁜 걸 주느니 없다고 하는 게 맞다.
+   * **늦는 것만은 어느 쪽으로도 새지 않는다.** 두 함수 모두 문턱을 넘긴 길을
+   * 돌려주지 않고, 그래도 돌려줄 것이 없으면 최단 경로(`floor`)가 받는다 —
+   * 늘리는 계획이 섰다는 건 최단이 목표 안에 든다는 뜻이라 늘 제때 닿는다.
    */
   const current =
     nextRoute(ranked, shownIds, targetSec) ?? firstRoute(ranked, targetSec) ?? floor;
@@ -262,6 +255,6 @@ export function useRouteSuggestion({
     retry,
     stretched,
     clockOffsetMs,
-    onTime: current != null && keepsPromise(current.candidate.durationSec, targetSec),
+    onTime: current != null && arrivesOnTime(current.candidate.durationSec, targetSec),
   };
 }

@@ -60,27 +60,6 @@ export function arrivesOnTime(durationSec: number, targetSec: number): boolean {
   return durationSec <= targetSec + LATE_SLACK_SEC;
 }
 
-/**
- * 대안으로 내놓아도 되는 이름의 한계 (초).
- *
- * 늦는 것보다 덜 나쁘지만 공짜는 아니다. 10분 전에 닿는 길은 약속이 다른 앱의 것이고,
- * 무엇보다 사용자가 이 앱을 켠 이유(자투리 시간을 걷기로 쓰는 것)를 그만큼 돌려주지 않는다.
- */
-export const EARLY_TOLERANCE_SEC = 5 * 60;
-
-/**
- * 이 길이 "다른 길"로 내놓을 만한가.
- *
- * 제때 닿는 것에 더해, 너무 일찍 닿지도 않아야 한다.
- *
- * 점수(`score`)와 별개로 둔다. 점수는 후보들 사이의 **순서**를 정할 뿐이라
- * 전부 나쁘면 그중 제일 나은 것이 1등이 된다. 약속을 지키는지는 순위가 아니라
- * 문턱이어야 한다 — 그래서 비교가 아니라 이 함수가 판단한다.
- */
-export function keepsPromise(durationSec: number, targetSec: number): boolean {
-  return arrivesOnTime(durationSec, targetSec) && targetSec - durationSec <= EARLY_TOLERANCE_SEC;
-}
-
 export function rankRoutes(
   candidates: RouteCandidate[],
   { targetSec, weights, recentRouteIds = [] }: RankOptions
@@ -106,15 +85,11 @@ export function rankRoutes(
 }
 
 /**
- * 처음 보여줄 한 장.
+ * 처음 보여줄 한 장. 아직 아무것도 안 보여준 상태의 `nextRoute`다.
  *
- * `nextRoute`보다 문턱이 하나 낮다 — 너무 일찍 닿는 것은 봐주고, **늦는 것만 막는다.**
- * 여유가 두 시간 남은 날에는 어느 후보도 목표에 못 미치는데, 그때 빈 화면을 주면
- * 걷지도 못하고 왜 안 되는지도 모른다. 일찍 닿는 건 아쉬운 일이지 실패가 아니다.
- *
- * 여기서도 **늦는 것만은 막는다.** 후보가 전부 목표를 넘겨 null이 나오는 날을 위해
- * `useRouteSuggestion`이 최단 경로를 따로 들고 있다 — 늘리는 계획이 섰다는 건
- * 최단이 목표 안에 든다는 뜻이므로, 그 한 장은 언제나 제때 닿는다.
+ * 후보가 전부 늦어서 null이 나오는 날을 위해 `useRouteSuggestion`이 최단 경로를
+ * 따로 들고 있다 — 늘리는 계획이 섰다는 건 최단이 목표 안에 든다는 뜻이므로,
+ * 그 한 장은 언제나 제때 닿는다.
  */
 export function firstRoute(ranked: ScoredRoute[], targetSec: number): ScoredRoute | null {
   return ranked.find((r) => arrivesOnTime(r.candidate.durationSec, targetSec)) ?? null;
@@ -122,15 +97,15 @@ export function firstRoute(ranked: ScoredRoute[], targetSec: number): ScoredRout
 
 /**
  * 사용자가 "다른 길"을 눌렀을 때 다음 후보.
- * 이미 보여준 것들을 빼고, **약속을 지키는 것 중에서** 그다음으로 좋은 것.
+ * 이미 보여준 것들을 빼고, **제때 닿는 것 중에서** 그다음으로 좋은 것.
  *
  * 문턱을 두는 이유: 후보는 경유지를 흩뿌려 만들기 때문에 소요 시간이 넓게 퍼진다.
- * 문턱 없이 순위만 따라 내려가면 "다른 길"을 누를수록 점점 안 맞는 길이 나오고,
+ * 문턱 없이 순위만 따라 내려가면 "다른 길"을 누를수록 점점 늦는 길이 나오고,
  * 몇 번 누른 사람은 약속에 늦는다. 이 앱이 하나 지키기로 한 것이 그것뿐인데
  * 버튼 하나로 무너지면 안 된다.
  *
- * 그래서 보여줄 게 없으면 없는 것으로 둔다 — 화면은 "다른 길" 버튼을 감춘다.
- * 나쁜 선택지를 주는 것보다 선택지가 없는 편이 정직하다.
+ * 일찍 닿는 쪽은 막지 않는다. 걷는 화면이 지금 속도로 몇 시에 닿을지 계속
+ * 알려주므로, 일찍 닿는다는 사실은 이미 사용자 앞에 있다.
  */
 export function nextRoute(
   ranked: ScoredRoute[],
@@ -140,7 +115,7 @@ export function nextRoute(
   const shown = new Set(shownRouteIds);
   return (
     ranked.find(
-      (r) => !shown.has(r.candidate.id) && keepsPromise(r.candidate.durationSec, targetSec)
+      (r) => !shown.has(r.candidate.id) && arrivesOnTime(r.candidate.durationSec, targetSec)
     ) ?? null
   );
 }
