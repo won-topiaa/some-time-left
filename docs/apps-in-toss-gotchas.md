@@ -277,7 +277,34 @@ MapLibre를 CDN에서 받지 않고 **번들에 문자열로 넣는 편이 낫�
   절반 크기가 되어 안 읽힌다. 타일 하나가 실제 화소로 원본 크기에 가장 가깝게
   놓이는 배율을 고르면 둘 다 피한다.
 
-## 9. 코드 쪽에서 되풀이하지 말 것
+## 9. 프레임워크가 이미 감싼 것을 또 감싸지 않는다
+
+`AppRoot`가 Router 위에서 **`SafeAreaProvider`를 이미 하나 두고 있다.**
+앱 진입부에서 하나 더 감싸면 두 겹이 되고, 실기기에서 이렇게 나타났다 —
+
+```
+ERROR  Maximum update depth exceeded. This can happen when a component
+       calls setState inside useEffect, but useEffect either doesn't have
+       a dependency array, or one of the dependencies changes on every render.
+```
+
+화면마다 초당 수십 줄씩 찍히고 앱이 버벅인다. 안쪽 provider가 자기 크기를 재서
+setState하고, 그 결과가 자기 레이아웃을 바꾸고, 다시 재는 되먹임이다.
+값도 틀린다 — `useSafeAreaInsets()`가 바깥 화면이 아니라 안쪽 틀을 기준으로 답한다.
+
+safe-area-context는 **앱 하나에 provider 하나**를 전제로 만들어져 있다.
+
+새 앱을 만들 때 `AppRoot.tsx`를 한 번 열어 보고, 거기 이미 있는 것은 다시 두지 않는다.
+지금 프레임워크가 감싸 주는 것들:
+
+```
+InitialPropsProvider → App → SafeAreaProvider → BackEventProvider → Router
+```
+
+**이 오류는 눈으로 안 보인다.** 화면은 멀쩡해 보이고 로그에만 찍힌다 —
+샌드박스에 붙어서 터미널을 보지 않으면 영영 모른다. (8번의 순서를 지켜야 하는 이유다.)
+
+## 10. 코드 쪽에서 되풀이하지 말 것
 
 앱인토스와 직접 상관은 없지만 이번에 값을 치른 것들.
 
@@ -307,4 +334,6 @@ MapLibre를 CDN에서 받지 않고 **번들에 문자열로 넣는 편이 낫�
 [ ] granite.config.ts 에 target 을 적지 않았다
 [ ] 비밀값이 .gitignore 된 파일에만 있다
 [ ] 첫 실행은 배포가 아니라 샌드박스로 한다
+[ ] AppRoot.tsx를 열어 보고, 거기 이미 있는 provider를 다시 감싸지 않았다
+[ ] 샌드박스에 붙여 터미널 로그를 한 번 끝까지 읽었다 (화면은 멀쩡해도 로그는 아닐 수 있다)
 ```

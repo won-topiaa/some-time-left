@@ -47,3 +47,22 @@ describe('pages 디렉터리', () => {
     expect(declared.sort()).toEqual(pagePaths.sort());
   });
 });
+
+/**
+ * 프레임워크가 이미 감싼 것을 또 감싸지 않는다.
+ *
+ * `AppRoot`가 Router 위에서 SafeAreaProvider를 하나 두는데, `boot.tsx`에서 하나 더
+ * 두면 두 겹이 된다. 안쪽 provider가 자기 크기를 재서 setState하고 그 결과가 자기
+ * 레이아웃을 바꾸는 되먹임이 생겨, 실기기에서 무한 루프로 나타났다 —
+ * "Maximum update depth exceeded"가 화면마다 초당 수십 줄씩 찍혔다.
+ *
+ * 눈으로는 안 보이고 로그로만 보이는 종류라 다시 들어오기 쉽다. 여기서 막는다.
+ */
+describe('boot.tsx', () => {
+  const BOOT = readFileSync(path.join(__dirname, '..', 'boot.tsx'), 'utf8');
+
+  it('SafeAreaProvider를 다시 감싸지 않는다', () => {
+    // 주석에서는 이름을 말해도 되지만, 실제로 그리지는 않아야 한다.
+    expect(BOOT).not.toMatch(/<SafeAreaProvider/);
+  });
+});

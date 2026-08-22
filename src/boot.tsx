@@ -9,7 +9,6 @@
 
 import type { PropsWithChildren } from 'react';
 import type { InitialProps } from '@granite-js/react-native';
-import { SafeAreaProvider } from '@granite-js/native/react-native-safe-area-context';
 import { TripProvider } from './state/TripContext';
 import { configureApi } from './config';
 import { localSecrets } from './config.local';
@@ -30,10 +29,22 @@ configureApi({
   vworld: { key: localSecrets.vworldKey },
 });
 
+/**
+ * **SafeAreaProvider를 여기서 또 감싸지 않는다.**
+ *
+ * `AppRoot`가 이미 Router 위에서 하나 감싸고 있어서, 여기서 하나 더 두면 두 겹이 된다.
+ * 안쪽 provider는 자기 크기를 재서 setState하고, 그 결과가 자기 레이아웃을 바꾸고,
+ * 다시 재고… 실기기에서 이게 그대로 무한 루프가 됐다 —
+ *
+ *   ERROR  Maximum update depth exceeded. This can happen when a component
+ *          calls setState inside useEffect ...
+ *
+ * 화면마다 초당 수십 줄씩 찍히고 앱이 버벅였다. 값도 틀린다: `useSafeAreaInsets()`가
+ * 바깥 화면이 아니라 안쪽 provider의 틀을 기준으로 답한다.
+ *
+ * safe-area-context는 **앱 하나에 provider 하나**를 전제로 만들어져 있다.
+ * 우리는 프레임워크가 준 것을 그대로 쓴다.
+ */
 export function Boot({ children }: PropsWithChildren<InitialProps>) {
-  return (
-    <SafeAreaProvider>
-      <TripProvider>{children}</TripProvider>
-    </SafeAreaProvider>
-  );
+  return <TripProvider>{children}</TripProvider>;
 }
