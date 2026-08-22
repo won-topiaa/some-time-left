@@ -1,90 +1,70 @@
 import { describe, expect, it } from 'vitest';
-import { matchCongestionPlace, normalizeName } from '../destination-congestion';
-import { parseCongestion, CONGESTION_LABEL } from '../tmap/congestion';
-import type { CongestionPlace } from '../tmap/congestion';
-import type { Place } from '../tmap/parse';
+import { CONGESTION_WORD, nearestHotspot, parseProxyAreas } from '../seoul/congestion';
+import type { Hotspot } from '../seoul/hotspots';
 
-const PLACES: CongestionPlace[] = [
-  { poiId: '5799875', poiName: '롯데월드몰' },
-  { poiId: '5411247', poiName: '스타필드하남' },
-  { poiId: '214920', poiName: '신세계백화점강남점' },
+/** 성수카페거리(37.5445, 127.0557)와 그 이웃들. */
+const HOTSPOTS: Hotspot[] = [
+  { areaName: '성수카페거리', at: { lat: 37.5445, lng: 127.0557 } },
+  { areaName: '잠실 관광특구', at: { lat: 37.5133, lng: 127.1 } },
+  { areaName: '강남역', at: { lat: 37.4979, lng: 127.0276 } },
 ];
 
-function place(overrides: Partial<Place> = {}): Place {
-  return { name: '롯데월드몰', address: '', at: { lat: 37.5133, lng: 127.1 }, ...overrides };
-}
-
-describe('matchCongestionPlace', () => {
-  it('poiId가 있으면 그걸로 맞춘다', () => {
-    const match = matchCongestionPlace(place({ name: '이름이 달라도', poiId: '5799875' }), PLACES);
-    expect(match?.poiName).toBe('롯데월드몰');
+describe('nearestHotspot — 약속 장소가 어느 동네인가', () => {
+  it('반경 안에서 가장 가까운 장소를 준다', () => {
+    // 성수카페거리에서 200m쯤 떨어진 지점.
+    const near = nearestHotspot({ lat: 37.546, lng: 127.056 }, HOTSPOTS);
+    expect(near?.areaName).toBe('성수카페거리');
   });
 
-  it('poiId가 없으면 이름으로 맞춘다 — 지오코딩 결과에는 poiId가 없다', () => {
-    expect(matchCongestionPlace(place(), PLACES)?.poiId).toBe('5799875');
+  /*
+   * 반경 밖이면 null이어야 한다. 가장 가까운 곳을 무조건 주면
+   * 김포공항에서도 "강남역이 붐벼요"라고 말하게 된다 — 틀린 값을 지어내는 것이다.
+   */
+  it('반경 밖이면 null', () => {
+    // 김포공항 근처. 어느 장소에서도 수 km 밖이다.
+    expect(nearestHotspot({ lat: 37.5585, lng: 126.7906 }, HOTSPOTS)).toBeNull();
   });
 
-  it('공백과 구두점 차이를 넘어서 맞춘다', () => {
-    expect(matchCongestionPlace(place({ name: '롯데 월드몰 ' }), PLACES)?.poiId).toBe('5799875');
-    expect(matchCongestionPlace(place({ name: '신세계백화점 강남점' }), PLACES)?.poiId).toBe('214920');
-  });
-
-  it('목록에 없는 장소면 null — 대부분의 약속 장소가 여기 해당한다', () => {
-    expect(matchCongestionPlace(place({ name: '성수동 어니언' }), PLACES)).toBeNull();
-  });
-
-  it('poiId가 목록에 없으면 이름으로 되짚는다', () => {
-    const match = matchCongestionPlace(place({ name: '롯데월드몰', poiId: '9999999' }), PLACES);
-    expect(match?.poiId).toBe('5799875');
-  });
-
-  it('이름이 비면 null', () => {
-    expect(matchCongestionPlace(place({ name: '' }), PLACES)).toBeNull();
+  it('둘 다 반경 안이면 더 가까운 쪽', () => {
+    const wide: Hotspot[] = [
+      { areaName: 'A', at: { lat: 37.5, lng: 127.0 } },
+      { areaName: 'B', at: { lat: 37.5, lng: 127.004 } },
+    ];
+    const near = nearestHotspot({ lat: 37.5, lng: 127.003 }, wide, 1000);
+    expect(near?.areaName).toBe('B');
   });
 });
 
-describe('normalizeName', () => {
-  it('공백·괄호·점을 지운다', () => {
-    expect(normalizeName('신세계 백화점 (강남점)')).toBe('신세계백화점강남점');
+describe('CONGESTION_WORD — 화면에 얹는 말', () => {
+  it('네 등급 전부 문장에 들어갈 말이 있다', () => {
+    expect(CONGESTION_WORD['여유']).toBe('한산해요');
+    expect(CONGESTION_WORD['보통']).toBe('보통이에요');
+    expect(CONGESTION_WORD['약간 붐빔']).toBe('조금 붐벼요');
+    expect(CONGESTION_WORD['붐빔']).toBe('붐벼요');
   });
 });
 
-describe('parseCongestion', () => {
-  it('rltm 배열의 첫 항목에서 등급을 읽는다', () => {
-    const result = parseCongestion({
-      status: { code: '00' },
-      contents: { poiId: '5799875', rltm: [{ congestionLevel: 3 }] },
-    });
-
-    expect(result).toEqual({ poiId: '5799875', level: 3 });
+describe('parseProxyAreas — 프록시 응답 읽기', () => {
+  it('아는 장소의 등급을 좌표와 함께 준다', () => {
+    const areas = parseProxyAreas(
+      { areas: [{ areaName: '성수카페거리', level: '붐빔' }] },
+      HOTSPOTS
+    );
+    expect(areas).toHaveLength(1);
+    expect(areas[0].level).toBe('붐빔');
+    expect(areas[0].at.lat).toBeCloseTo(37.5445, 4);
   });
 
-  it('평탄한 형태도 받는다', () => {
-    const result = parseCongestion({
-      status: { code: '00' },
-      contents: { poiId: '5799875', congestionLevel: 4 },
-    });
-
-    expect(result?.level).toBe(4);
-  });
-
-  it('0~1 비율로 오면 4단계로 환산한다', () => {
-    expect(parseCongestion({ contents: { poiId: 'x', rltm: [{ congestion: 0.1 }] } })?.level).toBe(1);
-    expect(parseCongestion({ contents: { poiId: 'x', rltm: [{ congestion: 0.9 }] } })?.level).toBe(4);
-  });
-
-  it('조회 실패면 null', () => {
-    expect(parseCongestion({ status: { code: '99' }, contents: { poiId: 'x' } })).toBeNull();
-  });
-
-  it('읽을 수 없으면 null — 화면에서 조용히 생략된다', () => {
-    expect(parseCongestion({ contents: { poiId: 'x' } })).toBeNull();
-    expect(parseCongestion({})).toBeNull();
-  });
-
-  it('모든 등급에 문구가 있다', () => {
-    for (const level of [1, 2, 3, 4] as const) {
-      expect(CONGESTION_LABEL[level]).toBeTruthy();
-    }
+  it('모르는 등급이나 모르는 장소는 떨어뜨린다', () => {
+    const areas = parseProxyAreas(
+      {
+        areas: [
+          { areaName: '성수카페거리', level: '초만원' },
+          { areaName: '모르는동네', level: '붐빔' },
+        ],
+      },
+      HOTSPOTS
+    );
+    expect(areas).toHaveLength(0);
   });
 });

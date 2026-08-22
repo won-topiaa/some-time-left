@@ -83,18 +83,66 @@ export function hotspotsAlong(
   );
 }
 
+/** 도착 화면 한 줄에 쓰는 말. 등급을 숫자나 원문 그대로 내보이지 않는다. */
+export const CONGESTION_WORD: Record<CongestionLevel, string> = {
+  여유: '한산해요',
+  보통: '보통이에요',
+  '약간 붐빔': '조금 붐벼요',
+  붐빔: '붐벼요',
+};
+
+/** 좌표에서 가장 가까운 장소. 반경 밖이면 null — 억지로 먼 동네 값을 씌우지 않는다. */
+export function nearestHotspot(
+  at: LatLng,
+  hotspots: Hotspot[] = SEOUL_HOTSPOTS,
+  radiusM: number = HOTSPOT_RADIUS_M
+): Hotspot | null {
+  let best: Hotspot | null = null;
+  let bestM = radiusM;
+
+  for (const hotspot of hotspots) {
+    const d = distanceM(at, hotspot.at);
+    if (d <= bestM) {
+      best = hotspot;
+      bestM = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * 한 지점(약속 장소)의 현재 혼잡도.
+ *
+ * TMAP Puzzle을 쓰다가 이쪽으로 옮겼다. Puzzle은 앱 키의 월 사용량을 먹는데
+ * (실제로 한 달 80%를 썼다), 서울 인구데이터는 **우리 프록시가 이미 받고 있고**
+ * 프록시가 5분씩 캐시하므로 같은 동네를 여럿이 물어도 업스트림 호출은 하나다.
+ * 앱에는 키가 아예 없다 — quiet 점수가 쓰는 바로 그 자리다.
+ *
+ * 대상은 서울 주요 장소들이다. 목록 밖이면 null이고, 도착 화면은 그 줄을 안 그린다 —
+ * Puzzle 때(대형 쇼핑몰 200곳)와 같은 성질이고, 걷는 약속 장소와는 이쪽이 더 겹친다.
+ */
+export async function fetchCongestionAt(at: LatLng): Promise<AreaCongestion | null> {
+  const hotspot = nearestHotspot(at);
+  if (hotspot == null) {
+    return null;
+  }
+
+  const areas = await fetchCongestionAreas([hotspot]);
+  return areas.find((area) => area.areaName === hotspot.areaName) ?? null;
+}
+
 /**
  * 경로가 지나는 장소들의 현재 혼잡도.
  * 프록시가 없으면 빈 배열 — `scoreQuiet`이 중립값으로 떨어진다.
  */
 export async function fetchCongestionAlong(path: LatLng[]): Promise<AreaCongestion[]> {
-  const { congestionProxy } = getApiConfig();
-  if (congestionProxy.baseUrl == null) {
-    return [];
-  }
+  return fetchCongestionAreas(hotspotsAlong(path));
+}
 
-  const targets = hotspotsAlong(path);
-  if (targets.length === 0) {
+/** 장소 목록의 혼잡도를 프록시에서 한 번에 받는다. */
+async function fetchCongestionAreas(targets: Hotspot[]): Promise<AreaCongestion[]> {
+  const { congestionProxy } = getApiConfig();
+  if (congestionProxy.baseUrl == null || targets.length === 0) {
     return [];
   }
 

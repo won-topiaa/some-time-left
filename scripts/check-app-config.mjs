@@ -239,23 +239,9 @@ await probe(
       }
 );
 
-// 3. TMAP Puzzle — TMAP과 별개 상품이다. 목적지 붐빔 한 줄용 선택 기능.
-await probe(
-  '장소 혼잡도',
-  appKey == null
-    ? null
-    : async () => {
-        const response = await fetch(`${config.tmap.baseUrl}/puzzle/place/meta/pois?offset=0&limit=1`, {
-          headers: { appKey, Accept: 'application/json' },
-        });
-        const body = await readJson(response);
-        if (body?.error?.code != null) {
-          throw new Error(`${body.error.code} — Puzzle 상품 미신청`);
-        }
-        return `제공 장소 ${body?.status?.totalCount ?? '?'}곳`;
-      },
-  { optional: true }
-);
+// (TMAP Puzzle 점검은 지웠다. 목적지 혼잡도가 서울 인구데이터로 옮겨 가면서
+//  Puzzle을 아예 안 부른다 — 월 사용량을 먹던 유일한 자리였다.
+//  서울 쪽은 위 '혼잡도 프록시' 점검이 그대로 검증한다.)
 
 // 4. 공공데이터포털 — 공원 표준데이터
 const serviceKey = config.publicData.serviceKey;

@@ -5,7 +5,7 @@ import { useScreenInsets } from '../ui/screenInsets';
 import { generateHapticFeedback } from '@apps-in-toss/framework';
 import { NOTE_PLACEHOLDER, arrivalPrompt } from '../domain/copy';
 import { saveRecord } from '../data/records';
-import { CONGESTION_LABEL } from '../data/tmap/congestion';
+import { CONGESTION_WORD } from '../data/seoul/congestion';
 import {
   lookupDestinationCongestion,
   type DestinationCongestion,
@@ -186,7 +186,7 @@ function Arrive() {
 
         {congestion != null && (
           <Text style={styles.congestion}>
-            {congestion.poiName}, 지금 {CONGESTION_LABEL[congestion.level]}
+            {congestion.areaName} 일대, 지금 {CONGESTION_WORD[congestion.level]}
           </Text>
         )}
 

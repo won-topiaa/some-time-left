@@ -1,76 +1,27 @@
 /**
- * 목적지 혼잡도.
+ * 목적지 혼잡도 — 도착 화면에서 한 줄 얹는 용도.
  *
- * TMAP Puzzle 장소 혼잡도는 대형 쇼핑시설 200여 곳만 다룬다. 그래서 경로의
- * 한적함(`quiet`)에는 쓸 수 없고 — 그건 서울 실시간 인구데이터가 맡는다 —
- * **약속 장소가 마침 그런 곳일 때** 도착 화면에서 한 줄 얹는 용도로 쓴다.
+ *   "5분 남았어요. 성수카페거리 일대, 지금 붐벼요."
  *
- *   "5분 남았어요. 롯데월드몰, 지금 붐벼요."
+ * TMAP Puzzle(대형 쇼핑시설 200곳)을 쓰다가 **서울 실시간 인구데이터**로 옮겼다.
+ * 이유는 두 가지다.
  *
- * 목록에 없는 장소가 대부분이므로, 없으면 조용히 아무것도 안 보여준다.
+ * 1. Puzzle은 앱 키의 월 사용량을 먹는다 — 실제로 한 달의 80%를 썼다.
+ *    서울 데이터는 우리 프록시가 5분 캐시로 받고 있어서 앱 키를 아예 안 쓴다.
+ *    경로의 한적함(quiet)이 이미 쓰는 바로 그 파이프라인이다.
+ * 2. 걷는 약속 장소와는 서울 주요 장소 쪽이 더 겹친다. 쇼핑몰 목록에는
+ *    "성수카페거리"도 "연남동"도 없다.
+ *
+ * 목록 밖이면 null이고, 화면은 그 줄을 아예 안 그린다 — 억지로 먼 동네 값을
+ * 씌우지 않는다. 부가 정보의 실패가 흐름을 막아서도 안 된다.
  */
 
-import {
-  fetchCongestionPlaces,
-  fetchPlaceCongestion,
-  type CongestionPlace,
-  type PlaceCongestion,
-} from './tmap/congestion';
+import { fetchCongestionAt, type AreaCongestion } from './seoul/congestion';
 import type { Place } from './tmap/parse';
 
-/** 이름 비교용 정규화. 공백·괄호·점 때문에 안 맞는 걸 막는다. */
-export function normalizeName(name: string): string {
-  return name.replace(/[\s()·・.,-]/g, '').toLowerCase();
-}
+export type DestinationCongestion = AreaCongestion;
 
-/**
- * 목적지가 혼잡도 제공 장소인지 찾는다.
- *
- * poiId가 있으면 그걸로 맞춘다(검색으로 고른 장소). 지오코딩 결과처럼 poiId가
- * 없으면 이름으로 맞춘다 — "롯데월드몰"과 "롯데월드몰 "을 같게 보려면 정규화가 필요하다.
- */
-export function matchCongestionPlace(
-  destination: Place,
-  places: CongestionPlace[]
-): CongestionPlace | null {
-  if (destination.poiId != null && destination.poiId !== '') {
-    const byId = places.find((p) => p.poiId === destination.poiId);
-    if (byId != null) {
-      return byId;
-    }
-  }
-
-  const target = normalizeName(destination.name);
-  if (target === '') {
-    return null;
-  }
-  return places.find((p) => normalizeName(p.poiName) === target) ?? null;
-}
-
-/** 제공 장소 목록은 자주 안 바뀐다. 세션 동안 한 번만 받는다. */
-let placeCache: CongestionPlace[] | null = null;
-
-export function clearCongestionPlaceCache(): void {
-  placeCache = null;
-}
-
-async function loadPlaces(): Promise<CongestionPlace[]> {
-  if (placeCache != null) {
-    return placeCache;
-  }
-  const { places } = await fetchCongestionPlaces(0, 1000);
-  placeCache = places;
-  return places;
-}
-
-export interface DestinationCongestion extends PlaceCongestion {
-  poiName: string;
-}
-
-/**
- * 목적지의 지금 혼잡도. 제공 장소가 아니거나 조회에 실패하면 null.
- * 도착 화면의 부가 정보라 실패가 흐름을 막아선 안 된다.
- */
+/** 목적지의 지금 혼잡도. 대상 장소가 아니거나 조회에 실패하면 null. */
 export async function lookupDestinationCongestion(
   destination: Place | null
 ): Promise<DestinationCongestion | null> {
@@ -79,14 +30,7 @@ export async function lookupDestinationCongestion(
   }
 
   try {
-    const places = await loadPlaces();
-    const match = matchCongestionPlace(destination, places);
-    if (match == null) {
-      return null;
-    }
-
-    const congestion = await fetchPlaceCongestion(match.poiId);
-    return congestion == null ? null : { ...congestion, poiName: match.poiName };
+    return await fetchCongestionAt(destination.at);
   } catch {
     return null;
   }
