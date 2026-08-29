@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pathLengthM, splitPath, walkProgress } from '../geo';
+import { pathLengthM, projectToPath, splitPath, walkProgress } from '../geo';
 import type { LatLng } from '../types';
 
 /**
@@ -156,5 +156,40 @@ describe('splitPath', () => {
       { lat: 37.5, lng: 127.0 },
     ];
     expect(splitPath(same, 0.7)?.at).toEqual(same[0]);
+  });
+});
+
+/**
+ * 도착 문턱에서 남은 거리가 Infinity로 튀지 않는다.
+ *
+ * walk 화면은 progress.current를 Math.max로 단조 증가시키다가 도착하면 1.0에
+ * 이르는데, 그 다음 GPS 표본이 오면 projectToPath(path, at, 1)이 불린다.
+ * 스킵 조건이 `<=`였을 때는 마지막 구간까지 건너뛰어 초깃값 Infinity가 그대로
+ * 나왔고, 그 값이 "Infinitym 남았어요", 거짓 경로 이탈 진동, 그리고
+ * `remainingM > 30`이 참이 되어 자동 도착이 막히는 것까지 번졌다.
+ */
+describe('projectToPath — 도착 문턱(minAlongRatio=1)', () => {
+  it('마지막 구간을 통째로 건너뛰지 않는다 (Infinity 금지)', () => {
+    const end = OUT_AND_BACK[OUT_AND_BACK.length - 1];
+    const projection = projectToPath(OUT_AND_BACK, end, 1);
+    expect(Number.isFinite(projection.distanceM)).toBe(true);
+    // 도착점에 서 있으면 경로까지 거리는 0에 가깝다.
+    expect(projection.distanceM).toBeLessThan(1);
+    expect(projection.alongRatio).toBeCloseTo(1, 5);
+  });
+
+  it('도착점에서 walkProgress가 유한한 0에 가까운 값을 준다', () => {
+    const end = OUT_AND_BACK[OUT_AND_BACK.length - 1];
+    const walked = walkProgress(OUT_AND_BACK, end, { since: 1 });
+    expect(Number.isFinite(walked.remainingM)).toBe(true);
+    // 자동 도착 문턱(30m)을 넘지 않아야 걷는 화면에 갇히지 않는다.
+    expect(walked.remainingM).toBeLessThan(30);
+  });
+
+  it('직선 두 점짜리 길에서도 Infinity가 아니다', () => {
+    const straight = [at(0, 0), at(300, 0)];
+    const projection = projectToPath(straight, at(300, 0), 1);
+    expect(Number.isFinite(projection.distanceM)).toBe(true);
+    expect(projection.alongRatio).toBeCloseTo(1, 5);
   });
 });

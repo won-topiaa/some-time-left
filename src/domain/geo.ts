@@ -306,7 +306,13 @@ export function projectToPath(
     // 이미 지나온 지점보다 앞이면, 이 구간에서 볼 수 있는 가장 이른 자리로 당긴다.
     if (minAlongRatio > 0 && total > 0) {
       const floorM = minAlongRatio * total;
-      if (travelled + segLen <= floorM) {
+      // `<`여야 한다. `<=`였을 땐 minAlongRatio가 1일 때 floorM==total이 되고,
+      // 마지막 구간에서 travelled+segLen이 total과 부동소수점까지 똑같아
+      // (pathLengthM과 여기가 같은 순서로 더한다) 마지막 구간마저 건너뛴다.
+      // 그러면 best가 초깃값 Infinity로 남아, 도착 순간 남은 거리가 Infinity로
+      // 튀고 거짓 이탈 경고·자동 도착 먹통까지 번진다. 구간이 바닥에서 정확히
+      // 끝날 땐 건너뛰지 말고 그 끝점(clamped=1)을 후보로 둔다.
+      if (travelled + segLen < floorM) {
         travelled += segLen;
         continue;
       }
