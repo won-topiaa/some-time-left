@@ -51,7 +51,7 @@ function Home() {
   /** null이면 앱이 다가오는 쪽으로 읽는다. 고르면 그 뜻이 이긴다. */
   const [period, setPeriod] = useState<'am' | 'pm' | null>(null);
   const minuteRef = useRef<TextInput>(null);
-  const { results, searching, available } = usePlaceSearch(query);
+  const { results, searching } = usePlaceSearch(query);
   // 편지의 첫 줄. 못 읽으면 null이고, 그러면 그 줄은 없다.
   const weather = useWeather();
   // 지금까지 걸은 거리. 없으면 null이라 아무것도 덧붙이지 않는다.
@@ -206,9 +206,7 @@ function Home() {
           <>
             <TextInput
               style={styles.input}
-              // 키가 없다는 건 우리 사정이지 쓰는 사람 사정이 아니다.
-              // "검색 키 미설정" 같은 말이 화면에 나오면 안 된다.
-              placeholder={available ? '약속 장소' : '지금은 장소를 찾을 수 없어요'}
+              placeholder="약속 장소"
               placeholderTextColor={colors.inkFaint}
               value={query}
               onChangeText={setQuery}

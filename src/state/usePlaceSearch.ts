@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Accuracy, getCurrentLocation } from '@apps-in-toss/framework';
 import { findPlaces, type Place } from '../data/places';
-import { isTmapConfigured } from '../config';
 import type { LatLng } from '../domain/types';
 
 /** 타이핑이 멈추고 이만큼 지나면 검색한다 (ms). */
@@ -13,8 +12,6 @@ const MIN_QUERY_LENGTH = 2;
 export interface PlaceSearch {
   results: Place[];
   searching: boolean;
-  /** 검색을 쓸 수 있는 상태인가 (키 미설정이면 false) */
-  available: boolean;
 }
 
 /**
@@ -26,12 +23,9 @@ export function usePlaceSearch(query: string): PlaceSearch {
   const [searching, setSearching] = useState(false);
   const near = useRef<LatLng | undefined>(undefined);
 
-  const available = isTmapConfigured();
-
   useEffect(() => {
-    if (!available) {
-      return;
-    }
+    // 약속 장소는 대개 근처라 가까운 곳부터 보여주려고 현재 위치를 잡아 둔다.
+    // 키가 없어 mock으로 검색할 때도 이 위치로 가까운 순으로 정렬한다.
     getCurrentLocation({ accuracy: Accuracy.Balanced })
       .then((position) => {
         near.current = {
@@ -40,12 +34,12 @@ export function usePlaceSearch(query: string): PlaceSearch {
         };
       })
       .catch(() => {});
-  }, [available]);
+  }, []);
 
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (!available || trimmed.length < MIN_QUERY_LENGTH) {
+    if (trimmed.length < MIN_QUERY_LENGTH) {
       setResults([]);
       setSearching(false);
       return;
@@ -66,7 +60,7 @@ export function usePlaceSearch(query: string): PlaceSearch {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, available]);
+  }, [query]);
 
-  return { results, searching, available };
+  return { results, searching };
 }
