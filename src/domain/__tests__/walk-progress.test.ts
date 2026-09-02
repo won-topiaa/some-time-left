@@ -92,7 +92,7 @@ describe('walkProgress', () => {
   });
 
   it('빈 경로는 0으로 둔다', () => {
-    expect(walkProgress([], at(0, 0))).toEqual({ remainingM: 0, alongRatio: 0 });
+    expect(walkProgress([], at(0, 0))).toEqual({ remainingM: 0, alongRatio: 0, offPathM: 0 });
   });
 });
 

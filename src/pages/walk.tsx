@@ -7,7 +7,7 @@ import {
   setScreenAwakeMode,
   startUpdateLocation,
 } from '@apps-in-toss/framework';
-import { distanceM, projectToPath, splitPath, walkProgress } from '../domain/geo';
+import { distanceM, splitPath, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
 import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { RouteMap } from '../ui/RouteMap';
@@ -200,9 +200,6 @@ function Walk() {
         setLocationLost(false);
         lastFixAtMs.current = Date.now();
 
-        // 길에서 얼마나 떨어져 있는가. 남은 거리에 이미 섞여 들어가지만,
-        // 숫자가 슬그머니 늘어나는 것만으로는 길을 잘못 들었다는 걸 알 수 없다.
-        setOffRouteM(projectToPath(path, at, progress.current).distanceM);
         const walked = walkProgress(path, at, {
           since: progress.current,
           // 길이 굽어 있으므로 직선 거리보다 조금 더 갔을 수 있다. 여유를 둔다.
@@ -212,6 +209,10 @@ function Walk() {
         progress.current = Math.max(progress.current, walked.alongRatio);
         setAlongRatio(progress.current);
         setRemainingM(walked.remainingM);
+        // 길에서 얼마나 떨어져 있는가. 남은 거리에 이미 섞여 들어가지만,
+        // 숫자가 슬그머니 늘어나는 것만으로는 길을 잘못 들었다는 걸 알 수 없다.
+        // 같은 투영에서 나온 값이라 경로를 두 번 훑지 않는다 — 표본마다 O(n)이다.
+        setOffRouteM(walked.offPathM);
       },
       // 조용히 삼키면 잘 걷는 사람에게 서두르라고 재촉하게 된다. 모르면 모른다고 한다.
       onError: () => setLocationLost(true),

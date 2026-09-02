@@ -129,7 +129,19 @@ export function RouteMapRaster({
         지우지 않는다. OpenStreetMap(ODbL)과 CARTO 둘 다 표기를 요구한다.
         가장 작고 옅게, 그러나 읽을 수 있게.
       */}
-      {view != null && <Text style={styles.credit}>{mapAttribution()}</Text>}
+      {view != null && (
+        <Text
+          style={[
+            styles.credit,
+            // 바탕색은 화면 톤을 따른다. 흰 바탕을 고정해 두면 어두운 화면에서
+            // 옅은 글자가 흰 종이 위에 놓여 안 읽힌다 — 표기 의무를 못 지킨다.
+            // 벡터 지도(RouteMapVector)와 같은 값이다.
+            { backgroundColor: scheme === 'dark' ? 'rgba(22,24,28,0.82)' : 'rgba(255,255,255,0.82)' },
+          ]}
+        >
+          {mapAttribution()}
+        </Text>
+      )}
     </View>
   );
 }
@@ -150,7 +162,8 @@ const createStyles = (colors: Palette, type: TypeScale) =>
 
       10px에 inkFaint로 뒀다가 고쳤다 — 이 앱은 11px에 inkFaint를 이미 한 번 시험하고
       "화면에서 안 읽힌다"고 버렸는데(`theme.ts`), 그보다 더 흐린 글씨를 하필 무늬가
-      많은 타일 위에 얹고 있었다. 크기를 되돌리고, 흰 바탕을 깔아 지도와 분리한다.
+      많은 타일 위에 얹고 있었다. 크기를 되돌리고, 바탕을 깔아 지도와 분리한다
+      (바탕색은 밝고 어두움에 따라 다르므로 JSX에서 정한다).
     */
     credit: {
       position: 'absolute',
@@ -159,7 +172,6 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       paddingHorizontal: 6,
       paddingVertical: 1,
       borderRadius: radius.sm,
-      backgroundColor: 'rgba(255,255,255,0.82)',
       ...type.caption,
       fontSize: 11,
       lineHeight: 16,

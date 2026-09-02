@@ -2,12 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createRoute, useKeyboardHeight, useNavigation } from '@granite-js/react-native';
 import { useScreenInsets } from '../ui/screenInsets';
-import { generateHapticFeedback } from '@apps-in-toss/framework';
-import { NOTE_PLACEHOLDER, arrivalPrompt } from '../domain/copy';
+import { generateHapticFeedback, share } from '@apps-in-toss/framework';
+import { NOTE_PLACEHOLDER, arrivalPrompt, walkShareText } from '../domain/copy';
 import { saveRecord } from '../data/records';
-import { share } from '@apps-in-toss/framework';
 import { CONGESTION_WORD } from '../data/seoul/congestion';
-import { walkShareText } from '../domain/copy';
 import {
   lookupDestinationCongestion,
   type DestinationCongestion,

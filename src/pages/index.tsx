@@ -67,23 +67,22 @@ function Home() {
    * 숫자를 그 문에 얹으면 주인공을 뺏지 않으면서 쌓인 게 보인다.
    * 걷고 돌아올 때마다 늘어나야 하므로 화면이 다시 보일 때 함께 새로 읽는다.
    */
-  const refreshRecent = useCallback(() => {
-    recentPlaces()
-      .then(setRecent)
-      .catch(() => setRecent([]));
-  }, []);
-
   const refreshWalked = useCallback(() => {
     Promise.all([loadRecords().catch(() => []), loadCarried().catch(() => NO_CARRIED)])
       .then(([records, carried]) => {
         const list = Array.isArray(records) ? records : [];
+        // 최근 목적지는 같은 기록에서 나온다. 저장소를 한 번 더 읽지 않는다.
+        setRecent(recentPlaces(list));
         if (list.length === 0 && carried.count === 0) {
           setWalkedKm(null);
           return;
         }
         setWalkedKm(formatTotalDistance(traceSummary(list, carried).totalDistanceM));
       })
-      .catch(() => setWalkedKm(null));
+      .catch(() => {
+        setWalkedKm(null);
+        setRecent([]);
+      });
   }, []);
 
   /**
@@ -100,16 +99,14 @@ function Home() {
 
   // 첫 진입에도 한 번 읽는다 — 'focus'는 이미 보이고 있는 첫 화면에는 안 올 수 있다.
   useEffect(refreshWalked, [refreshWalked]);
-  useEffect(refreshRecent, [refreshRecent]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       refreshNow();
       refreshWalked();
-      refreshRecent();
     });
     return unsubscribe;
-  }, [navigation, refreshNow, refreshWalked, refreshRecent]);
+  }, [navigation, refreshNow, refreshWalked]);
 
   /**
    * 적은 시각을 실제 시각으로. 못 읽으면 null이고, 그때는 다음 버튼이 잠긴다.
@@ -255,7 +252,9 @@ function Home() {
                   <Pressable
                     key={place.name}
                     style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                    onPress={() => update({ destinationName: place.name, destination: place.at })}
+                    // 검색 결과를 고를 때와 같은 길로 간다. 고르는 방식이 바뀌면
+                    // 칩도 같이 바뀌어야지, 두 갈래로 놔두면 한쪽만 고쳐진다.
+                    onPress={() => pick({ ...place, address: '' })}
                   >
                     <Text style={styles.chipText} numberOfLines={1}>
                       {place.name}

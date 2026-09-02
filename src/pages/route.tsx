@@ -12,6 +12,16 @@ import { RouteMap } from '../ui/RouteMap';
 import { useTrip } from '../state/TripContext';
 import { useRouteSuggestion } from '../state/useRouteSuggestion';
 
+/**
+ * 이만큼은 기다려야 "몇 시에 나서면 돼요"를 말한다 (초).
+ *
+ * departAt은 1초만 남아도 시각을 준다. 후보는 목표보다 조금 아래로 흩어져
+ * 있어서(aimSec) 몇십 초쯤 이른 길은 흔한데, 그때 "14:03에 나서면 딱 맞아요"라고
+ * 하면 지금 나서는 길에 다음 분까지 서 있으라는 말이 된다. 시각과 남은 시간을
+ * 같은 문턱으로 묶는다 — 한쪽만 걸면 시각만 덩그러니 남는다.
+ */
+const LEAVE_HINT_MIN_SEC = 60;
+
 export const Route = createRoute('/route', {
   component: RouteScreen,
 });
@@ -186,10 +196,9 @@ function RouteScreen() {
           약속이 끝난다 — 시각과 남은 시간을 함께 준다. 시각만 주면 지금과의
           거리를 사람이 매번 빼야 하고, 그 뺄셈이 이 앱이 대신 하기로 한 일이다.
         */}
-        {leaveAtMs != null && (
+        {leaveAtMs != null && waitingSec >= LEAVE_HINT_MIN_SEC && (
           <Text style={styles.leave}>
-            {formatClock(leaveAtMs)}에 나서면 딱 맞아요
-            {waitingSec >= 60 && ` · ${formatDuration(waitingSec)} 뒤`}
+            {formatClock(leaveAtMs)}에 나서면 딱 맞아요 · {formatDuration(waitingSec)} 뒤
           </Text>
         )}
 

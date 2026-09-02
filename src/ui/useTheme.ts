@@ -16,7 +16,7 @@ import { colors, type } from './theme';
  */
 
 import { useMemo } from 'react';
-import { PixelRatio, useColorScheme } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { useInitialProps, type InitialProps } from '@granite-js/react-native';
 
 /** `as const`로 굳은 리터럴이라 그대로 쓰면 다른 색을 넣을 수 없다. 폭을 넓혀 둔다. */
@@ -81,15 +81,20 @@ export interface Theme {
 /**
  * 지금 화면이 써야 할 색과 글자.
  *
- * 색은 `useColorScheme()`을 먼저 본다 — 앱이 떠 있는 동안 사용자가 설정을 바꾸면
- * 그때 따라가야 하는데, 초기값은 이름 그대로 처음 한 번뿐이라 그걸 못 잡는다.
- * 리액트 네이티브가 모르면(null) 토스가 넘겨준 값으로 물러선다.
+ * 색은 토스가 넘겨준 `initialColorPreference`를 먼저 본다. 그게 토스 안에서
+ * 사용자가 고른 테마고, 우리 화면을 감싸고 있는 게 바로 그 테마다 — OS는 어둡고
+ * 토스는 밝게 둔 사람에게 우리만 어둡게 뜨면 토스 안에서 혼자 다른 화면이 된다.
+ * 기기 설정(`useColorScheme`)은 그 값이 없을 때만 본다.
+ *
+ * 대신 앱이 떠 있는 동안 OS 테마가 바뀌는 건 못 따라간다. 초기값은 이름 그대로
+ * 처음 한 번이다. 걷는 몇십 분 사이에 테마를 바꾸는 일은 드물고, 토스를 밝게
+ * 두고 쓰는 사람이 매번 어두운 화면을 보는 것보다는 그쪽이 낫다.
  */
 export function useTheme(): Theme {
   const initial = useInitialProps<TossInitialProps>();
   const live = useColorScheme();
   const scheme: Scheme =
-    live === 'dark' || live === 'light' ? live : (initial.initialColorPreference ?? 'light');
+    initial.initialColorPreference ?? (live === 'dark' || live === 'light' ? live : 'light');
   const fontScale = FONT_SCALE[initial.initialFontSize ?? ''] ?? 1;
 
   return useMemo(
@@ -99,26 +104,28 @@ export function useTheme(): Theme {
 }
 
 /**
- * 글자 배율 적용.
+ * 글자 배율 적용 — 토스 글자 크기 설정만 곱한다.
  *
- * `fontSize`만 곱한다 — 리액트 네이티브가 `<Text>`를 그릴 때 기기 설정(OS)의
- * 배율을 자기가 한 번 더 곱해 주기 때문이다.
+ * 기기(OS) 배율은 여기서 곱하지 않는다. 리액트 네이티브가 `<Text>`를 그릴 때
+ * `allowFontScaling`(기본 켜짐)으로 `fontSize`와 `lineHeight` **둘 다**에 기기
+ * 배율을 한 번 더 곱한다 — 안드로이드는 sp 변환, iOS는 fontSizeMultiplier.
  *
- * `lineHeight`는 기기 배율을 **직접** 곱해 준다. 리액트 네이티브는 여기까지는
- * 손대지 않아서, 큰 글씨 설정에서 글자만 커지고 줄 높이는 그대로면 위아래가 잘린다.
+ * 전에는 `lineHeight`에만 기기 배율을 직접 곱했다. "리액트 네이티브는 줄 높이는
+ * 안 건드린다"는 전제였는데 틀렸고, 그러면 줄 높이가 두 번 커진다(1.3배 설정에서
+ * 글자 1.3배, 줄 높이 1.69배). 큰 글씨를 쓰는 바로 그 사람들 화면에서 줄이
+ * 벌어지고 고정 높이 상자가 잘렸다.
  */
 function scaleType(scale: number): TypeScale {
-  if (scale === 1 && PixelRatio.getFontScale() === 1) {
+  if (scale === 1) {
     return type;
   }
 
-  const deviceScale = PixelRatio.getFontScale();
   const scaled = Object.entries(type).map(([name, token]) => [
     name,
     {
       ...token,
       fontSize: Math.round(token.fontSize * scale),
-      lineHeight: Math.round(token.lineHeight * scale * deviceScale),
+      lineHeight: Math.round(token.lineHeight * scale),
     },
   ]);
 

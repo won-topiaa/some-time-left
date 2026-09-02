@@ -102,6 +102,12 @@ export interface WalkProgress {
   remainingM: number;
   /** 경로 위 진행 비율 (0~1). 다음 호출에 그대로 넘기면 뒤로 미끄러지지 않는다. */
   alongRatio: number;
+  /**
+   * 길에서 떨어진 거리 (m). remainingM에 이미 섞여 있지만, 숫자가 슬그머니
+   * 느는 것만으로는 길을 잘못 들었는지 알 수 없어 따로 준다. 같은 투영에서
+   * 나오므로 화면이 projectToPath를 한 번 더 부를 이유가 없다.
+   */
+  offPathM: number;
 }
 
 export interface WalkProgressOptions {
@@ -131,7 +137,7 @@ export function walkProgress(
   options: number | WalkProgressOptions = {}
 ): WalkProgress {
   if (path.length === 0) {
-    return { remainingM: 0, alongRatio: 0 };
+    return { remainingM: 0, alongRatio: 0, offPathM: 0 };
   }
 
   const { since = 0, maxAdvanceM } =
@@ -150,6 +156,7 @@ export function walkProgress(
   return {
     remainingM: projection.distanceM + total * (1 - alongRatio),
     alongRatio,
+    offPathM: projection.distanceM,
   };
 }
 

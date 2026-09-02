@@ -92,7 +92,9 @@ export function rankRoutes(
  * 그 한 장은 언제나 제때 닿는다.
  */
 export function firstRoute(ranked: ScoredRoute[], targetSec: number): ScoredRoute | null {
-  return ranked.find((r) => arrivesOnTime(r.candidate.durationSec, targetSec)) ?? null;
+  // 아직 아무것도 안 보여준 상태의 nextRoute다. 같은 규칙을 두 군데 적지 않는다 —
+  // 한쪽만 고치면 첫 길과 다음 길의 기준이 소리 없이 갈라진다.
+  return nextRoute(ranked, [], targetSec);
 }
 
 /**

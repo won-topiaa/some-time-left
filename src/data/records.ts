@@ -146,9 +146,12 @@ export interface RecentPlace {
  * 눌러도 얻는 게 없다(옛 기록에는 좌표가 없다).
  *
  * 같은 곳은 한 번만. 이름이 같으면 같은 곳으로 본다.
+ *
+ * 저장소를 직접 읽지 않고 이미 읽은 기록을 받는다(traceSummary처럼). 첫 화면이
+ * 같은 기록을 걸은 거리 때문에 이미 읽고 있어서, 여기서 또 읽으면 화면이 보일
+ * 때마다 최대 400건짜리 저장소를 한 번 더 파싱하게 된다.
  */
-export async function recentPlaces(): Promise<RecentPlace[]> {
-  const records = await loadRecords();
+export function recentPlaces(records: WalkRecord[]): RecentPlace[] {
   const seen = new Set<string>();
   const places: RecentPlace[] = [];
 
