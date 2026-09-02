@@ -4,6 +4,7 @@ import {
   arrivalPrompt,
   memoryRecall,
   planHeadline,
+  postscriptLines,
   promiseLine,
   routeReason,
   walkFootnote,
@@ -186,6 +187,27 @@ describe('wetDayNote — 왜 7분인지', () => {
         earlySec: WET_ARRIVE_EARLY_SEC,
       })
     ).not.toContain('분 전');
+  });
+});
+
+describe('postscriptLines — 첫 화면의 추신', () => {
+  it('숫자는 상수에서 온다 — 맑은 날 5, 비 오는 날 7', () => {
+    const text = postscriptLines().join('\n');
+    expect(text).toContain(`약속보다 ${earlyMinutes(ARRIVE_EARLY_SEC)}분 먼저`);
+    expect(text).toContain(`비 오는 날은 ${earlyMinutes(WET_ARRIVE_EARLY_SEC)}분 전`);
+  });
+
+  it('기능 목록이 아니라 문단 몇 개다 — 빈 줄 없이, 다섯 문단 안에서', () => {
+    const lines = postscriptLines();
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    expect(lines.length).toBeLessThanOrEqual(5);
+    for (const line of lines) {
+      expect(line.trim()).not.toBe('');
+      // 문단마다 마침표로 끝난다 — 편지의 문장이지 항목이 아니다.
+      expect(line.trim().endsWith('.') || line.trim().endsWith('요.')).toBe(true);
+    }
+    // 같은 문단이 둘 있으면 key가 겹쳐 화면이 경고를 낸다.
+    expect(new Set(lines).size).toBe(lines.length);
   });
 });
 

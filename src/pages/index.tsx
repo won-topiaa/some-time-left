@@ -14,7 +14,7 @@ import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
 import { useWeather } from '../state/useWeather';
 import { dayLabel, formatClock, resolveAppointment } from '../domain/time';
-import { promiseLine } from '../domain/copy';
+import { postscriptLines, promiseLine } from '../domain/copy';
 import { weatherLine } from '../domain/weather';
 import {
   NO_CARRIED,
@@ -378,6 +378,22 @@ function Home() {
           value={trip.companion}
           onChangeText={(companion) => update({ companion })}
         />
+
+        {/*
+          추신. 편지의 끝에 붙는 한 단락 — 이 앱이 무엇인지.
+
+          스크롤을 내려야 보이고, 읽지 않아도 아무 일도 없다. 처음 켠 사람은 여기서
+          이 앱이 무엇을 하는지 알게 되고, 매일 쓰는 사람에게는 그냥 편지의 끝이다.
+          면을 칠하지 않고 헤어라인 하나로만 위와 나눈다.
+        */}
+        <View style={styles.postscript}>
+          <Text style={styles.postscriptLabel}>추신</Text>
+          {postscriptLines().map((line) => (
+            <Text key={line} style={styles.postscriptLine}>
+              {line}
+            </Text>
+          ))}
+        </View>
       </ScrollView>
 
       <View style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : screen.bottom }}>
@@ -532,4 +548,16 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     ctaText: { ...type.title, color: colors.surface },
     trace: { paddingVertical: spacing.md, alignItems: 'center' },
     traceText: { ...type.caption, color: colors.inkFaint },
+    /**
+     * 추신. 입력칸들보다 한참 아래, 헤어라인 하나로만 나눈다.
+     * 주인공(위의 인사말과 입력칸)을 뺏지 않도록 가장 옅은 잉크로, 그러나 읽을 수 있는 크기로.
+     */
+    postscript: {
+      marginTop: spacing.xxl,
+      paddingTop: spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    postscriptLabel: { ...type.caption, color: colors.inkFaint },
+    postscriptLine: { ...type.body, color: colors.inkSoft, marginTop: spacing.md },
   });

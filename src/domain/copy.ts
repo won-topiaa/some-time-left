@@ -109,6 +109,28 @@ export function wetDayNote(weather: Weather | null): string | null {
   return `${noun} 오는 날이라 ${extra}분 더 일찍 잡았어요.`;
 }
 
+/**
+ * 첫 화면 맨 아래, 스크롤을 내려야 보이는 **추신**.
+ *
+ * 첫 화면은 날씨 한 줄로 시작하는 편지다. 편지는 추신으로 끝난다 — 이 앱이 무엇을
+ * 하는지는 맨 위에서 설명하지 않고 여기서 말한다. 위에서 말하면 안내문이 되고,
+ * 아래에 두면 읽고 싶은 사람만 읽는 한 단락이 된다.
+ *
+ * 기능 목록이 아니다. 하는 일 하나, 걷는 동안, 도착한 뒤, 그리고 비 오는 날 —
+ * 네 문단이고 숫자는 상수에서 온다. 손으로 적어 두면 숫자를 바꾸는 날 이 줄만 옛말을 한다.
+ */
+export function postscriptLines(): string[] {
+  const early = earlyMinutes(ARRIVE_EARLY_SEC);
+  const wet = earlyMinutes(WET_ARRIVE_EARLY_SEC);
+  return [
+    '이 앱이 하는 일은 하나예요.',
+    `약속보다 ${early}분 먼저 닿는 길을 찾아요.\n가장 빠른 길 말고, 오늘 기분에 맞는 길로요.`,
+    '걷는 동안엔 남은 거리와 닿을 시각만 조용히 알려드려요.\n길에서 벗어나면 한 번 톡, 두드리고요.',
+    '도착하면 약속까지 몇 분이 남아 있어요.\n그 시간에 한 줄을 적어 두면, 지나온 길에 그대로 남아요.',
+    `비 오는 날은 ${wet}분 전이에요.\n우산을 접고 숨을 고를 시간이니까요.`,
+  ];
+}
+
 export interface WalkFootnoteInput {
   destinationName: string;
   /** 계획이 약속 앞 목표를 겨눴고, 실제로도 그 언저리에 닿는가. */
