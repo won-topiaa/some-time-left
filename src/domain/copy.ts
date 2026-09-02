@@ -6,7 +6,14 @@
  */
 
 import { moodById } from './mood';
-import { ARRIVE_EARLY_MIN, formatDuration } from './time';
+import {
+  ARRIVE_EARLY_SEC,
+  WET_ARRIVE_EARLY_SEC,
+  arriveEarlySecFor,
+  earlyMinutes,
+  formatDuration,
+} from './time';
+import { precipNoun, type Weather } from './weather';
 import type { FeatureKey, MoodId, WalkRecord } from './types';
 import type { WalkPlan } from './time';
 
@@ -50,16 +57,47 @@ export function routeReason(mood: MoodId, feature: FeatureKey): string {
 export function planHeadline(plan: WalkPlan): string {
   switch (plan.kind) {
     case 'stretch':
+      // "몇 분"은 상수가 아니라 계획에서 읽는다. 비 오는 날 계획은 7분을 겨눴다.
       return plan.capped
         ? '시간이 꽤 남았어요.\n넉넉히 걸어볼까요?'
-        : `${ARRIVE_EARLY_MIN}분 전에 닿는 길이에요.`;
+        : `${earlyMinutes(plan.earlySec)}분 전에 닿는 길이에요.`;
     case 'straight':
       return plan.reason === 'no-early'
-        ? `${ARRIVE_EARLY_MIN}분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.`
+        ? `${earlyMinutes(plan.earlySec)}분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.`
         : '여유가 딱 그만큼이에요. 오늘은 그냥 곧장 가요.';
     case 'too-late':
       return `최단으로 가도 ${formatDuration(plan.shortBySec)} 늦어요.`;
   }
+}
+
+/**
+ * 첫 화면의 약속 한 줄.
+ *
+ * 맑은 날엔 "약속 5분 전에". 내리는 날엔 그 이유와 함께 "7분 전에" — 숫자가
+ * 어느 날 갑자기 달라져 있으면 앱이 틀린 것처럼 보이므로, 달라진 날은 왜 달라졌는지를
+ * 같은 문장 안에서 말한다. 날씨를 못 읽은 날은 맑은 날의 말이다.
+ */
+export function promiseLine(weather: Weather | null): string {
+  const minutes = earlyMinutes(arriveEarlySecFor(weather));
+  const noun = weather == null ? null : precipNoun(weather.precip);
+  return noun == null
+    ? `약속 ${minutes}분 전에 도착하게 해드릴게요.`
+    : `${noun} 오는 날이라 ${minutes}분 전에 도착하게 해드릴게요.`;
+}
+
+/**
+ * 길 찾기 화면에서 목표가 2분 물러난 이유. 내리는 날이 아니면 null — 그 줄은 없다.
+ *
+ * 헤드라인은 "7분 전에 닿는 길이에요"라고만 말한다. 5분이던 것이 왜 7분인지는
+ * 여기 한 줄이 맡는다. 두 문장을 합치면 헤드라인이 길어지고, 주인공이 둘이 된다.
+ */
+export function wetDayNote(weather: Weather | null): string | null {
+  const noun = weather == null ? null : precipNoun(weather.precip);
+  if (noun == null) {
+    return null;
+  }
+  const extra = earlyMinutes(WET_ARRIVE_EARLY_SEC - ARRIVE_EARLY_SEC);
+  return `${noun} 오는 날이라 ${extra}분 더 일찍 잡았어요.`;
 }
 
 /**

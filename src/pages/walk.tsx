@@ -9,7 +9,13 @@ import {
 } from '@apps-in-toss/framework';
 import { distanceM, splitPath, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
-import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, arrivalAt, formatClock, formatDuration } from '../domain/time';
+import {
+  arrivalAt,
+  arriveEarlySecFor,
+  earlyMinutes,
+  formatClock,
+  formatDuration,
+} from '../domain/time';
 import { RouteMap } from '../ui/RouteMap';
 import { moodTint } from '../ui/moodTint';
 import { radius, spacing } from '../ui/theme';
@@ -116,6 +122,8 @@ function Walk() {
   const progress = useRef(0);
 
   const path = useMemo(() => trip.route?.candidate.path ?? [], [trip.route]);
+  // 계획이 겨눈 "몇 분 전". 길 찾기 화면과 같은 날씨로 낸다 — 이동에 실린 날씨 하나에서.
+  const earlySec = arriveEarlySecFor(trip.weather);
 
   /**
    * 화면이 보이는 동안만 잠들지 않게 한다.
@@ -270,8 +278,7 @@ function Walk() {
    */
   const plannedArrivalMs =
     trip.route != null ? arrivalAt(startedAtMs, trip.route.candidate.durationSec) : null;
-  const promiseMs =
-    trip.arriveAtMs != null ? trip.arriveAtMs - ARRIVE_EARLY_SEC * 1000 : null;
+  const promiseMs = trip.arriveAtMs != null ? trip.arriveAtMs - earlySec * 1000 : null;
   const targetMs = plannedArrivalMs ?? promiseMs;
 
   /**
@@ -403,7 +410,7 @@ function Walk() {
       <Text style={styles.footnote}>
         {trip.destinationName !== '' ? `${trip.destinationName}까지 ` : ''}
         {promiseHeld
-          ? `${ARRIVE_EARLY_MIN}분 전에 도착하도록 맞추고 있어요.`
+          ? `${earlyMinutes(earlySec)}분 전에 도착하도록 맞추고 있어요.`
           : trip.arrivesEarly
             ? '넉넉히 걷고 있어요.'
             : // 5분 전은 애초에 포기한 계획(no-early). 지키지 못할 약속을 말하지 않는다.

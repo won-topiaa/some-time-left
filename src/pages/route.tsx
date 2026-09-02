@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
+import { alongRouteHint, planHeadline, routeReason, wetDayNote } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
-import { arrivalAt, departAt, formatClock, formatDuration, waitSec } from '../domain/time';
+import {
+  arrivalAt,
+  arriveEarlySecFor,
+  departAt,
+  formatClock,
+  formatDuration,
+  waitSec,
+} from '../domain/time';
 import { radius, spacing } from '../ui/theme';
 import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
@@ -65,7 +72,11 @@ function RouteScreen() {
     destination: trip.destination,
     arriveAtMs: trip.arriveAtMs,
     mood: trip.mood,
+    // 오늘의 "몇 분 전". 첫 화면이 읽은 날씨로 갈린다 — 비 오는 날은 7분.
+    earlySec: arriveEarlySecFor(trip.weather),
   });
+  // 목표가 물러난 날은 왜 물러났는지 한 줄. 맑은 날엔 null이라 줄이 없다.
+  const wetNote = wetDayNote(trip.weather);
 
 /**
    * 지금 나서면 너무 이른 날, 언제 나서면 되는지.
@@ -76,7 +87,13 @@ function RouteScreen() {
    */
   const leaveAtMs =
     trip.arriveAtMs != null && route != null
-      ? departAt(trip.arriveAtMs, route.candidate.durationSec, nowMs + clockOffsetMs)
+      ? departAt(
+          trip.arriveAtMs,
+          route.candidate.durationSec,
+          nowMs + clockOffsetMs,
+          // 계획과 같은 값. 여기만 5분이면 나서라는 시각이 비 오는 날 2분 늦는다.
+          arriveEarlySecFor(trip.weather)
+        )
       : null;
   const waitingSec = waitSec(leaveAtMs, nowMs + clockOffsetMs);
 
@@ -188,6 +205,8 @@ function RouteScreen() {
               ? '딱 맞는 길이 없었어요.'
               : planHeadline(plan)}
         </Text>
+        {/* 비 오는 날은 목표가 2분 물러난다. 왜 7분인지는 이 한 줄만 말한다. */}
+        {wetNote != null && <Text style={styles.sub}>{wetNote}</Text>}
 
         {plan.kind === 'stretch' && !stretched && (
           <Text style={styles.sub}>곧장 가는 길로 보여드릴게요.</Text>

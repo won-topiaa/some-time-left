@@ -91,6 +91,35 @@ export function readCurrent(current: unknown): Weather | null {
   return { tempC: Math.round(temp), sky: known.sky, precip: known.precip };
 }
 
+/**
+ * 무엇이든 내리는 날인가.
+ *
+ * 비만이 아니다. 눈·진눈깨비·소나기·뇌우 — 우산을 펴고, 물웅덩이를 돌아가고,
+ * 횡단보도 앞에서 처마를 찾는 날은 다 같은 날이다. 걷는 시간이 늘어나는 이유가
+ * 같으니 약속 앞 여유도 같이 늘린다(`arriveEarlySecFor`). 날씨를 못 읽은 날은
+ * 모르는 것이지 내리는 것이 아니다 — 맑은 날로 친다.
+ */
+export function isWetDay(weather: Weather | null): boolean {
+  return weather != null && weather.precip !== 'none';
+}
+
+/**
+ * "비 오는 날이라" 처럼 이유를 말할 때 앞에 오는 낱말. 내리는 게 없으면 null.
+ * 소나기·뇌우도 사람에게는 비다.
+ */
+export function precipNoun(precip: Precip): string | null {
+  switch (precip) {
+    case 'none':
+      return null;
+    case 'snow':
+      return '눈';
+    case 'sleet':
+      return '진눈깨비';
+    default:
+      return '비';
+  }
+}
+
 const SKY_WORD: Record<Sky, string> = {
   clear: '맑아요',
   partly: '구름이 조금 있어요',

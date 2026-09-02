@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   ARRIVE_EARLY_SEC,
   MAX_STRETCH_RATIO,
+  WET_ARRIVE_EARLY_SEC,
   arrivalAt,
+  arriveEarlySecFor,
   dayLabel,
   departAt,
+  earlyMinutes,
   formatClock,
   formatDuration,
   planWalk,
   resolveAppointment,
   waitSec,
 } from '../time';
+import type { Weather } from '../weather';
 
 const MIN = 60;
 /** 약속보다 몇 분 먼저 닿기로 했는가. 숫자를 적어 두면 상수를 바꾸는 날 테스트만 옛말을 한다. */
@@ -309,5 +313,67 @@ describe('waitSec — 나설 때까지', () => {
   it('지금 나서야 하면 0', () => {
     expect(waitSec(null, now)).toBe(0);
     expect(waitSec(now - 60_000, now)).toBe(0);
+  });
+});
+
+/**
+ * 비 오는 날은 7분. 우산·물웅덩이·처마가 2분을 먹는다.
+ *
+ * 갈림은 `arriveEarlySecFor` 한 군데고, 계획은 그 값을 받아 들고 다닌다.
+ * 날씨를 못 읽은 날은 맑은 날이다 — 모르는 것을 이유로 2분 더 일찍 보내지 않는다.
+ */
+describe('비 오는 날 — 7분 전', () => {
+  const rain: Weather = { tempC: 18, sky: 'cloudy', precip: 'rain' };
+  const clear: Weather = { tempC: 24, sky: 'clear', precip: 'none' };
+  const now = Date.UTC(2026, 8, 2, 5, 0, 0);
+  const at = (minutesFromNow: number) => now + minutesFromNow * 60_000;
+
+  it('갈림은 날씨 하나로', () => {
+    expect(arriveEarlySecFor(null)).toBe(ARRIVE_EARLY_SEC);
+    expect(arriveEarlySecFor(clear)).toBe(ARRIVE_EARLY_SEC);
+    expect(arriveEarlySecFor(rain)).toBe(WET_ARRIVE_EARLY_SEC);
+    expect(arriveEarlySecFor({ ...clear, precip: 'snow' })).toBe(WET_ARRIVE_EARLY_SEC);
+    expect(arriveEarlySecFor({ ...clear, precip: 'shower' })).toBe(WET_ARRIVE_EARLY_SEC);
+  });
+
+  it('7분은 5분보다 2분 크다 — 문구가 "2분 더"라고 말하는 근거', () => {
+    expect(WET_ARRIVE_EARLY_SEC - ARRIVE_EARLY_SEC).toBe(2 * MIN);
+    expect(earlyMinutes(WET_ARRIVE_EARLY_SEC)).toBe(7);
+    expect(earlyMinutes(ARRIVE_EARLY_SEC)).toBe(5);
+  });
+
+  it('계획은 받은 값을 들고 다닌다', () => {
+    const wet = planWalk({ nowMs: now, arriveAtMs: at(45), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
+    const dry = planWalk({ nowMs: now, arriveAtMs: at(45), shortestSec: 20 * MIN });
+    if (wet.kind !== 'stretch' || dry.kind !== 'stretch') throw new Error('둘 다 stretch여야 한다');
+    expect(wet.earlySec).toBe(WET_ARRIVE_EARLY_SEC);
+    expect(dry.earlySec).toBe(ARRIVE_EARLY_SEC);
+    // 목표대로 걸으면 비 오는 날은 7분 전, 맑은 날은 5분 전에 닿는다.
+    expect(at(45) - (now + wet.targetWalkSec * 1000)).toBe(WET_ARRIVE_EARLY_SEC * 1000);
+    expect(at(45) - (now + dry.targetWalkSec * 1000)).toBe(ARRIVE_EARLY_SEC * 1000);
+    expect(dry.targetWalkSec - wet.targetWalkSec).toBe(2 * MIN);
+  });
+
+  it('같은 날, 같은 약속이라도 비가 오면 곧장 가는 날이 될 수 있다', () => {
+    // 20분 거리에 25분 남음. 맑은 날은 여유 0(곧장, no-slack), 비 오는 날은 7분 전이 무리(no-early).
+    const dry = planWalk({ nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN });
+    const wet = planWalk({ nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
+    expect(dry).toEqual({ kind: 'straight', reason: 'no-slack', targetWalkSec: 20 * MIN, earlySec: ARRIVE_EARLY_SEC });
+    expect(wet).toEqual({ kind: 'straight', reason: 'no-early', targetWalkSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
+  });
+
+  it('늦는 판정은 날씨와 무관하다 — 정시에 못 닿는 건 비가 와도 안 와도 같다', () => {
+    const wet = planWalk({ nowMs: now, arriveAtMs: at(19), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
+    expect(wet).toEqual({ kind: 'too-late', shortBySec: MIN });
+  });
+
+  it('나설 시각도 같은 값으로 되짚는다 — 비 오는 날은 2분 먼저 나선다', () => {
+    const appointment = at(90);
+    const dry = departAt(appointment, 44 * MIN, now);
+    const wet = departAt(appointment, 44 * MIN, now, WET_ARRIVE_EARLY_SEC);
+    expect(dry).not.toBeNull();
+    expect(wet).not.toBeNull();
+    expect(dry! - wet!).toBe(2 * MIN * 1000);
+    expect(arrivalAt(wet!, 44 * MIN)).toBe(appointment - WET_ARRIVE_EARLY_SEC * 1000);
   });
 });

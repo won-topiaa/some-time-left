@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readCurrent, weatherLine } from '../weather';
+import { isWetDay, precipNoun, readCurrent, weatherLine, type Weather } from '../weather';
 
 const current = (temperature_2m: unknown, weather_code: unknown) => ({
   time: '2026-08-20T17:45',
@@ -83,5 +83,32 @@ describe('weatherLine — 맨 위 한 줄', () => {
     expect(weatherLine({ tempC: 26, sky: 'cloudy', precip: 'thunder' })).toBe(
       '지금 26도, 천둥번개가 쳐요'
     );
+  });
+});
+
+describe('isWetDay — 무엇이든 내리는 날', () => {
+  const base: Weather = { tempC: 10, sky: 'cloudy', precip: 'none' };
+
+  it('못 읽은 날과 안 내리는 날은 아니다', () => {
+    expect(isWetDay(null)).toBe(false);
+    expect(isWetDay(base)).toBe(false);
+    expect(isWetDay({ ...base, sky: 'clear' })).toBe(false);
+  });
+
+  it.each(['rain', 'sleet', 'snow', 'shower', 'thunder'] as const)('%s는 내리는 날', (precip) => {
+    expect(isWetDay({ ...base, precip })).toBe(true);
+  });
+});
+
+describe('precipNoun — "비 오는 날이라"의 낱말', () => {
+  it.each([
+    ['none', null],
+    ['rain', '비'],
+    ['shower', '비'],
+    ['thunder', '비'],
+    ['sleet', '진눈깨비'],
+    ['snow', '눈'],
+  ] as const)('%s → %s', (precip, noun) => {
+    expect(precipNoun(precip)).toBe(noun);
   });
 });

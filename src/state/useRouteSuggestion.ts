@@ -66,6 +66,8 @@ export interface SuggestionInput {
   destination: LatLng | null;
   arriveAtMs: number | null;
   mood: MoodId | null;
+  /** 약속 몇 초 전을 겨눌 것인가. 날씨가 정한다(`arriveEarlySecFor`). */
+  earlySec: number;
 }
 
 /**
@@ -87,6 +89,7 @@ export function useRouteSuggestion({
   destination,
   arriveAtMs,
   mood,
+  earlySec,
 }: SuggestionInput): Suggestion {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +161,7 @@ export function useRouteSuggestion({
           nowMs,
           arriveAtMs,
           shortestSec: shortest.durationSec,
+          earlySec,
         });
 
         if (cancelled) return;
@@ -223,7 +227,8 @@ export function useRouteSuggestion({
     return () => {
       cancelled = true;
     };
-  }, [destination, arriveAtMs, mood, attempt]);
+    // 날씨가 뒤늦게 읽혀 목표가 바뀌면 다시 계획한다. 5분으로 세운 계획에 7분 문구를 붙일 수는 없다.
+  }, [destination, arriveAtMs, mood, earlySec, attempt]);
 
   /**
    * 목표 소요 시간. 계획이 없으면 잴 자가 없다.

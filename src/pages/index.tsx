@@ -7,7 +7,9 @@ import { useScreenInsets } from '../ui/screenInsets';
 import { useTrip } from '../state/TripContext';
 import { usePlaceSearch } from '../state/usePlaceSearch';
 import { useWeather } from '../state/useWeather';
-import { ARRIVE_EARLY_MIN, dayLabel, formatClock, resolveAppointment } from '../domain/time';
+import { dayLabel, formatClock, resolveAppointment } from '../domain/time';
+import { promiseLine } from '../domain/copy';
+import { weatherLine } from '../domain/weather';
 import {
   NO_CARRIED,
   loadCarried,
@@ -52,8 +54,10 @@ function Home() {
   const [period, setPeriod] = useState<'am' | 'pm' | null>(null);
   const minuteRef = useRef<TextInput>(null);
   const { results, searching } = usePlaceSearch(query);
-  // 편지의 첫 줄. 못 읽으면 null이고, 그러면 그 줄은 없다.
-  const weather = useWeather();
+  // 화면이 다시 보인 횟수. 날씨를 그때마다 다시 읽는다(캐시가 있어 싸다).
+  const [shownCount, setShownCount] = useState(0);
+  // 편지의 첫 줄이자 "몇 분 전"의 갈림. 못 읽으면 null이고, 그러면 그 줄은 없고 맑은 날이다.
+  const weather = useWeather(shownCount);
   // 지금까지 걸은 거리. 없으면 null이라 아무것도 덧붙이지 않는다.
   const [walkedKm, setWalkedKm] = useState<string | null>(null);
   /** 최근에 간 곳. 좌표가 남아 있는 기록에서만 온다. */
@@ -104,9 +108,18 @@ function Home() {
     const unsubscribe = navigation.addListener('focus', () => {
       refreshNow();
       refreshWalked();
+      setShownCount((n) => n + 1);
     });
     return unsubscribe;
   }, [navigation, refreshNow, refreshWalked]);
+
+  // 읽은 날씨를 이동에 싣는다. 길 찾기·걷기 화면이 "몇 분 전"을 같은 날씨로 내야 한다.
+  // `reset()`이 지운 뒤에도 값이 같으면 effect가 안 돌므로, 이동 쪽 값과 비교해 되채운다.
+  useEffect(() => {
+    if (trip.weather !== weather) {
+      update({ weather });
+    }
+  }, [weather, trip.weather, update]);
 
   /**
    * 적은 시각을 실제 시각으로. 못 읽으면 null이고, 그때는 다음 버튼이 잠긴다.
@@ -183,9 +196,10 @@ function Home() {
             편지가 날씨 이야기로 시작하듯 맨 위에 한 줄.
             가장 작고 가장 옅게 둔다 — 주인공은 아래 인사말 하나다.
           */}
-          {weather != null && <Text style={styles.weather}>{weather}</Text>}
+          {weather != null && <Text style={styles.weather}>{weatherLine(weather)}</Text>}
           <Text style={styles.hello}>시간이 좀 남았네요.</Text>
-          <Text style={styles.sub}>약속 {ARRIVE_EARLY_MIN}분 전에 도착하게 해드릴게요.</Text>
+          {/* 비 오는 날은 7분. 숫자가 달라진 이유를 같은 문장이 말한다. */}
+          <Text style={styles.sub}>{promiseLine(weather)}</Text>
         </View>
 
         <Text style={styles.label}>어디로 가세요?</Text>

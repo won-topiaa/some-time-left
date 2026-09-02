@@ -7,6 +7,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
+import type { Weather } from '../domain/weather';
 
 /**
  * 한 번의 이동에 대한 상태.
@@ -17,6 +18,15 @@ export interface Trip {
   destination: LatLng | null;
   /** 약속 시각 (epoch ms) */
   arriveAtMs: number | null;
+  /**
+   * 첫 화면이 읽은 지금 날씨. 못 읽었으면 null.
+   *
+   * 여기 실어 두는 이유는 하나다 — "약속 몇 분 전"이 날씨로 갈리는데(비 오는 날은
+   * 7분), 그 값을 길 찾기·걷기 화면이 **같은 날씨로** 내야 하기 때문이다. 화면마다
+   * 따로 읽으면 하나는 5분, 하나는 7분을 말하는 날이 생긴다. 값은 저장하지 않고
+   * 날씨만 저장한다 — 갈림은 `arriveEarlySecFor` 한 군데가 한다.
+   */
+  weather: Weather | null;
   companion: string;
   mood: MoodId | null;
   /** 지금 제안 중인 경로 */
@@ -78,6 +88,7 @@ const EMPTY: Trip = {
   destinationName: '',
   destination: null,
   arriveAtMs: null,
+  weather: null,
   companion: '',
   mood: null,
   route: null,

@@ -5,21 +5,49 @@
  * 상수로 고정하고, UI에서 사용자에게 바꾸게 하지 않는다.
  */
 
+import { isWetDay, type Weather } from './weather';
+
 /**
- * 약속 시각보다 얼마나 먼저 도착할 것인가. 제품의 정체성이므로 고정.
+ * 약속 시각보다 얼마나 먼저 도착할 것인가. 제품의 정체성이므로 사용자가 바꾸지 않는다.
  *
  * 3분이었다가 5분이 됐다. 3분은 실제로 걸어 보니 너무 얇았다 — 신호 하나,
  * 횡단보도 한 번, 도로망 추정 오차 몇십 초면 그대로 약속 시각을 넘긴다.
  * 5분으로 잡으면 그 정도가 다 흡수되고, 넘치더라도 여전히 약속 전에 닿는다.
  * **먼저 도착하는 앱이 늦는 것보다 나쁜 실패는 없다.**
  *
- * 화면 문구는 이 상수에서 뽑아 쓴다(`copy.ts`). 손으로 적어 두면
- * 숫자를 바꾸는 날 화면만 옛말을 하게 된다.
+ * 바꾸는 건 사용자가 아니라 날씨다. 내리는 날은 `WET_ARRIVE_EARLY_SEC`로 물러나고,
+ * 그 갈림은 `arriveEarlySecFor` 한 군데가 한다. 계획(`WalkPlan`)이 그날의 값을
+ * 직접 들고 다니므로 화면 문구는 계획에서 뽑아 쓴다(`copy.ts`) — 상수를 손으로
+ * 적어 두면 비 오는 날 화면만 맑은 날 말을 하게 된다.
  */
 export const ARRIVE_EARLY_SEC = 5 * 60;
 
-/** "5분" 처럼 사람에게 말할 때의 단위. 문구가 상수에서 갈라지지 않게 한 군데서 낸다. */
-export const ARRIVE_EARLY_MIN = Math.round(ARRIVE_EARLY_SEC / 60);
+/**
+ * 내리는 날의 목표. 맑은 날보다 2분 더.
+ *
+ * 비 오는 날의 5분은 맑은 날의 3분이다 — 우산을 펴고 접는 데, 물웅덩이를 돌아가는 데,
+ * 횡단보도 앞에서 처마를 찾는 데 그 2분이 그대로 새어 나간다. 젖은 채로 뛰어
+ * 들어가는 것이 이 앱이 만들려는 마지막 장면과 가장 먼 모습이기도 하다.
+ */
+export const WET_ARRIVE_EARLY_SEC = 7 * 60;
+
+/** "5분" 처럼 사람에게 말할 때의 단위. 문구가 초에서 갈라지지 않게 한 군데서 낸다. */
+export function earlyMinutes(earlySec: number): number {
+  return Math.round(earlySec / 60);
+}
+
+/** 맑은 날의 분. 날씨와 무관한 자리(첫 화면 인사말의 기본값 등)에서만 쓴다. */
+export const ARRIVE_EARLY_MIN = earlyMinutes(ARRIVE_EARLY_SEC);
+
+/**
+ * 오늘의 목표 (초). 날씨 하나로 갈린다.
+ *
+ * 날씨를 못 읽은 날(null)은 맑은 날이다 — 모르는 것을 이유로 사람을 2분 더
+ * 일찍 보내지 않는다.
+ */
+export function arriveEarlySecFor(weather: Weather | null): number {
+  return isWetDay(weather) ? WET_ARRIVE_EARLY_SEC : ARRIVE_EARLY_SEC;
+}
 
 /**
  * 여기보다 늦게 닿는 길은 **어떤 이유로도 내놓지 않는다** (초).
@@ -35,6 +63,12 @@ export const ARRIVE_EARLY_MIN = Math.round(ARRIVE_EARLY_SEC / 60);
  * 그게 이 앱이 지키기로 한 전부다. 나머지 2분은 도로망 추정 오차가 쓰는 몫이다.
  */
 export const PROMISE_FLOOR_SEC = 3 * 60;
+
+/*
+ * 바닥은 목표에 붙어 움직인다. `route-plan.ts`가 두 상수의 **차이**(2분)만 쓰므로
+ * 비 오는 날 목표가 7분이 되면 바닥은 5분이 된다 — 맑은 날 3분과 같은 폭이고,
+ * 그 2분이 도로망 오차의 몫이라는 뜻도 그대로다.
+ */
 
 /**
  * 최단 경로 대비 최대 몇 배까지 늘릴 것인가.
@@ -54,12 +88,16 @@ export type WalkPlan =
       slackSec: number;
       /** 여유가 너무 많아 상한에서 잘렸는가 */
       capped: boolean;
+      /** 이 계획이 겨눈 "약속 몇 초 전" — 문구가 이 값으로 말한다. */
+      earlySec: number;
     }
   | {
       kind: 'straight';
       /** 'no-slack': 여유가 없음 / 'no-early': 약속 전 여유는 못 맞추지만 정시엔 도착 */
       reason: 'no-slack' | 'no-early';
       targetWalkSec: number;
+      /** 못 맞춘 그 "몇 분 전"이 얼마였는지. no-early 문구가 이 숫자를 말한다. */
+      earlySec: number;
     }
   | {
       kind: 'too-late';
@@ -74,6 +112,8 @@ export interface PlanInput {
   arriveAtMs: number;
   /** 최단 도보 경로의 소요 시간 (초) */
   shortestSec: number;
+  /** 약속 몇 초 전을 겨눌 것인가. 날씨가 정한다(`arriveEarlySecFor`). 기본은 맑은 날. */
+  earlySec?: number;
 }
 
 /**
@@ -85,25 +125,30 @@ export interface PlanInput {
  * - 약속 전 여유는 못 맞추지만 정시엔 도착 → 곧장 간다 (straight / no-early)
  * - 최단으로도 늦음 → 정직하게 말한다 (too-late)
  */
-export function planWalk({ nowMs, arriveAtMs, shortestSec }: PlanInput): WalkPlan {
+export function planWalk({
+  nowMs,
+  arriveAtMs,
+  shortestSec,
+  earlySec = ARRIVE_EARLY_SEC,
+}: PlanInput): WalkPlan {
   const untilAppointmentSec = Math.round((arriveAtMs - nowMs) / 1000);
 
   if (untilAppointmentSec < shortestSec) {
     return { kind: 'too-late', shortBySec: shortestSec - untilAppointmentSec };
   }
 
-  // 약속보다 ARRIVE_EARLY_SEC 먼저 닿으려면 실제로 걸을 수 있는 시간
-  const budgetSec = untilAppointmentSec - ARRIVE_EARLY_SEC;
+  // 약속보다 earlySec 먼저 닿으려면 실제로 걸을 수 있는 시간
+  const budgetSec = untilAppointmentSec - earlySec;
 
   if (budgetSec < shortestSec) {
     // 정시엔 닿지만 여유를 두고는 무리. 앱이 해줄 게 없으니 솔직하게.
-    return { kind: 'straight', reason: 'no-early', targetWalkSec: shortestSec };
+    return { kind: 'straight', reason: 'no-early', targetWalkSec: shortestSec, earlySec };
   }
 
   const slackSec = budgetSec - shortestSec;
 
   if (slackSec <= STRAIGHT_TOLERANCE_SEC) {
-    return { kind: 'straight', reason: 'no-slack', targetWalkSec: shortestSec };
+    return { kind: 'straight', reason: 'no-slack', targetWalkSec: shortestSec, earlySec };
   }
 
   const maxWalkSec = Math.round(shortestSec * MAX_STRETCH_RATIO);
@@ -114,6 +159,7 @@ export function planWalk({ nowMs, arriveAtMs, shortestSec }: PlanInput): WalkPla
     targetWalkSec: capped ? maxWalkSec : budgetSec,
     slackSec,
     capped,
+    earlySec,
   };
 }
 
@@ -135,16 +181,18 @@ export function arrivalAt(departAtMs: number, durationSec: number): number {
  * 87분 남았는데 44분짜리 길을 주고 "넉넉히 걸어볼까요"라고 말하는 날이 생긴다 —
  * 그건 대답이 아니라 회피다. 사용자가 정말 알고 싶은 건 **몇 시에 나서면 되는지**다.
  *
- * 고른 길을 그대로 걸어서 약속 `ARRIVE_EARLY_SEC` 앞에 닿으려면 언제 출발해야
- * 하는지를 되짚어 준다. 지금 나서도 되는 날(늦었거나 딱 맞는 날)은 null —
- * 기다리라고 할 이유가 없으면 말하지 않는다.
+ * 고른 길을 그대로 걸어서 약속 `earlySec` 앞에 닿으려면 언제 출발해야 하는지를
+ * 되짚어 준다. 계획과 같은 값을 넣어야 한다 — 비 오는 날 계획은 7분 전을 겨눴는데
+ * 여기가 5분으로 되짚으면 나서라는 시각이 2분 늦는다. 지금 나서도 되는 날(늦었거나
+ * 딱 맞는 날)은 null — 기다리라고 할 이유가 없으면 말하지 않는다.
  */
 export function departAt(
   arriveAtMs: number,
   walkSec: number,
-  nowMs: number
+  nowMs: number,
+  earlySec: number = ARRIVE_EARLY_SEC
 ): number | null {
-  const leaveAtMs = arriveAtMs - (ARRIVE_EARLY_SEC + walkSec) * 1000;
+  const leaveAtMs = arriveAtMs - (earlySec + walkSec) * 1000;
 
   // 이미 그 시각을 지났으면 지금이 나설 때다.
   return leaveAtMs > nowMs ? leaveAtMs : null;
