@@ -227,7 +227,7 @@ function Home() {
           */}
           {weather != null && <Text style={styles.weather}>{weatherLine(weather)}</Text>}
           <Text style={styles.hello}>시간이 좀 남았네요.</Text>
-          {/* 비 오는 날은 7분. 숫자가 달라진 이유를 같은 문장이 말한다. */}
+          {/* 맑은 날은 "3분 전"(지킬 수 있는 숫자), 내리는 날은 숫자 대신 "조금 더 일찍". */}
           <Text style={styles.sub}>{promiseLine(weather)}</Text>
         </View>
 

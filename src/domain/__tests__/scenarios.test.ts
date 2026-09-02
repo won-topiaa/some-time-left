@@ -10,7 +10,7 @@ import {
   resolveAppointment,
   waitSec,
 } from '../time';
-import { planHeadline, promiseLine, walkFootnote, wetDayNote } from '../copy';
+import { planHeadline, promiseLine, walkFootnote } from '../copy';
 import { arrivesOnTime } from '../route-plan';
 import type { Weather } from '../weather';
 import { estimateSpeedMps, paceAdvice } from '../pace';
@@ -74,19 +74,20 @@ describe('비 오는 날 — 같은 약속, 다른 계획', () => {
   const now = Date.UTC(2026, 8, 2, 5, 0);
   const walk = 20 * MIN;
 
-  it('첫 화면부터 걷는 화면까지 같은 숫자를 말한다 — 7', () => {
+  it('첫 화면부터 걷는 화면까지 같은 말을 한다 — 숫자 없이 "조금 더 일찍"', () => {
     const earlySec = arriveEarlySecFor(rain);
-    expect(promiseLine(rain)).toBe('비 오는 날이라 약속 7분 전에 도착하게 해드릴게요.');
+    expect(promiseLine(rain)).toBe('비 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.');
 
     const plan = planWalk({ nowMs: now, arriveAtMs: now + 45 * MIN * 1000, shortestSec: walk, earlySec });
-    expect(planHeadline(plan)).toBe('7분 전에 닿는 길이에요.');
-    expect(wetDayNote(rain)).toBe('비 오는 날이라 2분 더 일찍 잡았어요.');
+    expect(planHeadline(plan)).toBe('비 오는 날이라, 조금 더 일찍 닿는 길이에요.');
 
     // 걷는 화면은 길과 함께 고정된 earlySec(계획의 값)으로 말한다.
     if (plan.kind !== 'stretch') throw new Error('stretch여야 한다');
     expect(
       walkFootnote({ destinationName: '성수', promiseHeld: true, arrivesEarly: false, earlySec: plan.earlySec })
-    ).toBe('성수까지 7분 전에 도착하도록 맞추고 있어요.');
+    ).toBe('성수까지 비 오는 날이라 조금 더 일찍 닿도록 맞추고 있어요.');
+    // 셈은 여전히 7분을 겨눈다 — 말만 바뀐다.
+    expect(now + plan.targetWalkSec * 1000).toBe(now + 45 * MIN * 1000 - WET_ARRIVE_EARLY_SEC * 1000);
   });
 
   it('여유가 얇은 날, 비는 곧장 가는 이유가 된다 — 맑은 날엔 늘리고, 비 오는 날엔 곧장', () => {
@@ -97,8 +98,8 @@ describe('비 오는 날 — 같은 약속, 다른 계획', () => {
     const wet = planWalk({ earlySec: WET_ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at, shortestSec: walk });
     expect(dry).toMatchObject({ kind: 'stretch', capped: false });
     expect(wet).toMatchObject({ kind: 'straight', reason: 'no-early' });
-    expect(planHeadline(wet)).toBe('7분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.');
-    expect(planHeadline(dry)).toBe('5분 전에 닿는 길이에요.');
+    expect(planHeadline(wet)).toBe('비 오는 날인데 여유가 없네요. 오늘은 그냥 곧장 가요.');
+    expect(planHeadline(dry)).toBe('3분 전에 닿는 길이에요.');
   });
 
   it('바닥도 함께 물러난다 — 맑은 날은 약속 3분 전 도착까지 받고, 비 오는 날은 5분 전까지만', () => {
@@ -124,10 +125,9 @@ describe('비 오는 날 — 같은 약속, 다른 계획', () => {
     expect(wet).toBeNull();
   });
 
-  it('날씨를 못 읽은 날은 맑은 날과 똑같다', () => {
+  it('날씨를 못 읽은 날은 맑은 날과 똑같다 — 화면은 3, 셈은 5', () => {
     expect(arriveEarlySecFor(null)).toBe(ARRIVE_EARLY_SEC);
-    expect(promiseLine(null)).toBe('약속 5분 전에 도착하게 해드릴게요.');
-    expect(wetDayNote(null)).toBeNull();
+    expect(promiseLine(null)).toBe('약속 3분 전에 도착하게 해드릴게요.');
   });
 });
 

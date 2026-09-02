@@ -6,6 +6,8 @@ import {
   arrivalAt,
   arriveEarlySecFor,
   dayLabel,
+  isWetTarget,
+  promisedMinutes,
   departAt,
   earlyMinutes,
   formatClock,
@@ -375,5 +377,22 @@ describe('비 오는 날 — 7분 전', () => {
     expect(wet).not.toBeNull();
     expect(dry! - wet!).toBe(2 * MIN * 1000);
     expect(arrivalAt(wet!, 44 * MIN)).toBe(appointment - WET_ARRIVE_EARLY_SEC * 1000);
+  });
+});
+
+/**
+ * 화면이 말하는 숫자는 겨눈 값이 아니라 지킬 수 있는 값이다.
+ * 코드는 5분을 겨누고 화면은 3분을 약속한다. 그 2분이 도로망 오차의 몫이다.
+ */
+describe('promisedMinutes — 화면이 약속하는 분', () => {
+  it('맑은 날: 겨눈 5분, 약속 3분', () => {
+    expect(earlyMinutes(ARRIVE_EARLY_SEC)).toBe(5);
+    expect(promisedMinutes(ARRIVE_EARLY_SEC)).toBe(3);
+  });
+
+  it('내리는 날: 겨눈 7분, 지키는 5분 — 화면엔 숫자 대신 말이지만 셈은 이렇다', () => {
+    expect(promisedMinutes(WET_ARRIVE_EARLY_SEC)).toBe(5);
+    expect(isWetTarget(WET_ARRIVE_EARLY_SEC)).toBe(true);
+    expect(isWetTarget(ARRIVE_EARLY_SEC)).toBe(false);
   });
 });

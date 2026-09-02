@@ -37,6 +37,25 @@ export function earlyMinutes(earlySec: number): number {
 }
 
 /**
+ * 화면이 **약속하는** 분. 목표(겨누는 값)가 아니라 바닥(어떤 경우에도 그 앞에는 닿는 값)이다.
+ *
+ * 코드는 5분을 겨누지만 화면은 "3분 전"이라고 말한다. 겨눈 값을 말하면 도로망 오차
+ * 몇십 초로 4분 전에 닿은 날 앱이 거짓말을 한 것이 되고, 바닥을 말하면 그날도 약속을
+ * 지킨 것이다. 지킬 수 있는 숫자만 말한다. 나머지 2분은 말하지 않는 여유다.
+ *
+ * 내리는 날은 이 숫자를 화면에 적지 않는다("조금 더 일찍"). 그래도 셈은 같다 — 7분을
+ * 겨누고 5분 전을 지킨다.
+ */
+export function promisedMinutes(earlySec: number): number {
+  return earlyMinutes(earlySec - (ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC));
+}
+
+/** 이 계획이 내리는 날의 목표를 겨눴는가. 문구가 숫자 대신 "조금 더 일찍"을 고를 때 쓴다. */
+export function isWetTarget(earlySec: number): boolean {
+  return earlySec > ARRIVE_EARLY_SEC;
+}
+
+/**
  * 오늘의 목표 (초). 날씨 하나로 갈린다.
  *
  * 날씨를 못 읽은 날(null)은 맑은 날이다 — 모르는 것을 이유로 사람을 2분 더

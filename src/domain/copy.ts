@@ -8,10 +8,10 @@
 import { moodById } from './mood';
 import {
   ARRIVE_EARLY_SEC,
-  WET_ARRIVE_EARLY_SEC,
   arriveEarlySecFor,
-  earlyMinutes,
   formatDuration,
+  isWetTarget,
+  promisedMinutes,
 } from './time';
 import { precipNoun, type Weather } from './weather';
 import type { FeatureKey, MoodId, WalkRecord } from './types';
@@ -57,56 +57,37 @@ export function routeReason(mood: MoodId, feature: FeatureKey): string {
 export function planHeadline(plan: WalkPlan): string {
   switch (plan.kind) {
     case 'stretch':
-      // "몇 분"은 상수가 아니라 계획에서 읽는다. 비 오는 날 계획은 7분을 겨눴다.
+      // 숫자는 계획이 겨눈 값이 아니라 지킬 수 있는 값(바닥)이다. 내리는 날은 숫자 대신 말로 —
+      // "7분"은 정확하지만 우산 든 사람에게 필요한 말은 숫자가 아니라 여유를 뒀다는 사실이다.
       return plan.capped
         ? '시간이 꽤 남았어요.\n넉넉히 걸어볼까요?'
-        : `${earlyMinutes(plan.earlySec)}분 전에 닿는 길이에요.`;
+        : isWetTarget(plan.earlySec)
+          ? '비 오는 날이라, 조금 더 일찍 닿는 길이에요.'
+          : `${promisedMinutes(plan.earlySec)}분 전에 닿는 길이에요.`;
     case 'straight':
       return plan.reason === 'no-early'
-        ? `${earlyMinutes(plan.earlySec)}분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.`
+        ? isWetTarget(plan.earlySec)
+          ? '비 오는 날인데 여유가 없네요. 오늘은 그냥 곧장 가요.'
+          : `${promisedMinutes(plan.earlySec)}분 전은 어렵겠어요. 오늘은 그냥 곧장 가요.`
         : '여유가 딱 그만큼이에요. 오늘은 그냥 곧장 가요.';
     case 'too-late':
       return `최단으로 가도 ${formatDuration(plan.shortBySec)} 늦어요.`;
   }
 }
 
-/** "비 오는 날이라"의 그 낱말. 날씨를 못 읽었거나 안 내리면 null. */
-function wetNoun(weather: Weather | null): string | null {
-  return weather == null ? null : precipNoun(weather.precip);
-}
-
 /**
  * 첫 화면의 약속 한 줄.
  *
- * 맑은 날엔 "약속 5분 전에". 내리는 날엔 그 이유와 함께 "약속 7분 전에" — 숫자가
- * 어느 날 갑자기 달라져 있으면 앱이 틀린 것처럼 보이므로, 달라진 날은 왜 달라졌는지를
- * 같은 문장 안에서 말한다. '약속'은 두 문장 모두에 둔다 — 아직 시각을 적기 전에
- * 보는 줄이라, 그 낱말이 없으면 "7분 전에 도착"이 무엇의 전인지가 없다.
+ * 맑은 날엔 "약속 3분 전에" — 지킬 수 있는 숫자(바닥)다. 내리는 날엔 숫자 대신
+ * "조금 더 일찍" — 그 이유(비·눈)와 함께. 숫자가 어느 날 갑자기 달라져 있으면
+ * 앱이 틀린 것처럼 보이므로 달라진 날은 숫자를 말하지 않고 왜 달라졌는지를 말한다.
  * 날씨를 못 읽은 날은 맑은 날의 말이다.
  */
 export function promiseLine(weather: Weather | null): string {
-  const minutes = earlyMinutes(arriveEarlySecFor(weather));
-  const noun = wetNoun(weather);
+  const noun = weather == null ? null : precipNoun(weather.precip);
   return noun == null
-    ? `약속 ${minutes}분 전에 도착하게 해드릴게요.`
-    : `${noun} 오는 날이라 약속 ${minutes}분 전에 도착하게 해드릴게요.`;
-}
-
-/**
- * 길 찾기 화면에서 목표가 2분 물러난 이유. 내리는 날이 아니면 null — 그 줄은 없다.
- *
- * 헤드라인은 "7분 전에 닿는 길이에요"라고만 말한다. 5분이던 것이 왜 7분인지는
- * 여기 한 줄이 맡는다. 두 문장을 합치면 헤드라인이 길어지고, 주인공이 둘이 된다.
- * 그래서 **숫자를 말하는 헤드라인 밑에만** 온다(`route.tsx`) — "돌아갈 길을 못
- * 찾았어요" 밑에 오면 못 찾은 이유가 비인 것처럼 읽힌다.
- */
-export function wetDayNote(weather: Weather | null): string | null {
-  const noun = wetNoun(weather);
-  if (noun == null) {
-    return null;
-  }
-  const extra = earlyMinutes(WET_ARRIVE_EARLY_SEC - ARRIVE_EARLY_SEC);
-  return `${noun} 오는 날이라 ${extra}분 더 일찍 잡았어요.`;
+    ? `약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에 도착하게 해드릴게요.`
+    : `${noun} 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.`;
 }
 
 /**
@@ -116,18 +97,18 @@ export function wetDayNote(weather: Weather | null): string | null {
  * 하는지는 맨 위에서 설명하지 않고 여기서 말한다. 위에서 말하면 안내문이 되고,
  * 아래에 두면 읽고 싶은 사람만 읽는 한 단락이 된다.
  *
- * 기능 목록이 아니다. 하는 일 하나, 걷는 동안, 도착한 뒤, 그리고 비 오는 날 —
- * 네 문단이고 숫자는 상수에서 온다. 손으로 적어 두면 숫자를 바꾸는 날 이 줄만 옛말을 한다.
+ * 기능 목록이 아니다. 이 앱이 있는 이유인 **그 상황**에서 시작한다 — 약속 장소
+ * 근처에 일찍 와 버려서, 카페에 들어가기엔 애매하고 서 있기엔 긴 시간. 그 시간을
+ * 걷기로 쓰게 하는 것이 이 앱의 전부다. 숫자는 상수에서 온다.
  */
 export function postscriptLines(): string[] {
-  const early = earlyMinutes(ARRIVE_EARLY_SEC);
-  const wet = earlyMinutes(WET_ARRIVE_EARLY_SEC);
+  const promised = promisedMinutes(ARRIVE_EARLY_SEC);
   return [
-    '이 앱이 하는 일은 하나예요.',
-    `약속보다 ${early}분 먼저 닿는 길을 찾아요.\n가장 빠른 길 말고, 오늘 기분에 맞는 길로요.`,
+    '약속 장소 근처에 일찍 와 버린 날이 있죠.\n카페에 들어가기엔 애매하고, 그냥 서 있기엔 긴 시간.',
+    `그 시간만큼 걷는 길을 찾아드려요.\n가장 빠른 길 말고, 약속 ${promised}분 전에 딱 닿는 길로. 오늘 기분에 맞춰서요.`,
     '걷는 동안엔 남은 거리와 닿을 시각만 조용히 알려드려요.\n길에서 벗어나면 한 번 톡, 두드리고요.',
-    '도착하면 약속까지 몇 분이 남아 있어요.\n그 시간에 한 줄을 적어 두면, 지나온 길에 그대로 남아요.',
-    `비 오는 날은 ${wet}분 전이에요.\n우산을 접고 숨을 고를 시간이니까요.`,
+    '도착하면 몇 분이 남아 있어요.\n그 시간에 한 줄을 적어 두면, 지나온 길에 그대로 남아요.',
+    '비 오는 날은 조금 더 일찍 닿게 잡아요.\n우산을 접고 숨을 고를 시간이니까요.',
   ];
 }
 
@@ -146,8 +127,8 @@ export interface WalkFootnoteInput {
  *
  * 지킬 수 있는 말만 한다. 일찍 닿게 되는 계획은 약속 바로 앞에 맞추는 게 아니라
  * 그냥 넉넉히 걷는 것이므로 그렇게 말하고, 목표를 애초에 포기한 날(no-early)은
- * 지키지 못할 "N분 전"을 말하지 않는다. 숫자는 계획이 겨눈 값에서 온다 —
- * 비 오는 날은 7이다.
+ * 지키지 못할 "N분 전"을 말하지 않는다. 숫자는 겨눈 값이 아니라 지킬 수 있는
+ * 값(바닥)이고, 내리는 날은 숫자 대신 "조금 더 일찍"이다.
  */
 export function walkFootnote({
   destinationName,
@@ -157,7 +138,9 @@ export function walkFootnote({
 }: WalkFootnoteInput): string {
   const prefix = destinationName !== '' ? `${destinationName}까지 ` : '';
   const body = promiseHeld
-    ? `${earlyMinutes(earlySec)}분 전에 도착하도록 맞추고 있어요.`
+    ? isWetTarget(earlySec)
+      ? '비 오는 날이라 조금 더 일찍 닿도록 맞추고 있어요.'
+      : `${promisedMinutes(earlySec)}분 전에는 닿도록 맞추고 있어요.`
     : arrivesEarly
       ? '넉넉히 걷고 있어요.'
       : '제시간에 닿도록 걷고 있어요.';

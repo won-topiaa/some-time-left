@@ -9,13 +9,13 @@ import {
   routeReason,
   walkFootnote,
   walkShareText,
-  wetDayNote,
 } from '../copy';
 import { MOODS, dominantFeature, weightsFor } from '../mood';
 import { FEATURE_KEYS } from '../types';
-import { ARRIVE_EARLY_SEC, WET_ARRIVE_EARLY_SEC, earlyMinutes } from '../time';
+import { ARRIVE_EARLY_SEC, WET_ARRIVE_EARLY_SEC, promisedMinutes } from '../time';
 
-const ARRIVE_EARLY_MIN = earlyMinutes(ARRIVE_EARLY_SEC);
+/** 화면이 말하는 숫자 — 겨눈 5가 아니라 지킬 수 있는 3. */
+const ARRIVE_EARLY_MIN = promisedMinutes(ARRIVE_EARLY_SEC);
 
 /**
  * 이 한 줄이 자동 추천의 생명줄이라, 여섯 기분 × 여섯 성질을 전부 통과시킨다.
@@ -104,11 +104,18 @@ describe('planHeadline', () => {
     expect(noEarly).toContain(`${ARRIVE_EARLY_MIN}분 전은 어렵겠어요`);
   });
 
+  it('맑은 날은 겨눈 5분이 아니라 지킬 수 있는 3분을 말한다', () => {
+    expect(ARRIVE_EARLY_MIN).toBe(3);
+    expect(
+      planHeadline({ kind: 'stretch', targetWalkSec: 27 * 60, slackSec: 420, capped: false, earlySec: ARRIVE_EARLY_SEC })
+    ).toBe('3분 전에 닿는 길이에요.');
+  });
+
   /*
-   * 비 오는 날 계획은 7분을 겨눈다. 문구가 상수(5분)를 읽으면 그날 화면만 맑은 날
-   * 말을 하게 되므로, 계획이 든 값을 읽어야 한다.
+   * 비 오는 날 계획은 7분을 겨눈다. 숫자를 말하지 않고 "조금 더 일찍"과 그 이유를 말한다 —
+   * 우산 든 사람에게 필요한 건 숫자가 아니라 여유를 뒀다는 사실이다.
    */
-  it('비 오는 날 계획은 7분이라고 말한다 — 상수가 아니라 계획을 읽는다', () => {
+  it('비 오는 날은 숫자 대신 "조금 더 일찍" — 계획이 든 값으로 갈린다', () => {
     const wet = planHeadline({
       kind: 'stretch',
       targetWalkSec: 27 * 60,
@@ -116,7 +123,8 @@ describe('planHeadline', () => {
       capped: false,
       earlySec: WET_ARRIVE_EARLY_SEC,
     });
-    expect(wet).toBe('7분 전에 닿는 길이에요.');
+    expect(wet).toBe('비 오는 날이라, 조금 더 일찍 닿는 길이에요.');
+    expect(wet).not.toMatch(/\d분/);
     expect(
       planHeadline({
         kind: 'straight',
@@ -124,7 +132,7 @@ describe('planHeadline', () => {
         targetWalkSec: 1200,
         earlySec: WET_ARRIVE_EARLY_SEC,
       })
-    ).toContain('7분 전은 어렵겠어요');
+    ).toBe('비 오는 날인데 여유가 없네요. 오늘은 그냥 곧장 가요.');
   });
 
   it('늦으면 얼마나 늦는지 말한다 — "몇 분 전"의 숫자가 아니라 늦는 만큼을', () => {
@@ -134,17 +142,17 @@ describe('planHeadline', () => {
 });
 
 describe('promiseLine — 첫 화면의 약속', () => {
-  it('맑은 날, 못 읽은 날은 5분', () => {
-    expect(promiseLine(null)).toBe('약속 5분 전에 도착하게 해드릴게요.');
+  it('맑은 날, 못 읽은 날은 3분 — 겨눈 5분이 아니라 지킬 수 있는 숫자', () => {
+    expect(promiseLine(null)).toBe('약속 3분 전에 도착하게 해드릴게요.');
     expect(promiseLine({ tempC: 20, sky: 'clear', precip: 'none' })).toBe(
-      '약속 5분 전에 도착하게 해드릴게요.'
+      '약속 3분 전에 도착하게 해드릴게요.'
     );
   });
 
-  it('비 오는 날은 이유와 함께 7분 — "약속"은 두 문장 모두에 남는다', () => {
-    expect(promiseLine({ tempC: 18, sky: 'cloudy', precip: 'rain' })).toBe(
-      '비 오는 날이라 약속 7분 전에 도착하게 해드릴게요.'
-    );
+  it('비 오는 날은 숫자 없이 "조금 더 일찍" — 이유와 "약속"은 남는다', () => {
+    const line = promiseLine({ tempC: 18, sky: 'cloudy', precip: 'rain' });
+    expect(line).toBe('비 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.');
+    expect(line).not.toMatch(/\d분/);
   });
 
   it.each([
@@ -154,30 +162,11 @@ describe('promiseLine — 첫 화면의 약속', () => {
     ['snow', '눈'],
   ] as const)('%s → "%s 오는 날"', (precip, noun) => {
     expect(promiseLine({ tempC: 0, sky: 'cloudy', precip })).toBe(
-      `${noun} 오는 날이라 약속 7분 전에 도착하게 해드릴게요.`
-    );
-  });
-});
-
-describe('wetDayNote — 왜 7분인지', () => {
-  it('맑은 날, 못 읽은 날은 줄이 없다', () => {
-    expect(wetDayNote(null)).toBeNull();
-    expect(wetDayNote({ tempC: 25, sky: 'partly', precip: 'none' })).toBeNull();
-  });
-
-  it.each([
-    ['rain', '비'],
-    ['shower', '비'],
-    ['thunder', '비'],
-    ['sleet', '진눈깨비'],
-    ['snow', '눈'],
-  ] as const)('%s → "%s 오는 날이라 2분 더"', (precip, noun) => {
-    expect(wetDayNote({ tempC: 0, sky: 'cloudy', precip })).toBe(
-      `${noun} 오는 날이라 2분 더 일찍 잡았어요.`
+      `${noun} 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.`
     );
   });
 
-  it('상한에서 잘린 비 오는 날의 헤드라인은 숫자를 말하지 않는다 — 그 밑엔 이 줄도 없어야 한다', () => {
+  it('상한에서 잘린 비 오는 날의 헤드라인은 여전히 "넉넉히"다', () => {
     expect(
       planHeadline({
         kind: 'stretch',
@@ -186,15 +175,23 @@ describe('wetDayNote — 왜 7분인지', () => {
         capped: true,
         earlySec: WET_ARRIVE_EARLY_SEC,
       })
-    ).not.toContain('분 전');
+    ).toContain('넉넉히');
   });
 });
 
 describe('postscriptLines — 첫 화면의 추신', () => {
-  it('숫자는 상수에서 온다 — 맑은 날 5, 비 오는 날 7', () => {
+  it('그 상황에서 시작한다 — 일찍 와 버려 애매하게 남은 시간', () => {
+    const [first] = postscriptLines();
+    expect(first).toContain('일찍 와 버린');
+    expect(first).toContain('카페에 들어가기엔 애매');
+  });
+
+  it('숫자는 지킬 수 있는 3이고, 비 오는 날은 숫자 없이 "조금 더 일찍"', () => {
     const text = postscriptLines().join('\n');
-    expect(text).toContain(`약속보다 ${earlyMinutes(ARRIVE_EARLY_SEC)}분 먼저`);
-    expect(text).toContain(`비 오는 날은 ${earlyMinutes(WET_ARRIVE_EARLY_SEC)}분 전`);
+    expect(text).toContain(`약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에 딱 닿는`);
+    expect(text).toContain('비 오는 날은 조금 더 일찍');
+    expect(text).not.toContain('5분');
+    expect(text).not.toContain('7분');
   });
 
   it('기능 목록이 아니라 문단 몇 개다 — 빈 줄 없이, 다섯 문단 안에서', () => {
@@ -214,12 +211,12 @@ describe('postscriptLines — 첫 화면의 추신', () => {
 describe('walkFootnote — 걷는 화면 맨 아래', () => {
   const base = { destinationName: '', promiseHeld: false, arrivesEarly: false };
 
-  it('맞추고 있는 날은 계획이 겨눈 숫자를 말한다 — 비 오는 날은 7', () => {
+  it('맞추고 있는 날은 지킬 수 있는 숫자(3)를, 비 오는 날은 "조금 더 일찍"을 말한다', () => {
     expect(walkFootnote({ ...base, promiseHeld: true, earlySec: ARRIVE_EARLY_SEC })).toBe(
-      '5분 전에 도착하도록 맞추고 있어요.'
+      '3분 전에는 닿도록 맞추고 있어요.'
     );
     expect(walkFootnote({ ...base, promiseHeld: true, earlySec: WET_ARRIVE_EARLY_SEC })).toBe(
-      '7분 전에 도착하도록 맞추고 있어요.'
+      '비 오는 날이라 조금 더 일찍 닿도록 맞추고 있어요.'
     );
   });
 
@@ -233,7 +230,7 @@ describe('walkFootnote — 걷는 화면 맨 아래', () => {
   it('목적지 이름이 있으면 앞에 붙는다', () => {
     expect(
       walkFootnote({ destinationName: '성수', promiseHeld: true, arrivesEarly: false, earlySec: ARRIVE_EARLY_SEC })
-    ).toBe('성수까지 5분 전에 도착하도록 맞추고 있어요.');
+    ).toBe('성수까지 3분 전에는 닿도록 맞추고 있어요.');
   });
 });
 

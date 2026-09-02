@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { alongRouteHint, planHeadline, routeReason, wetDayNote } from '../domain/copy';
+import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
 import {
   arrivalAt,
@@ -178,18 +178,6 @@ function RouteScreen() {
     navigation.navigate('/walk');
   };
 
-  /**
-   * 목표가 물러난 이유 한 줄은 **숫자를 말하는 헤드라인 밑에만** 온다.
-   *
-   * "돌아갈 길을 못 찾았어요" 밑에 "비 오는 날이라 2분 더 일찍 잡았어요"가 오면
-   * '~라'가 못 찾은 이유처럼 읽히고, 그 뒤 "곧장 가는 길로 보여드릴게요"와 헤드라인
-   * 사이를 갈라놓는다. 7분이라는 숫자가 화면에 있는 날에만 그 숫자의 이유를 단다.
-   */
-  const headlineHasMinutes =
-    (plan.kind === 'stretch' && stretched && !plan.capped && onTarget) ||
-    (plan.kind === 'straight' && plan.reason === 'no-early');
-  const wetNote = headlineHasMinutes ? wetDayNote(trip.weather) : null;
-
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
       {/*
@@ -219,7 +207,6 @@ function RouteScreen() {
               ? '딱 맞는 길이 없었어요.'
               : planHeadline(plan)}
         </Text>
-        {wetNote != null && <Text style={styles.sub}>{wetNote}</Text>}
 
         {plan.kind === 'stretch' && !stretched && (
           <Text style={styles.sub}>곧장 가는 길로 보여드릴게요.</Text>
