@@ -112,10 +112,12 @@ describe('planHeadline', () => {
   });
 
   /*
-   * 비 오는 날 계획은 7분을 겨눈다. 숫자를 말하지 않고 "조금 더 일찍"과 그 이유를 말한다 —
-   * 우산 든 사람에게 필요한 건 숫자가 아니라 여유를 뒀다는 사실이다.
+   * 비 오는 날 계획은 7분을 겨누고 5분 전을 지킨다. 화면은 그 두 숫자를 **말하지 않는다** —
+   * 늘 보던 3분을 기준으로 "그보다 조금 더 일찍"이라고만 한다. 숫자가 어느 날 5로
+   * 달라져 있으면 앱이 틀린 것처럼 보이고, 우산 든 사람에게 필요한 건 정확한 분이 아니라
+   * 여유를 더 뒀다는 사실이다.
    */
-  it('비 오는 날은 숫자 대신 "조금 더 일찍" — 계획이 든 값으로 갈린다', () => {
+  it('비 오는 날은 늘 보던 3분을 기준으로 말한다 — 5도 7도 새어 나오지 않는다', () => {
     const wet = planHeadline({
       kind: 'stretch',
       targetWalkSec: 27 * 60,
@@ -123,8 +125,9 @@ describe('planHeadline', () => {
       capped: false,
       earlySec: WET_ARRIVE_EARLY_SEC,
     });
-    expect(wet).toBe('비 오는 날이라, 조금 더 일찍 닿는 길이에요.');
-    expect(wet).not.toMatch(/\d분/);
+    expect(wet).toBe('비 오는 날이라, 3분보다 조금 더 일찍 닿는 길이에요.');
+    // 겨눈 값(7)도 그날의 바닥(5)도 화면에 나오지 않는다.
+    expect(wet).not.toMatch(/[57]분/);
     expect(
       planHeadline({
         kind: 'straight',
@@ -149,10 +152,10 @@ describe('promiseLine — 첫 화면의 약속', () => {
     );
   });
 
-  it('비 오는 날은 숫자 없이 "조금 더 일찍" — 이유와 "약속"은 남는다', () => {
+  it('비 오는 날도 기준은 3분 — 이유와 "약속"은 남고, 5·7은 안 나온다', () => {
     const line = promiseLine({ tempC: 18, sky: 'cloudy', precip: 'rain' });
-    expect(line).toBe('비 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.');
-    expect(line).not.toMatch(/\d분/);
+    expect(line).toBe('비 오는 날이라, 약속 3분 전보다 조금 더 일찍 도착하게 해드릴게요.');
+    expect(line).not.toMatch(/[57]분/);
   });
 
   it.each([
@@ -162,7 +165,7 @@ describe('promiseLine — 첫 화면의 약속', () => {
     ['snow', '눈'],
   ] as const)('%s → "%s 오는 날"', (precip, noun) => {
     expect(promiseLine({ tempC: 0, sky: 'cloudy', precip })).toBe(
-      `${noun} 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.`
+      `${noun} 오는 날이라, 약속 3분 전보다 조금 더 일찍 도착하게 해드릴게요.`
     );
   });
 
@@ -189,7 +192,7 @@ describe('postscriptLines — 첫 화면의 추신', () => {
   it('숫자는 지킬 수 있는 3이고, 비 오는 날은 숫자 없이 "조금 더 일찍"', () => {
     const text = postscriptLines().join('\n');
     expect(text).toContain(`약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에는 닿는`);
-    expect(text).toContain('비 오는 날은 조금 더 일찍');
+    expect(text).toContain('비 오는 날은 3분보다 조금 더 일찍');
     expect(text).not.toContain('5분');
     expect(text).not.toContain('7분');
   });
@@ -216,7 +219,7 @@ describe('walkFootnote — 걷는 화면 맨 아래', () => {
       '3분 전에는 닿도록 맞추고 있어요.'
     );
     expect(walkFootnote({ ...base, promiseHeld: true, earlySec: WET_ARRIVE_EARLY_SEC })).toBe(
-      '비 오는 날이라 조금 더 일찍 닿도록 맞추고 있어요.'
+      '비 오는 날이라 3분보다 조금 더 일찍 닿도록 맞추고 있어요.'
     );
   });
 

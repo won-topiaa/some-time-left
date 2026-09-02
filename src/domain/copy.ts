@@ -62,7 +62,7 @@ export function planHeadline(plan: WalkPlan): string {
       return plan.capped
         ? '시간이 꽤 남았어요.\n넉넉히 걸어볼까요?'
         : isWetTarget(plan.earlySec)
-          ? '비 오는 날이라, 조금 더 일찍 닿는 길이에요.'
+          ? `비 오는 날이라, ${promisedMinutes(ARRIVE_EARLY_SEC)}분보다 조금 더 일찍 닿는 길이에요.`
           : `${promisedMinutes(plan.earlySec)}분 전에는 닿는 길이에요.`;
     case 'straight':
       return plan.reason === 'no-early'
@@ -79,7 +79,8 @@ export function planHeadline(plan: WalkPlan): string {
  * 첫 화면의 약속 한 줄.
  *
  * 맑은 날엔 "약속 3분 전에" — 지킬 수 있는 숫자(바닥)다. 내리는 날엔 숫자 대신
- * "조금 더 일찍" — 그 이유(비·눈)와 함께. 숫자가 어느 날 갑자기 달라져 있으면
+ * "3분보다 조금 더 일찍" — 그 이유(비·눈)와 함께. 맑은 날의 숫자를 기준으로 삼아
+ * "그보다 더"라고만 말한다. 숫자가 어느 날 갑자기 5로 달라져 있으면
  * 앱이 틀린 것처럼 보이므로 달라진 날은 숫자를 말하지 않고 왜 달라졌는지를 말한다.
  * 날씨를 못 읽은 날은 맑은 날의 말이다.
  */
@@ -87,7 +88,7 @@ export function promiseLine(weather: Weather | null): string {
   const noun = weather == null ? null : precipNoun(weather.precip);
   return noun == null
     ? `약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에 도착하게 해드릴게요.`
-    : `${noun} 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.`;
+    : `${noun} 오는 날이라, 약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전보다 조금 더 일찍 도착하게 해드릴게요.`;
 }
 
 /**
@@ -108,7 +109,7 @@ export function postscriptLines(): string[] {
     `그 시간만큼 걷는 길을 찾아드려요.\n가장 빠른 길 말고, 약속 ${promised}분 전에는 닿는 길로. 오늘 기분에 맞춰서요.`,
     '걷는 동안엔 남은 거리와 닿을 시각만 조용히 알려드려요.\n길에서 벗어나면 한 번 톡, 두드리고요.',
     '도착하면 몇 분이 남아 있어요.\n그 시간에 한 줄을 적어 두면, 지나온 길에 그대로 남아요.',
-    '비 오는 날은 조금 더 일찍 닿게 잡아요.\n우산을 접고 숨을 고를 시간이니까요.',
+    `비 오는 날은 ${promised}분보다 조금 더 일찍 닿게 잡아요.\n우산을 접고 숨을 고를 시간이니까요.`,
   ];
 }
 
@@ -128,7 +129,7 @@ export interface WalkFootnoteInput {
  * 지킬 수 있는 말만 한다. 일찍 닿게 되는 계획은 약속 바로 앞에 맞추는 게 아니라
  * 그냥 넉넉히 걷는 것이므로 그렇게 말하고, 목표를 애초에 포기한 날(no-early)은
  * 지키지 못할 "N분 전"을 말하지 않는다. 숫자는 겨눈 값이 아니라 지킬 수 있는
- * 값(바닥)이고, 내리는 날은 숫자 대신 "조금 더 일찍"이다.
+ * 값(바닥)이고, 내리는 날은 그 숫자를 기준으로 "그보다 조금 더 일찍"이라고 말한다.
  */
 export function walkFootnote({
   destinationName,
@@ -139,7 +140,7 @@ export function walkFootnote({
   const prefix = destinationName !== '' ? `${destinationName}까지 ` : '';
   const body = promiseHeld
     ? isWetTarget(earlySec)
-      ? '비 오는 날이라 조금 더 일찍 닿도록 맞추고 있어요.'
+      ? `비 오는 날이라 ${promisedMinutes(ARRIVE_EARLY_SEC)}분보다 조금 더 일찍 닿도록 맞추고 있어요.`
       : `${promisedMinutes(earlySec)}분 전에는 닿도록 맞추고 있어요.`
     : arrivesEarly
       ? '넉넉히 걷고 있어요.'

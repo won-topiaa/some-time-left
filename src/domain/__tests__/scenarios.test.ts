@@ -76,16 +76,16 @@ describe('비 오는 날 — 같은 약속, 다른 계획', () => {
 
   it('첫 화면부터 걷는 화면까지 같은 말을 한다 — 숫자 없이 "조금 더 일찍"', () => {
     const earlySec = arriveEarlySecFor(rain);
-    expect(promiseLine(rain)).toBe('비 오는 날이라, 약속보다 조금 더 일찍 도착하게 해드릴게요.');
+    expect(promiseLine(rain)).toBe('비 오는 날이라, 약속 3분 전보다 조금 더 일찍 도착하게 해드릴게요.');
 
     const plan = planWalk({ nowMs: now, arriveAtMs: now + 45 * MIN * 1000, shortestSec: walk, earlySec });
-    expect(planHeadline(plan)).toBe('비 오는 날이라, 조금 더 일찍 닿는 길이에요.');
+    expect(planHeadline(plan)).toBe('비 오는 날이라, 3분보다 조금 더 일찍 닿는 길이에요.');
 
     // 걷는 화면은 길과 함께 고정된 earlySec(계획의 값)으로 말한다.
     if (plan.kind !== 'stretch') throw new Error('stretch여야 한다');
     expect(
       walkFootnote({ destinationName: '성수', promiseHeld: true, arrivesEarly: false, earlySec: plan.earlySec })
-    ).toBe('성수까지 비 오는 날이라 조금 더 일찍 닿도록 맞추고 있어요.');
+    ).toBe('성수까지 비 오는 날이라 3분보다 조금 더 일찍 닿도록 맞추고 있어요.');
     // 셈은 여전히 7분을 겨눈다 — 말만 바뀐다.
     expect(now + plan.targetWalkSec * 1000).toBe(now + 45 * MIN * 1000 - WET_ARRIVE_EARLY_SEC * 1000);
   });
