@@ -8,6 +8,7 @@
 
 import { searchPlaces } from './tmap/client';
 import { geocodeAddress } from './tmap/geocode';
+import { searchOsmPlaces } from './osm-places';
 import { isTmapConfigured } from '../config';
 import { SEOUL_HOTSPOTS } from './seoul/hotspots';
 import { distanceM } from '../domain/geo';
@@ -28,7 +29,8 @@ const MOCK_LIMIT = 8;
  * 실좌표(`SEOUL_HOTSPOTS`)를 목적지로 빌려 준다. 좌표가 진짜라 골라서 걷기까지
  * 이어지고, 지도에도 현재 위치에서 그 지점까지 실제 경로가 그려진다.
  *
- * 키가 있으면 findPlaces가 이 함수를 부르지 않는다 — 그때는 진짜 검색이 답한다.
+ * 이제는 마지막 안전망이다. 키가 없어도 OSM 검색이 먼저 답하고, 그마저 못 읽는
+ * 날(오프라인)에만 이 목록이 받는다 — 어느 날이든 목적지는 고를 수 있어야 한다.
  */
 function mockPlaces(query: string, near?: LatLng): Place[] {
   const needle = query.toLowerCase();
@@ -58,10 +60,12 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
     return [];
   }
 
-  // 키가 없으면 진짜 검색이 없다. 빈 목록을 돌려주면 목적지를 못 골라 첫 화면에
-  // 갇히므로, 실좌표를 가진 mock 목적지로 대신한다. 앱을 눌러볼 수는 있어야 한다.
+  // 키가 없어도 검색은 진짜여야 한다. 핫스팟 121곳만으로는 중앙대학교도 흑석역도
+  // "없는 곳"이 된다 — 실제로 그랬다. OSM(Photon)은 키 없이 열려 있고 역·대학·
+  // 도로명 주소를 안다. 그마저 못 읽으면 실좌표 목록으로 물러난다.
   if (!isTmapConfigured()) {
-    return mockPlaces(trimmed, near);
+    const osm = await searchOsmPlaces(trimmed, near).catch(() => []);
+    return osm.length > 0 ? dedupe(osm) : mockPlaces(trimmed, near);
   }
 
   const lookups: Promise<Place[]>[] = [searchPlaces(trimmed, near).catch(() => [])];
@@ -72,7 +76,14 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
   }
 
   const results = await Promise.all(lookups);
-  return dedupe(results.flat());
+  const found = dedupe(results.flat());
+  if (found.length > 0) {
+    return found;
+  }
+
+  // TMAP이 빈손으로 돌아온 이름도 있다. OSM은 다른 지도라 다른 이름을 안다 —
+  // 마지막으로 한 번 더 물어본다. 여기도 비면 정말 없는 것이다.
+  return dedupe(await searchOsmPlaces(trimmed, near).catch(() => []));
 }
 
 /** 같은 장소가 두 소스에서 겹쳐 오는 걸 정리한다. */

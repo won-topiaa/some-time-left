@@ -559,5 +559,6 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       borderTopColor: colors.line,
     },
     postscriptLabel: { ...type.caption, color: colors.inkFaint },
-    postscriptLine: { ...type.body, color: colors.inkSoft, marginTop: spacing.md },
+    // 문단 사이를 넉넉히 — 천천히 스크롤하며 한 문단씩 읽는 리듬을 여백이 만든다.
+    postscriptLine: { ...type.body, color: colors.inkSoft, marginTop: spacing.lg },
   });

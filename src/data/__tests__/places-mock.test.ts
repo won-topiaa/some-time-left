@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { findPlaces } from '../places';
 import { configureApi, isTmapConfigured } from '../../config';
 import { SEOUL_HOTSPOTS } from '../seoul/hotspots';
@@ -12,6 +12,16 @@ import type { LatLng } from '../../domain/types';
  * 그래서 키가 없을 땐 서울 실좌표(SEOUL_HOTSPOTS)를 목적지로 빌려 준다.
  */
 describe('findPlaces — 키 없을 때 mock 목적지', () => {
+  // 키가 없으면 OSM(Photon)이 먼저 답한다. 이 테스트는 그마저 못 읽는 날의
+  // 마지막 안전망(핫스팟)을 보는 것이라 네트워크를 끊어 둔다.
+  const realFetch = globalThis.fetch;
+  beforeAll(() => {
+    globalThis.fetch = (() => Promise.reject(new Error('offline'))) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = realFetch;
+  });
+
   beforeEach(() => {
     // 이 테스트의 전제: 키가 없는 상태. 기본 설정이 그렇지만 명시해 둔다.
     configureApi({ tmap: { appKey: null } });

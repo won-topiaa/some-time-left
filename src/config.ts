@@ -60,6 +60,17 @@ export interface ApiConfig {
     baseUrl: string;
   };
   /**
+   * 키 없는 보조 장소 검색 — Photon (OSM 지오코더). **키가 없다.**
+   *
+   * TMAP 키가 없는 번들(심사용)에서도 중앙대학교·흑석역 같은 진짜 장소가
+   * 검색돼야 한다. 서울 핫스팟 121곳만으로는 "검색이 안 돼요"가 되고, 실제로
+   * 그랬다. Photon은 OSM 데이터라 역·대학·도로명 주소에 밝고 타이핑 중 검색을
+   * 허용한다. TMAP이 빈손일 때의 뒷배로도 쓴다.
+   */
+  osmSearch: {
+    baseUrl: string;
+  };
+  /**
    * 지도 타일 — CARTO Positron.
    *
    * 지금은 **키 없이** 받아진다(실측). 다만 CARTO 문서는 무료 basemap에 대해
@@ -143,15 +154,19 @@ const config: ApiConfig = {
   weather: {
     baseUrl: 'https://api.open-meteo.com',
   },
+  osmSearch: {
+    baseUrl: 'https://photon.komoot.io',
+  },
   mapTiles: {
     /*
-     * 기본값은 아직 래스터다.
+     * 벡터가 기본이 됐다.
      *
-     * 벡터판이 실기기에서 검증되기 전까지는 확인된 쪽을 기본으로 둔다 —
-     * 조건은 벡터가 깨끗하지만, 켜지지 않는 지도는 조건이 아무리 좋아도 지도가 아니다.
-     * 샌드박스에서 확인하면 이 한 줄을 'vector'로 바꾼다.
+     * 래스터(CARTO)가 실기기에서 "API KEY REQUIRED" 워터마크가 구워진 타일을
+     * 내려주기 시작했다(샌드박스 스크린샷 실측). 문서가 예고하던 키 요구가 켜진
+     * 것이다. OpenFreeMap 벡터는 키·등록·한도·상업 제한이 전부 없어 그 문이 없다.
+     * 래스터 판은 키를 붙이는 날 되살릴 수 있게 남겨 둔다.
      */
-    kind: 'raster',
+    kind: 'vector',
     // `@2x`는 고해상도 타일(512px). 논리 크기보다 크게 받아 두면 확대해도 안 뭉개진다.
     urlTemplate: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
     // 같은 CARTO의 어두운 짝. 밝은 쪽을 그대로 쓰면 밤에 지도만 혼자 하얗게 뜬다.
