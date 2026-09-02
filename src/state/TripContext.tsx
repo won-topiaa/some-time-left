@@ -39,6 +39,14 @@ export interface Trip {
    */
   recordSaved: boolean;
   /**
+   * 남긴 기록의 id. 아직 안 남겼으면 null.
+   *
+   * 도착 화면에서 뒤로 나갔다가 '이미 도착했어요'로 다시 들어오는 날이 있다.
+   * 걸은 일은 한 번이라 기록을 또 만들지 않지만, 그때 적은 한 줄은 어딘가에 남아야
+   * 한다 — 이 id가 그 자리다. 없으면 "남기고 닫기"가 아무것도 안 남기게 된다.
+   */
+  recordId: string | null;
+  /**
    * 실제로 걸은 거리 (m). 위치를 한 번도 못 잡았으면 null.
    *
    * '이미 도착했어요'를 눌러 중간에 끝낼 수 있으니, 계획한 거리를 그대로 기록하면
@@ -75,6 +83,7 @@ const EMPTY: Trip = {
   route: null,
   arrivesEarly: false,
   recordSaved: false,
+  recordId: null,
   walkedDistanceM: null,
   walkedPath: null,
   clockOffsetMs: 0,

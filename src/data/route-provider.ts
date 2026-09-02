@@ -9,7 +9,7 @@
  * 여기서는 그 인터페이스만 정의하고, 화면 개발용 mock을 함께 둔다.
  */
 
-import { bearingDeg, distanceM, pathLengthM } from '../domain/geo';
+import { bearingDeg, distanceM, offsetPoint, pathLengthM } from '../domain/geo';
 import { routeShadeOverTime } from '../domain/shade';
 import type { LatLng, RouteCandidate, RouteFeatures, StreetSegment } from '../domain/types';
 
@@ -65,10 +65,16 @@ export function toSegments(
 function seeded(seed: number): () => number {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;
-  return () => {
+  const next = () => {
     s = (s * 16807) % 2147483647;
     return (s - 1) / 2147483646;
   };
+  // 작은 씨앗(1, 2, 3…)의 첫 값은 전부 0에 붙어 있다 — 16807/2³¹이 첫 값이라서.
+  // 그대로 쓰면 후보 여섯이 같은 폭으로 벌어져 소요 시간까지 똑같아진다. 몇 번 돌려 흩는다.
+  for (let i = 0; i < 3; i += 1) {
+    next();
+  }
+  return next;
 }
 
 function interpolate(a: LatLng, b: LatLng, t: number): LatLng {
@@ -91,22 +97,37 @@ export class MockRouteProvider implements RouteProvider {
     targetSec,
     departAtMs,
   }: RouteRequest): Promise<RouteCandidate[]> {
-    const direct = pathLengthM([origin, destination]);
+    const direct = distanceM(origin, destination);
     const targetM = targetSec * WALK_SPEED_MPS;
-    // 목표 거리를 내려면 얼마나 옆으로 벌어져야 하는가 (아주 거친 근사)
-    const detourScale = Math.max(0, (targetM - direct) / Math.max(direct, 1));
+
+    /*
+     * 경유지가 가운데에서 옆으로 얼마나 나가야 목표 길이가 되는가 — **미터로** 푼다.
+     *
+     * 출발→경유지→도착 두 다리의 길이는 2·√((직선/2)² + 옆으로 나간 거리²)다.
+     * 예전엔 위경도 차이에 비례한 대충의 값을 썼는데, 경도 1도는 위도 1도의 0.8배라
+     * 남북으로 난 길에서는 옆으로 거의 못 나갔다 — 목표가 40분인데 후보 여섯이
+     * 전부 21분이 나왔다. 키 없는 번들에서는 이게 곧 앱이 길을 늘리는 모습이라,
+     * 여기서 못 늘리면 "5분 전에 닿는 길"을 보여줄 방법이 없다.
+     */
+    const half = Math.max(direct, targetM) / 2;
+    const reachM = Math.sqrt(Math.max(0, half * half - (direct / 2) * (direct / 2)));
+
+    // 진행 방향의 수직 단위 벡터 (동, 북). 출발=도착이면 아무 방향이나.
+    const northM = (destination.lat - origin.lat) * 111320;
+    const eastM = (destination.lng - origin.lng) * 111320 * Math.cos((origin.lat * Math.PI) / 180);
+    const norm = Math.hypot(eastM, northM);
+    const perp = norm > 0 ? { e: -northM / norm, n: eastM / norm } : { e: 1, n: 0 };
 
     const out: RouteCandidate[] = [];
     for (let i = 0; i < 6; i += 1) {
       const rand = seeded(i + 1);
       const side = i % 2 === 0 ? 1 : -1;
-      const spread = detourScale * (0.5 + rand() * 0.9) * side;
+      // 목표 언저리로 흩어진다. 실제 도보 API도 그렇다 — 어떤 건 조금 넘겨 문턱에서
+      // 걸러지고, 어떤 건 조금 못 미친다. 그래야 "다른 길"이 보여줄 게 생긴다.
+      const sideM = reachM * (0.8 + rand() * 0.35) * side;
 
       const mid = interpolate(origin, destination, 0.5);
-      const waypoint: LatLng = {
-        lat: mid.lat + (destination.lng - origin.lng) * spread * 0.5,
-        lng: mid.lng - (destination.lat - origin.lat) * spread * 0.5,
-      };
+      const waypoint = offsetPoint(mid, perp.e * sideM, perp.n * sideM);
 
       const path = [
         origin,

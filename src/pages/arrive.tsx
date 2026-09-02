@@ -4,7 +4,7 @@ import { createRoute, useKeyboardHeight, useNavigation } from '@granite-js/react
 import { useScreenInsets } from '../ui/screenInsets';
 import { generateHapticFeedback, share } from '@apps-in-toss/framework';
 import { NOTE_PLACEHOLDER, arrivalPrompt, walkShareText } from '../domain/copy';
-import { saveRecord } from '../data/records';
+import { saveRecord, updateRecordNote } from '../data/records';
 import { CONGESTION_WORD } from '../data/seoul/congestion';
 import {
   lookupDestinationCongestion,
@@ -104,16 +104,34 @@ function Arrive() {
    * 화면이 새로 만들어져 ref는 초기화되지만, 걸은 일은 여전히 한 번이기 때문이다.
    */
   const persist = useCallback(async (): Promise<boolean> => {
-    if (saved.current || trip.recordSaved || trip.mood == null || trip.route == null) {
-      // 남길 게 없거나 이미 남았다. 어느 쪽이든 잃은 것은 없다.
+    if (saved.current || trip.mood == null || trip.route == null) {
+      // 남길 게 없거나 이 화면에서 이미 남겼다. 어느 쪽이든 잃은 것은 없다.
       return true;
+    }
+
+    if (trip.recordSaved) {
+      // 뒤로 나갔다가 다시 들어온 날. 걸은 일은 한 번이라 기록을 또 만들지 않지만,
+      // 이번에 적은 한 줄까지 버리면 "남기고 닫기"가 거짓말이 된다 — 그 기록에 얹는다.
+      const text = note.trim();
+      if (text === '' || trip.recordId == null) {
+        return true;
+      }
+      saved.current = true;
+      try {
+        await updateRecordNote(trip.recordId, text);
+        return true;
+      } catch {
+        saved.current = false;
+        return false;
+      }
     }
     saved.current = true;
 
     const now = Date.now() + offset;
+    const id = `${now}`;
     try {
       await saveRecord({
-        id: `${now}`,
+        id,
         companion: trip.companion,
         mood: trip.mood,
         note: note.trim(),
@@ -126,7 +144,7 @@ function Arrive() {
         routeId: trip.route.candidate.id,
         distanceM: trip.walkedDistanceM ?? trip.route.candidate.distanceM,
       });
-      update({ recordSaved: true });
+      update({ recordSaved: true, recordId: id });
       return true;
     } catch {
       // 다음 기회에 다시 시도할 수 있도록 되돌린다.

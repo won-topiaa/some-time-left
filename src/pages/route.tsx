@@ -59,7 +59,8 @@ function RouteScreen() {
     retry,
     stretched,
     clockOffsetMs,
-    onTime,
+    onTarget,
+    fallback,
   } = useRouteSuggestion({
     destination: trip.destination,
     arriveAtMs: trip.arriveAtMs,
@@ -150,11 +151,10 @@ function RouteScreen() {
       route,
       clockOffsetMs,
       walkedDistanceM: null,
-      // 상한에서 잘렸거나 아예 못 늘렸으면 목표 시각 도착을 약속할 수 없다.
-      // 걷는 화면이 알아야 같은 말을 하지 않는다.
-      // 고른 길이 문턱을 못 넘었으면(onTime === false) 걷는 화면도 목표 시각을
-      // 약속하면 안 된다. 계획만 보고 정하면 그 화면만 혼자 옛말을 하게 된다.
-      arrivesEarly: plan.kind === 'stretch' && (plan.capped || !stretched || !onTime),
+      // 상한에서 잘렸거나, 아예 못 늘렸거나, 늘린 길이 목표에 못 미쳤으면(onTarget
+      // === false) 목표 시각 도착을 약속할 수 없다. 걷는 화면이 알아야 같은 말을
+      // 하지 않는다 — 계획만 보고 정하면 그 화면만 혼자 옛말을 하게 된다.
+      arrivesEarly: plan.kind === 'stretch' && (plan.capped || !stretched || !onTarget),
     });
     navigation.navigate('/walk');
   };
@@ -179,7 +179,12 @@ function RouteScreen() {
         <Text style={styles.headline}>
           {plan.kind === 'stretch' && !stretched
             ? '오늘은 돌아갈 길을 못 찾았어요.'
-            : plan.kind === 'stretch' && !onTime
+            : /*
+                상한에서 잘린 날은 애초에 "넉넉히 걸어볼까요"라 목표에 맞을 수가 없다.
+                그 밖의 날에 목표에 못 미치면 — 후보가 전부 늦어 최단으로 물러섰거나,
+                늘린 길이 죄다 이르거나 — 맞췄다고 하지 않는다.
+              */
+              plan.kind === 'stretch' && !plan.capped && !onTarget
               ? '딱 맞는 길이 없었어요.'
               : planHeadline(plan)}
         </Text>
@@ -207,7 +212,7 @@ function RouteScreen() {
           그때 "먼저 닿는 길이에요"를 그대로 두면 화면에 적힌 도착 시각과
           바로 어긋난다 — 아래 도착 시각이 그 거짓말을 즉시 들키게 만든다.
         */}
-        {plan.kind === 'stretch' && stretched && !onTime && (
+        {plan.kind === 'stretch' && stretched && !plan.capped && !onTarget && (
           <Text style={styles.sub}>가장 가까운 길로 보여드릴게요.</Text>
         )}
 
@@ -256,12 +261,12 @@ function RouteScreen() {
               "골랐다"고 말하게 되는데, 바로 위 헤드라인은 "그냥 곧장 가요"라고 한다.
               둘이 어긋나면 이 앱이 신뢰를 얻는 유일한 문장이 흠집이 된다.
 
-              `!onTime`도 같다. 그건 내놓을 게 없어 최단 경로로 물러선 자리인데,
+              `fallback`도 같다. 그건 내놓을 게 없어 최단 경로로 물러선 자리인데,
               최단 경로는 환경 데이터를 부르지 않고 만든 것이라 성질 값이 재본 값이 아니다
               (novelty가 늘 1.0으로 나온다). 매일 걷는 출근길에 "아직 안 가보신 길이에요"라고
               말하게 되므로, 고르지 않은 길에는 이유도 붙이지 않는다.
             */}
-            {trip.mood != null && plan.kind === 'stretch' && onTime && (
+            {trip.mood != null && plan.kind === 'stretch' && !fallback && (
               <Text style={styles.reason}>
                 {routeReason(trip.mood, route.dominantFeature)}
               </Text>
@@ -294,7 +299,8 @@ function RouteScreen() {
           onPress={startWalking}
         >
           <Text style={styles.ctaText}>
-            {plan.kind === 'straight' || !stretched ? '곧장 갈게요' : '이 길로 갈게요'}
+            {/* 최단으로 물러선 날도 곧장 가는 길이다. 그 길에 "이 길로"는 고른 척이 된다. */}
+            {plan.kind === 'straight' || !stretched || fallback ? '곧장 갈게요' : '이 길로 갈게요'}
           </Text>
         </Pressable>
       ) : (

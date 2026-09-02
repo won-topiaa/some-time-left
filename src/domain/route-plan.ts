@@ -60,6 +60,27 @@ export function arrivesOnTime(durationSec: number, targetSec: number): boolean {
   return durationSec <= targetSec + LATE_SLACK_SEC;
 }
 
+/**
+ * 이 길을 "약속 앞 목표에 맞춘 길"이라고 **말해도 되는** 이른 쪽 폭 (초).
+ *
+ * 고르는 문턱이 아니라 말하는 문턱이다. 일찍 닿는 길도 내놓기로 했지만(`nextRoute`),
+ * 그 길에 "5분 전에 닿는 길이에요"를 붙이면 바로 아래 적힌 도착 시각이 그 말을
+ * 즉시 들킨다 — 약속 45분 전에 닿는 길을 두고 그렇게 말할 수는 없다.
+ */
+export const ON_TARGET_EARLY_SEC = 5 * 60;
+
+/**
+ * 이 길이 목표 언저리에 닿는가 — 늦지 않으면서 `ON_TARGET_EARLY_SEC`보다 이르지도 않은가.
+ *
+ * `arrivesOnTime`이 "내놓아도 되는가"라면 이건 "맞췄다고 말해도 되는가"다.
+ * 둘을 한 함수로 합쳤을 때 후보가 전부 늦어 최단으로 물러선 날에도 화면이
+ * "5분 전에 닿는 길이에요"라고 말했다 — 최단은 늦지 않으니까. 물러선 날은
+ * 물러섰다고 말해야 한다.
+ */
+export function landsOnTarget(durationSec: number, targetSec: number): boolean {
+  return arrivesOnTime(durationSec, targetSec) && targetSec - durationSec <= ON_TARGET_EARLY_SEC;
+}
+
 export function rankRoutes(
   candidates: RouteCandidate[],
   { targetSec, weights, recentRouteIds = [] }: RankOptions

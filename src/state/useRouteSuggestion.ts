@@ -6,7 +6,7 @@ import { isTmapConfigured } from '../config';
 import { RECENT_WINDOW, loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
-import { arrivesOnTime, firstRoute, nextRoute, rankRoutes } from '../domain/route-plan';
+import { firstRoute, landsOnTarget, nextRoute, rankRoutes } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
@@ -41,15 +41,25 @@ export interface Suggestion {
    */
   clockOffsetMs: number;
   /**
-   * 지금 보여주는 길로 가면 **약속 전에** 닿는가.
+   * 지금 보여주는 길이 **약속 앞 목표 언저리에** 닿는가 — 늦지도, 5분 넘게 이르지도 않은가.
    *
-   * 일찍 닿는 것은 실패가 아니다 — 걷는 화면이 지금 속도로 몇 시에 닿을지 계속
-   * 알려주므로 그 사실은 이미 사용자 앞에 있다. 늦는 것만 막는다.
+   * 늦는 길은 애초에 여기까지 오지 않는다(`nextRoute`가 거른다). 그러니 이 값이
+   * 거짓이면 뜻은 하나다: 일찍 닿는다. 그때 화면은 "5분 전에 닿는 길이에요"라고
+   * 말하면 안 되고, 걷는 화면도 목표 시각을 약속하면 안 된다.
    *
-   * `stretched`와 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 그 길로 가면
-   * 제때 닿는지다.
+   * `stretched`와 다르다. 저건 길을 늘리는 데 성공했는지고, 이건 늘린 길이 목표에
+   * 맞았는지다. 예전엔 `arrivesOnTime`(늦지 않는가)을 그대로 내보냈는데, 늦는 길은
+   * 어차피 안 나오므로 늘 참이었다 — 최단으로 물러선 날에도 맞췄다고 말했다.
    */
-  onTime: boolean;
+  onTarget: boolean;
+  /**
+   * 내놓을 후보가 없어 최단 경로로 물러섰는가.
+   *
+   * 최단은 첫 화면을 빠르게 띄우려고 환경 데이터 없이 만들어서 성질 값이 재본 값이
+   * 아니다(novelty가 늘 1.0). 그 길에 "아직 안 가보신 길이에요"를 붙이면 매일 걷는
+   * 출근길에 그렇게 말하게 되므로, 화면은 이 값이 참이면 이유를 붙이지 않는다.
+   */
+  fallback: boolean;
 }
 
 export interface SuggestionInput {
@@ -255,6 +265,8 @@ export function useRouteSuggestion({
     retry,
     stretched,
     clockOffsetMs,
-    onTime: current != null && arrivesOnTime(current.candidate.durationSec, targetSec),
+    onTarget: current != null && landsOnTarget(current.candidate.durationSec, targetSec),
+    // 늘리는 계획에서만 뜻이 있다. 곧장 가는 계획은 최단이 곧 답이라 물러선 게 아니다.
+    fallback: plan?.kind === 'stretch' && current != null && current === floor,
   };
 }

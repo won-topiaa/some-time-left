@@ -123,6 +123,26 @@ export async function saveRecord(record: WalkRecord): Promise<void> {
   } satisfies RecordStore);
 }
 
+/**
+ * 이미 남긴 기록에 한 줄을 얹는다.
+ *
+ * 도착 화면을 나갔다가 다시 들어와 적은 말이 갈 곳이다. 기록은 걸은 일당 하나라
+ * 새로 만들지 않고, 그 기록의 note만 바꾼다. 목록에서 밀려났거나 없는 id면
+ * 조용히 아무것도 안 한다 — 없는 기록을 되살려 두 번 세지 않는다.
+ *
+ * 저장과 같은 이유로 엄격하게 읽는다. 못 읽은 채로 덮어쓰면 기록 전부가 사라진다.
+ */
+export async function updateRecordNote(id: string, note: string): Promise<void> {
+  const store = toStore(await readJsonStrict<unknown>(RECORDS_KEY, null));
+  const index = store.records.findIndex((record) => record.id === id);
+  if (index < 0) {
+    return;
+  }
+  const records = [...store.records];
+  records[index] = { ...records[index], note };
+  await writeJson(RECORDS_KEY, { records, carried: store.carried } satisfies RecordStore);
+}
+
 /** 목록에서 밀려난 기록들의 합. 없으면 0. */
 export async function loadCarried(): Promise<CarriedTotals> {
   return toStore(await readJson<unknown>(RECORDS_KEY, null)).carried;
