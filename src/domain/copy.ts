@@ -63,7 +63,7 @@ export function planHeadline(plan: WalkPlan): string {
         ? '시간이 꽤 남았어요.\n넉넉히 걸어볼까요?'
         : isWetTarget(plan.earlySec)
           ? '비 오는 날이라, 조금 더 일찍 닿는 길이에요.'
-          : `${promisedMinutes(plan.earlySec)}분 전에 닿는 길이에요.`;
+          : `${promisedMinutes(plan.earlySec)}분 전에는 닿는 길이에요.`;
     case 'straight':
       return plan.reason === 'no-early'
         ? isWetTarget(plan.earlySec)
@@ -105,7 +105,7 @@ export function postscriptLines(): string[] {
   const promised = promisedMinutes(ARRIVE_EARLY_SEC);
   return [
     '약속 장소 근처에 일찍 와 버린 날이 있죠.\n카페에 들어가기엔 애매하고, 그냥 서 있기엔 긴 시간.',
-    `그 시간만큼 걷는 길을 찾아드려요.\n가장 빠른 길 말고, 약속 ${promised}분 전에 딱 닿는 길로. 오늘 기분에 맞춰서요.`,
+    `그 시간만큼 걷는 길을 찾아드려요.\n가장 빠른 길 말고, 약속 ${promised}분 전에는 닿는 길로. 오늘 기분에 맞춰서요.`,
     '걷는 동안엔 남은 거리와 닿을 시각만 조용히 알려드려요.\n길에서 벗어나면 한 번 톡, 두드리고요.',
     '도착하면 몇 분이 남아 있어요.\n그 시간에 한 줄을 적어 두면, 지나온 길에 그대로 남아요.',
     '비 오는 날은 조금 더 일찍 닿게 잡아요.\n우산을 접고 숨을 고를 시간이니까요.',

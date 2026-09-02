@@ -92,14 +92,24 @@ describe('비 오는 날 — 같은 약속, 다른 계획', () => {
 
   it('여유가 얇은 날, 비는 곧장 가는 이유가 된다 — 맑은 날엔 늘리고, 비 오는 날엔 곧장', () => {
     // 20분 거리에 26분 45초 남음. 맑은 날 여유 105초(>90) → 늘린다.
-    // 비 오는 날 예산 19분 45초(<20분) → 7분 전은 무리, 곧장.
+    // 비 오는 날은 예산이 최단에 못 미쳐 곧장 — 6분 45초 전에 닿으니 바닥(5분)은 지킨다.
     const at = now + (26 * MIN + 45) * 1000;
     const dry = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at, shortestSec: walk });
     const wet = planWalk({ earlySec: WET_ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at, shortestSec: walk });
     expect(dry).toMatchObject({ kind: 'stretch', capped: false });
+    expect(wet).toMatchObject({ kind: 'straight', reason: 'no-slack' });
+    expect(planHeadline(wet)).toBe('여유가 딱 그만큼이에요. 오늘은 그냥 곧장 가요.');
+    expect(planHeadline(dry)).toBe('3분 전에는 닿는 길이에요.');
+  });
+
+  it('24분 남은 날: 맑은 날은 4분 전이라 약속(3분)을 지키고, 비 오는 날은 바닥(5분)을 못 지킨다', () => {
+    const at = now + 24 * MIN * 1000;
+    const dry = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at, shortestSec: walk });
+    const wet = planWalk({ earlySec: WET_ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at, shortestSec: walk });
+    expect(dry).toMatchObject({ kind: 'straight', reason: 'no-slack' });
     expect(wet).toMatchObject({ kind: 'straight', reason: 'no-early' });
+    expect(planHeadline(dry)).toBe('여유가 딱 그만큼이에요. 오늘은 그냥 곧장 가요.');
     expect(planHeadline(wet)).toBe('비 오는 날인데 여유가 없네요. 오늘은 그냥 곧장 가요.');
-    expect(planHeadline(dry)).toBe('3분 전에 닿는 길이에요.');
   });
 
   it('바닥도 함께 물러난다 — 맑은 날은 약속 3분 전 도착까지 받고, 비 오는 날은 5분 전까지만', () => {

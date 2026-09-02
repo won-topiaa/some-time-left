@@ -357,9 +357,10 @@ describe('비 오는 날 — 7분 전', () => {
   });
 
   it('같은 날, 같은 약속이라도 비가 오면 곧장 가는 날이 될 수 있다', () => {
-    // 20분 거리에 25분 남음. 맑은 날은 여유 0(곧장, no-slack), 비 오는 날은 7분 전이 무리(no-early).
-    const dry = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN });
-    const wet = planWalk({ nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
+    // 20분 거리에 24분 남음 → 곧장 가면 4분 전. 맑은 날 바닥(3분)은 지킨다(no-slack),
+    // 비 오는 날 바닥(5분)은 못 지킨다(no-early).
+    const dry = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(24), shortestSec: 20 * MIN });
+    const wet = planWalk({ nowMs: now, arriveAtMs: at(24), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
     expect(dry).toEqual({ kind: 'straight', reason: 'no-slack', targetWalkSec: 20 * MIN, earlySec: ARRIVE_EARLY_SEC });
     expect(wet).toEqual({ kind: 'straight', reason: 'no-early', targetWalkSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
   });
@@ -394,5 +395,35 @@ describe('promisedMinutes — 화면이 약속하는 분', () => {
     expect(promisedMinutes(WET_ARRIVE_EARLY_SEC)).toBe(5);
     expect(isWetTarget(WET_ARRIVE_EARLY_SEC)).toBe(true);
     expect(isWetTarget(ARRIVE_EARLY_SEC)).toBe(false);
+  });
+});
+
+/**
+ * 화면은 3분을 약속한다. 그러니 "3분 전은 어렵겠어요"는 정말 3분 전에 못 닿을 때만.
+ * 곧장 가서 4분 전에 닿는 날은 약속을 지키는 날이다 — 여유가 없을 뿐.
+ */
+describe('planWalk — no-early의 기준은 목표(5분)가 아니라 약속한 바닥(3분)', () => {
+  const now = Date.UTC(2026, 8, 2, 5, 0, 0);
+  const at = (m: number) => now + m * 60_000;
+  const walk = 20 * MIN;
+  const dry = (minutesLeft: number) =>
+    planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(minutesLeft), shortestSec: walk });
+
+  it('3~5분 전에 닿는 날은 곧장 가되 약속은 지킨다(no-slack)', () => {
+    expect(dry(23)).toMatchObject({ kind: 'straight', reason: 'no-slack' });
+    expect(dry(24)).toMatchObject({ kind: 'straight', reason: 'no-slack' });
+    expect(dry(25)).toMatchObject({ kind: 'straight', reason: 'no-slack' });
+  });
+
+  it('3분 전 미만이면 no-early — 정말 어려운 날', () => {
+    expect(dry(22)).toMatchObject({ kind: 'straight', reason: 'no-early' });
+    expect(dry(20)).toMatchObject({ kind: 'straight', reason: 'no-early' });
+  });
+
+  it('경계: 정확히 3분 전은 지키는 것', () => {
+    expect(planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(23), shortestSec: walk }).kind).toBe('straight');
+    expect(dry(23)).toMatchObject({ reason: 'no-slack' });
+    const justUnder = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(23) - 1000, shortestSec: walk });
+    expect(justUnder).toMatchObject({ reason: 'no-early' });
   });
 });

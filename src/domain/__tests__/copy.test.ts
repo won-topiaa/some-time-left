@@ -108,7 +108,7 @@ describe('planHeadline', () => {
     expect(ARRIVE_EARLY_MIN).toBe(3);
     expect(
       planHeadline({ kind: 'stretch', targetWalkSec: 27 * 60, slackSec: 420, capped: false, earlySec: ARRIVE_EARLY_SEC })
-    ).toBe('3분 전에 닿는 길이에요.');
+    ).toBe('3분 전에는 닿는 길이에요.');
   });
 
   /*
@@ -188,7 +188,7 @@ describe('postscriptLines — 첫 화면의 추신', () => {
 
   it('숫자는 지킬 수 있는 3이고, 비 오는 날은 숫자 없이 "조금 더 일찍"', () => {
     const text = postscriptLines().join('\n');
-    expect(text).toContain(`약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에 딱 닿는`);
+    expect(text).toContain(`약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에는 닿는`);
     expect(text).toContain('비 오는 날은 조금 더 일찍');
     expect(text).not.toContain('5분');
     expect(text).not.toContain('7분');

@@ -47,7 +47,12 @@ export function earlyMinutes(earlySec: number): number {
  * 겨누고 5분 전을 지킨다.
  */
 export function promisedMinutes(earlySec: number): number {
-  return earlyMinutes(earlySec - (ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC));
+  return earlyMinutes(promisedSec(earlySec));
+}
+
+/** 그날의 바닥 (초). 목표보다 2분 안쪽 — 맑은 날 3분, 내리는 날 5분. 화면이 약속하는 값. */
+export function promisedSec(earlySec: number): number {
+  return earlySec - (ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC);
 }
 
 /** 이 계획이 내리는 날의 목표를 겨눴는가. 문구가 숫자 대신 "조금 더 일찍"을 고를 때 쓴다. */
@@ -144,8 +149,12 @@ export interface PlanInput {
  * 네 갈래로 갈린다.
  * - 여유가 넉넉함 → 늘린다 (stretch)
  * - 여유가 거의 없음 → 곧장 간다 (straight / no-slack)
- * - 약속 전 여유는 못 맞추지만 정시엔 도착 → 곧장 간다 (straight / no-early)
+ * - 화면이 약속한 "바닥"(맑은 날 3분 전)조차 못 맞추지만 정시엔 도착 → 곧장 간다 (straight / no-early)
  * - 최단으로도 늦음 → 정직하게 말한다 (too-late)
+ *
+ * no-early의 기준이 목표(5분)가 아니라 바닥(3분)인 이유: 화면은 3분을 약속한다.
+ * 최단으로 4분 전에 닿는 날에 "3분 전은 어렵겠어요"라고 하면 앱이 제 약속을
+ * 스스로 틀리게 읽는 것이다. 그날은 약속을 지키는 날이고, 그냥 여유가 없을 뿐이다.
  */
 export function planWalk({ nowMs, arriveAtMs, shortestSec, earlySec }: PlanInput): WalkPlan {
   const untilAppointmentSec = Math.round((arriveAtMs - nowMs) / 1000);
@@ -154,14 +163,14 @@ export function planWalk({ nowMs, arriveAtMs, shortestSec, earlySec }: PlanInput
     return { kind: 'too-late', shortBySec: shortestSec - untilAppointmentSec };
   }
 
-  // 약속보다 earlySec 먼저 닿으려면 실제로 걸을 수 있는 시간
-  const budgetSec = untilAppointmentSec - earlySec;
-
-  if (budgetSec < shortestSec) {
-    // 정시엔 닿지만 여유를 두고는 무리. 앱이 해줄 게 없으니 솔직하게.
+  // 곧장 가도 화면이 약속한 바닥(맑은 날 3분 전) 앞에 못 닿는다. 정시엔 닿으니 솔직하게.
+  if (untilAppointmentSec - shortestSec < promisedSec(earlySec)) {
     return { kind: 'straight', reason: 'no-early', targetWalkSec: shortestSec, earlySec };
   }
 
+  // 약속보다 earlySec 먼저 닿으려면 실제로 걸을 수 있는 시간
+  const budgetSec = untilAppointmentSec - earlySec;
+  // 바닥은 지키지만 목표(5분)엔 못 미치는 날은 음수다. 그날도 곧장 간다 — 약속은 지켜진다.
   const slackSec = budgetSec - shortestSec;
 
   if (slackSec <= STRAIGHT_TOLERANCE_SEC) {
