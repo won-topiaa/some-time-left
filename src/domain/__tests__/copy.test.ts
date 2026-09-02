@@ -6,12 +6,15 @@ import {
   planHeadline,
   promiseLine,
   routeReason,
+  walkFootnote,
   walkShareText,
   wetDayNote,
 } from '../copy';
 import { MOODS, dominantFeature, weightsFor } from '../mood';
 import { FEATURE_KEYS } from '../types';
-import { ARRIVE_EARLY_MIN, ARRIVE_EARLY_SEC, WET_ARRIVE_EARLY_SEC } from '../time';
+import { ARRIVE_EARLY_SEC, WET_ARRIVE_EARLY_SEC, earlyMinutes } from '../time';
+
+const ARRIVE_EARLY_MIN = earlyMinutes(ARRIVE_EARLY_SEC);
 
 /**
  * 이 한 줄이 자동 추천의 생명줄이라, 여섯 기분 × 여섯 성질을 전부 통과시킨다.
@@ -123,8 +126,9 @@ describe('planHeadline', () => {
     ).toContain('7분 전은 어렵겠어요');
   });
 
-  it('늦으면 얼마나 늦는지 말한다', () => {
-    expect(planHeadline({ kind: 'too-late', shortBySec: 300 })).toContain('5분');
+  it('늦으면 얼마나 늦는지 말한다 — "몇 분 전"의 숫자가 아니라 늦는 만큼을', () => {
+    // 5분으로 두면 ARRIVE_EARLY_MIN과 구별이 안 된다. 4분이어야 늦는 만큼을 말한 것이 보인다.
+    expect(planHeadline({ kind: 'too-late', shortBySec: 240 })).toBe('최단으로 가도 4분 늦어요.');
   });
 });
 
@@ -136,9 +140,9 @@ describe('promiseLine — 첫 화면의 약속', () => {
     );
   });
 
-  it('비 오는 날은 이유와 함께 7분', () => {
+  it('비 오는 날은 이유와 함께 7분 — "약속"은 두 문장 모두에 남는다', () => {
     expect(promiseLine({ tempC: 18, sky: 'cloudy', precip: 'rain' })).toBe(
-      '비 오는 날이라 7분 전에 도착하게 해드릴게요.'
+      '비 오는 날이라 약속 7분 전에 도착하게 해드릴게요.'
     );
   });
 
@@ -149,7 +153,7 @@ describe('promiseLine — 첫 화면의 약속', () => {
     ['snow', '눈'],
   ] as const)('%s → "%s 오는 날"', (precip, noun) => {
     expect(promiseLine({ tempC: 0, sky: 'cloudy', precip })).toBe(
-      `${noun} 오는 날이라 7분 전에 도착하게 해드릴게요.`
+      `${noun} 오는 날이라 약속 7분 전에 도착하게 해드릴게요.`
     );
   });
 });
@@ -160,13 +164,54 @@ describe('wetDayNote — 왜 7분인지', () => {
     expect(wetDayNote({ tempC: 25, sky: 'partly', precip: 'none' })).toBeNull();
   });
 
-  it('내리는 날은 더한 분을 말한다', () => {
-    expect(wetDayNote({ tempC: 18, sky: 'cloudy', precip: 'rain' })).toBe(
-      '비 오는 날이라 2분 더 일찍 잡았어요.'
+  it.each([
+    ['rain', '비'],
+    ['shower', '비'],
+    ['thunder', '비'],
+    ['sleet', '진눈깨비'],
+    ['snow', '눈'],
+  ] as const)('%s → "%s 오는 날이라 2분 더"', (precip, noun) => {
+    expect(wetDayNote({ tempC: 0, sky: 'cloudy', precip })).toBe(
+      `${noun} 오는 날이라 2분 더 일찍 잡았어요.`
     );
-    expect(wetDayNote({ tempC: -2, sky: 'cloudy', precip: 'snow' })).toBe(
-      '눈 오는 날이라 2분 더 일찍 잡았어요.'
+  });
+
+  it('상한에서 잘린 비 오는 날의 헤드라인은 숫자를 말하지 않는다 — 그 밑엔 이 줄도 없어야 한다', () => {
+    expect(
+      planHeadline({
+        kind: 'stretch',
+        targetWalkSec: 44 * 60,
+        slackSec: 4000,
+        capped: true,
+        earlySec: WET_ARRIVE_EARLY_SEC,
+      })
+    ).not.toContain('분 전');
+  });
+});
+
+describe('walkFootnote — 걷는 화면 맨 아래', () => {
+  const base = { destinationName: '', promiseHeld: false, arrivesEarly: false };
+
+  it('맞추고 있는 날은 계획이 겨눈 숫자를 말한다 — 비 오는 날은 7', () => {
+    expect(walkFootnote({ ...base, promiseHeld: true, earlySec: ARRIVE_EARLY_SEC })).toBe(
+      '5분 전에 도착하도록 맞추고 있어요.'
     );
+    expect(walkFootnote({ ...base, promiseHeld: true, earlySec: WET_ARRIVE_EARLY_SEC })).toBe(
+      '7분 전에 도착하도록 맞추고 있어요.'
+    );
+  });
+
+  it('일찍 닿는 계획과 포기한 계획은 숫자를 말하지 않는다', () => {
+    expect(walkFootnote({ ...base, arrivesEarly: true, earlySec: WET_ARRIVE_EARLY_SEC })).toBe(
+      '넉넉히 걷고 있어요.'
+    );
+    expect(walkFootnote({ ...base, earlySec: WET_ARRIVE_EARLY_SEC })).toBe('제시간에 닿도록 걷고 있어요.');
+  });
+
+  it('목적지 이름이 있으면 앞에 붙는다', () => {
+    expect(
+      walkFootnote({ destinationName: '성수', promiseHeld: true, arrivesEarly: false, earlySec: ARRIVE_EARLY_SEC })
+    ).toBe('성수까지 5분 전에 도착하도록 맞추고 있어요.');
   });
 });
 

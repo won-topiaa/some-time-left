@@ -26,7 +26,7 @@ describe('planWalk', () => {
 
   it('여유가 넉넉하면 약속 앞 도착에 맞춰 경로를 늘린다', () => {
     // 30분 뒤 약속, 최단 20분 → 약속 EARLY_MIN분 전에 닿는 경로
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(30), shortestSec: 20 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(30), shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
@@ -36,7 +36,7 @@ describe('planWalk', () => {
   });
 
   it('사용자가 말한 그 상황 — 20분 거리에 30분 남음', () => {
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(30), shortestSec: 20 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(30), shortestSec: 20 * MIN });
     if (plan.kind !== 'stretch') throw new Error('stretch여야 한다');
 
     // 목표대로 걸으면 약속 EARLY_MIN분 전에 도착한다
@@ -46,7 +46,7 @@ describe('planWalk', () => {
 
   it('여유가 1분 남짓이면 우회하지 않고 곧장 간다', () => {
     // 최단 20분 + 여유 1분 + 먼저 닿을 시간 → 우회할 게 없다
-    const plan = planWalk({
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC,
       nowMs: now,
       arriveAtMs: at(20 + 1 + EARLY_MIN),
       shortestSec: 20 * MIN,
@@ -59,7 +59,7 @@ describe('planWalk', () => {
 
   it('먼저 닿기는 못 하지만 정시엔 닿으면 솔직하게 곧장 가라고 한다', () => {
     // 최단 20분인데 약속까지 21분 → EARLY_MIN분을 빼면 예산이 최단에 못 미친다
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(21), shortestSec: 20 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(21), shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('straight');
     if (plan.kind !== 'straight') return;
@@ -68,7 +68,7 @@ describe('planWalk', () => {
   });
 
   it('최단으로도 늦으면 얼마나 늦는지 말한다', () => {
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(15), shortestSec: 20 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(15), shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('too-late');
     if (plan.kind !== 'too-late') return;
@@ -77,7 +77,7 @@ describe('planWalk', () => {
 
   it('여유가 과하면 상한에서 자르고 그 사실을 표시한다', () => {
     // 90분 뒤 약속, 최단 20분 → 87분을 다 걷게 하지 않는다
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(90), shortestSec: 20 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(90), shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
@@ -87,7 +87,7 @@ describe('planWalk', () => {
   });
 
   it('타겟인 40분 거리에서도 동작한다', () => {
-    const plan = planWalk({ nowMs: now, arriveAtMs: at(50), shortestSec: 40 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(50), shortestSec: 40 * MIN });
 
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
@@ -265,7 +265,7 @@ describe('arrivalAt', () => {
    */
   it('목표대로 걸으면 약속보다 그만큼 먼저 닿는다', () => {
     const appointment = now + 40 * 60_000;
-    const plan = planWalk({ nowMs: now, arriveAtMs: appointment, shortestSec: 20 * MIN });
+    const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: appointment, shortestSec: 20 * MIN });
 
     expect(plan.kind).toBe('stretch');
     if (plan.kind !== 'stretch') return;
@@ -280,23 +280,23 @@ describe('departAt — 언제 나서면 되는가', () => {
 
   it('고른 길을 걸어 약속 앞에 닿도록 되짚는다', () => {
     // 90분 뒤 약속, 44분짜리 길 → 약속 EARLY_MIN분 전에 닿으려면 44분 전에 나선다
-    const leave = departAt(at(90), 44 * MIN, now);
+    const leave = departAt(at(90), 44 * MIN, now, ARRIVE_EARLY_SEC);
     expect(leave).toBe(at(90 - EARLY_MIN - 44));
   });
 
   it('이미 나설 때가 지났으면 null', () => {
     // 30분 뒤 약속에 27분짜리 길이면 지금이 그 시각이다
-    expect(departAt(at(30), 27 * MIN, now)).toBeNull();
+    expect(departAt(at(30), 27 * MIN, now, ARRIVE_EARLY_SEC)).toBeNull();
   });
 
   it('늦은 날에도 null — 기다리라고 할 이유가 없다', () => {
-    expect(departAt(at(10), 30 * MIN, now)).toBeNull();
+    expect(departAt(at(10), 30 * MIN, now, ARRIVE_EARLY_SEC)).toBeNull();
   });
 
   it('나설 시각에 걸어 나가면 약속보다 그만큼 먼저 닿는다', () => {
     const appointment = at(120);
     const walkSec = 40 * MIN;
-    const leave = departAt(appointment, walkSec, now);
+    const leave = departAt(appointment, walkSec, now, ARRIVE_EARLY_SEC);
     if (leave == null) throw new Error('나설 시각이 있어야 한다');
 
     expect(arrivalAt(leave, walkSec)).toBe(appointment - ARRIVE_EARLY_SEC * 1000);
@@ -344,7 +344,7 @@ describe('비 오는 날 — 7분 전', () => {
 
   it('계획은 받은 값을 들고 다닌다', () => {
     const wet = planWalk({ nowMs: now, arriveAtMs: at(45), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
-    const dry = planWalk({ nowMs: now, arriveAtMs: at(45), shortestSec: 20 * MIN });
+    const dry = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(45), shortestSec: 20 * MIN });
     if (wet.kind !== 'stretch' || dry.kind !== 'stretch') throw new Error('둘 다 stretch여야 한다');
     expect(wet.earlySec).toBe(WET_ARRIVE_EARLY_SEC);
     expect(dry.earlySec).toBe(ARRIVE_EARLY_SEC);
@@ -356,7 +356,7 @@ describe('비 오는 날 — 7분 전', () => {
 
   it('같은 날, 같은 약속이라도 비가 오면 곧장 가는 날이 될 수 있다', () => {
     // 20분 거리에 25분 남음. 맑은 날은 여유 0(곧장, no-slack), 비 오는 날은 7분 전이 무리(no-early).
-    const dry = planWalk({ nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN });
+    const dry = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN });
     const wet = planWalk({ nowMs: now, arriveAtMs: at(25), shortestSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
     expect(dry).toEqual({ kind: 'straight', reason: 'no-slack', targetWalkSec: 20 * MIN, earlySec: ARRIVE_EARLY_SEC });
     expect(wet).toEqual({ kind: 'straight', reason: 'no-early', targetWalkSec: 20 * MIN, earlySec: WET_ARRIVE_EARLY_SEC });
@@ -369,7 +369,7 @@ describe('비 오는 날 — 7분 전', () => {
 
   it('나설 시각도 같은 값으로 되짚는다 — 비 오는 날은 2분 먼저 나선다', () => {
     const appointment = at(90);
-    const dry = departAt(appointment, 44 * MIN, now);
+    const dry = departAt(appointment, 44 * MIN, now, ARRIVE_EARLY_SEC);
     const wet = departAt(appointment, 44 * MIN, now, WET_ARRIVE_EARLY_SEC);
     expect(dry).not.toBeNull();
     expect(wet).not.toBeNull();

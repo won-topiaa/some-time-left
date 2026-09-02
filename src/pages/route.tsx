@@ -75,8 +75,14 @@ function RouteScreen() {
     // 오늘의 "몇 분 전". 첫 화면이 읽은 날씨로 갈린다 — 비 오는 날은 7분.
     earlySec: arriveEarlySecFor(trip.weather),
   });
-  // 목표가 물러난 날은 왜 물러났는지 한 줄. 맑은 날엔 null이라 줄이 없다.
-  const wetNote = wetDayNote(trip.weather);
+  /**
+   * 계획이 실제로 겨눈 값. 나설 시각도 걷는 화면도 이 숫자 하나를 쓴다.
+   *
+   * 아직 계획이 없는 순간(로딩·오류)에만 날씨에서 다시 낸다. 계획이 있는데 날씨로
+   * 다시 내면, 뒤늦게 온 날씨가 계획과 나설 시각을 2분 어긋나게 만들 수 있다.
+   */
+  const plannedEarlySec =
+    plan != null && plan.kind !== 'too-late' ? plan.earlySec : arriveEarlySecFor(trip.weather);
 
 /**
    * 지금 나서면 너무 이른 날, 언제 나서면 되는지.
@@ -87,13 +93,7 @@ function RouteScreen() {
    */
   const leaveAtMs =
     trip.arriveAtMs != null && route != null
-      ? departAt(
-          trip.arriveAtMs,
-          route.candidate.durationSec,
-          nowMs + clockOffsetMs,
-          // 계획과 같은 값. 여기만 5분이면 나서라는 시각이 비 오는 날 2분 늦는다.
-          arriveEarlySecFor(trip.weather)
-        )
+      ? departAt(trip.arriveAtMs, route.candidate.durationSec, nowMs + clockOffsetMs, plannedEarlySec)
       : null;
   const waitingSec = waitSec(leaveAtMs, nowMs + clockOffsetMs);
 
@@ -166,6 +166,8 @@ function RouteScreen() {
     // 걸은 거리는 아직 0이 아니라 '모름'이다 — 걷는 화면이 채운다.
     update({
       route,
+      // 길과 함께 고정한다. 걷는 화면이 날씨에서 다시 세면 뒤늦게 온 날씨에 목표가 움직인다.
+      earlySec: plan.earlySec,
       clockOffsetMs,
       walkedDistanceM: null,
       // 상한에서 잘렸거나, 아예 못 늘렸거나, 늘린 길이 목표에 못 미쳤으면(onTarget
@@ -175,6 +177,18 @@ function RouteScreen() {
     });
     navigation.navigate('/walk');
   };
+
+  /**
+   * 목표가 물러난 이유 한 줄은 **숫자를 말하는 헤드라인 밑에만** 온다.
+   *
+   * "돌아갈 길을 못 찾았어요" 밑에 "비 오는 날이라 2분 더 일찍 잡았어요"가 오면
+   * '~라'가 못 찾은 이유처럼 읽히고, 그 뒤 "곧장 가는 길로 보여드릴게요"와 헤드라인
+   * 사이를 갈라놓는다. 7분이라는 숫자가 화면에 있는 날에만 그 숫자의 이유를 단다.
+   */
+  const headlineHasMinutes =
+    (plan.kind === 'stretch' && stretched && !plan.capped && onTarget) ||
+    (plan.kind === 'straight' && plan.reason === 'no-early');
+  const wetNote = headlineHasMinutes ? wetDayNote(trip.weather) : null;
 
   return (
     <View style={[styles.screen, { paddingTop: screen.top, paddingBottom: screen.bottom }]}>
@@ -205,7 +219,6 @@ function RouteScreen() {
               ? '딱 맞는 길이 없었어요.'
               : planHeadline(plan)}
         </Text>
-        {/* 비 오는 날은 목표가 2분 물러난다. 왜 7분인지는 이 한 줄만 말한다. */}
         {wetNote != null && <Text style={styles.sub}>{wetNote}</Text>}
 
         {plan.kind === 'stretch' && !stretched && (

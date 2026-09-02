@@ -70,19 +70,26 @@ export function planHeadline(plan: WalkPlan): string {
   }
 }
 
+/** "비 오는 날이라"의 그 낱말. 날씨를 못 읽었거나 안 내리면 null. */
+function wetNoun(weather: Weather | null): string | null {
+  return weather == null ? null : precipNoun(weather.precip);
+}
+
 /**
  * 첫 화면의 약속 한 줄.
  *
- * 맑은 날엔 "약속 5분 전에". 내리는 날엔 그 이유와 함께 "7분 전에" — 숫자가
+ * 맑은 날엔 "약속 5분 전에". 내리는 날엔 그 이유와 함께 "약속 7분 전에" — 숫자가
  * 어느 날 갑자기 달라져 있으면 앱이 틀린 것처럼 보이므로, 달라진 날은 왜 달라졌는지를
- * 같은 문장 안에서 말한다. 날씨를 못 읽은 날은 맑은 날의 말이다.
+ * 같은 문장 안에서 말한다. '약속'은 두 문장 모두에 둔다 — 아직 시각을 적기 전에
+ * 보는 줄이라, 그 낱말이 없으면 "7분 전에 도착"이 무엇의 전인지가 없다.
+ * 날씨를 못 읽은 날은 맑은 날의 말이다.
  */
 export function promiseLine(weather: Weather | null): string {
   const minutes = earlyMinutes(arriveEarlySecFor(weather));
-  const noun = weather == null ? null : precipNoun(weather.precip);
+  const noun = wetNoun(weather);
   return noun == null
     ? `약속 ${minutes}분 전에 도착하게 해드릴게요.`
-    : `${noun} 오는 날이라 ${minutes}분 전에 도착하게 해드릴게요.`;
+    : `${noun} 오는 날이라 약속 ${minutes}분 전에 도착하게 해드릴게요.`;
 }
 
 /**
@@ -90,14 +97,49 @@ export function promiseLine(weather: Weather | null): string {
  *
  * 헤드라인은 "7분 전에 닿는 길이에요"라고만 말한다. 5분이던 것이 왜 7분인지는
  * 여기 한 줄이 맡는다. 두 문장을 합치면 헤드라인이 길어지고, 주인공이 둘이 된다.
+ * 그래서 **숫자를 말하는 헤드라인 밑에만** 온다(`route.tsx`) — "돌아갈 길을 못
+ * 찾았어요" 밑에 오면 못 찾은 이유가 비인 것처럼 읽힌다.
  */
 export function wetDayNote(weather: Weather | null): string | null {
-  const noun = weather == null ? null : precipNoun(weather.precip);
+  const noun = wetNoun(weather);
   if (noun == null) {
     return null;
   }
   const extra = earlyMinutes(WET_ARRIVE_EARLY_SEC - ARRIVE_EARLY_SEC);
   return `${noun} 오는 날이라 ${extra}분 더 일찍 잡았어요.`;
+}
+
+export interface WalkFootnoteInput {
+  destinationName: string;
+  /** 계획이 약속 앞 목표를 겨눴고, 실제로도 그 언저리에 닿는가. */
+  promiseHeld: boolean;
+  /** 눈에 띄게 일찍 닿는 계획인가 (상한에서 잘렸거나 못 늘렸거나). */
+  arrivesEarly: boolean;
+  /** 그 계획이 겨눈 "약속 몇 초 전". */
+  earlySec: number;
+}
+
+/**
+ * 걷는 화면 맨 아래 한 줄 — 지금 무엇에 맞춰 걷고 있는가.
+ *
+ * 지킬 수 있는 말만 한다. 일찍 닿게 되는 계획은 약속 바로 앞에 맞추는 게 아니라
+ * 그냥 넉넉히 걷는 것이므로 그렇게 말하고, 목표를 애초에 포기한 날(no-early)은
+ * 지키지 못할 "N분 전"을 말하지 않는다. 숫자는 계획이 겨눈 값에서 온다 —
+ * 비 오는 날은 7이다.
+ */
+export function walkFootnote({
+  destinationName,
+  promiseHeld,
+  arrivesEarly,
+  earlySec,
+}: WalkFootnoteInput): string {
+  const prefix = destinationName !== '' ? `${destinationName}까지 ` : '';
+  const body = promiseHeld
+    ? `${earlyMinutes(earlySec)}분 전에 도착하도록 맞추고 있어요.`
+    : arrivesEarly
+      ? '넉넉히 걷고 있어요.'
+      : '제시간에 닿도록 걷고 있어요.';
+  return prefix + body;
 }
 
 /**

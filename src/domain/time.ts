@@ -36,9 +36,6 @@ export function earlyMinutes(earlySec: number): number {
   return Math.round(earlySec / 60);
 }
 
-/** 맑은 날의 분. 날씨와 무관한 자리(첫 화면 인사말의 기본값 등)에서만 쓴다. */
-export const ARRIVE_EARLY_MIN = earlyMinutes(ARRIVE_EARLY_SEC);
-
 /**
  * 오늘의 목표 (초). 날씨 하나로 갈린다.
  *
@@ -112,8 +109,14 @@ export interface PlanInput {
   arriveAtMs: number;
   /** 최단 도보 경로의 소요 시간 (초) */
   shortestSec: number;
-  /** 약속 몇 초 전을 겨눌 것인가. 날씨가 정한다(`arriveEarlySecFor`). 기본은 맑은 날. */
-  earlySec?: number;
+  /**
+   * 약속 몇 초 전을 겨눌 것인가. 날씨가 정한다(`arriveEarlySecFor`).
+   *
+   * 기본값을 두지 않는다. 두면 잊힌 호출 자리가 조용히 맑은 날 값으로 계획해
+   * 비 오는 날 화면만 5분을 말하게 되는데, 그걸 잡을 시험이 화면 코드에는 없다.
+   * 빠뜨리면 컴파일이 막게 둔다.
+   */
+  earlySec: number;
 }
 
 /**
@@ -125,12 +128,7 @@ export interface PlanInput {
  * - 약속 전 여유는 못 맞추지만 정시엔 도착 → 곧장 간다 (straight / no-early)
  * - 최단으로도 늦음 → 정직하게 말한다 (too-late)
  */
-export function planWalk({
-  nowMs,
-  arriveAtMs,
-  shortestSec,
-  earlySec = ARRIVE_EARLY_SEC,
-}: PlanInput): WalkPlan {
+export function planWalk({ nowMs, arriveAtMs, shortestSec, earlySec }: PlanInput): WalkPlan {
   const untilAppointmentSec = Math.round((arriveAtMs - nowMs) / 1000);
 
   if (untilAppointmentSec < shortestSec) {
@@ -190,7 +188,7 @@ export function departAt(
   arriveAtMs: number,
   walkSec: number,
   nowMs: number,
-  earlySec: number = ARRIVE_EARLY_SEC
+  earlySec: number
 ): number | null {
   const leaveAtMs = arriveAtMs - (earlySec + walkSec) * 1000;
 

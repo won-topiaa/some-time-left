@@ -8,6 +8,7 @@ import {
 } from 'react';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 import type { Weather } from '../domain/weather';
+import { ARRIVE_EARLY_SEC } from '../domain/time';
 
 /**
  * 한 번의 이동에 대한 상태.
@@ -31,6 +32,15 @@ export interface Trip {
   mood: MoodId | null;
   /** 지금 제안 중인 경로 */
   route: ScoredRoute | null;
+  /**
+   * 그 경로를 고를 때 계획이 겨눈 "약속 몇 초 전". 길과 함께 고정된다.
+   *
+   * 걷는 화면이 `weather`에서 다시 셈하면 안 된다. 첫 화면은 스택 아래에 살아 있어
+   * 느리게 온 날씨를 걷는 도중에도 이동에 써넣는데, 그 순간 목표 시각이 2분 움직여
+   * "7분 전에 맞추고 있어요"와 계획한 도착 시각이 서로 어긋난다. 계획한 값 하나를
+   * 길과 같이 들고 다니면 그럴 수 없다.
+   */
+  earlySec: number;
   /**
    * 약속보다 눈에 띄게 일찍 닿게 되는가.
    *
@@ -92,6 +102,7 @@ const EMPTY: Trip = {
   companion: '',
   mood: null,
   route: null,
+  earlySec: ARRIVE_EARLY_SEC,
   arrivesEarly: false,
   recordSaved: false,
   recordId: null,

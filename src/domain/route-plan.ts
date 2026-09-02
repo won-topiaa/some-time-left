@@ -41,7 +41,9 @@ export interface RankOptions {
 const REPEAT_PENALTY = 0.85;
 
 /**
- * 목표를 넘겨도 받아 주는 폭 (초). 목표는 5분 전, 바닥은 3분 전이므로 그 차이다.
+ * 목표를 넘겨도 받아 주는 폭 (초). 목표(맑은 날 `ARRIVE_EARLY_SEC` 5분)와 바닥
+ * (`PROMISE_FLOOR_SEC` 3분)의 **차이** 2분이다. 차이만 쓰므로 목표가 물러나면 바닥도
+ * 같이 물러난다 — 비 오는 날은 7분을 겨누고 5분 전까지 받는다. 상수로 바꾸지 말 것.
  *
  * 이 폭이 0이었을 때 후보가 거의 전멸했다 — 경유지를 흩뿌려 만든 길들은 목표
  * 언저리로 흩어지는데, 1초만 넘겨도 버리니 남는 게 없었다. 기분을 무엇으로 골라도
@@ -52,8 +54,9 @@ const LATE_SLACK_SEC = ARRIVE_EARLY_SEC - PROMISE_FLOOR_SEC;
 /**
  * 이 길로 가도 **약속 전에 닿는가.**
  *
- * 목표(`targetWalkSec`)는 약속보다 5분 앞에 닿도록 잡은 값이고, 여기서 최대
- * `LATE_SLACK_SEC`까지는 받는다 — 그래도 3분 전에는 닿는다. 그 너머는 안 받는다.
+ * 목표(`targetWalkSec`)는 약속보다 그날의 `earlySec`(맑은 날 5분, 내리는 날 7분) 앞에
+ * 닿도록 잡은 값이고, 여기서 최대 `LATE_SLACK_SEC`까지는 받는다 — 그래도 목표보다
+ * 2분 안쪽(맑은 날 3분 전, 내리는 날 5분 전)에는 닿는다. 그 너머는 안 받는다.
  * 이 함수가 이 앱의 유일한 약속이다.
  */
 export function arrivesOnTime(durationSec: number, targetSec: number): boolean {
@@ -64,7 +67,7 @@ export function arrivesOnTime(durationSec: number, targetSec: number): boolean {
  * 이 길을 "약속 앞 목표에 맞춘 길"이라고 **말해도 되는** 이른 쪽 폭 (초).
  *
  * 고르는 문턱이 아니라 말하는 문턱이다. 일찍 닿는 길도 내놓기로 했지만(`nextRoute`),
- * 그 길에 "5분 전에 닿는 길이에요"를 붙이면 바로 아래 적힌 도착 시각이 그 말을
+ * 그 길에 "N분 전에 닿는 길이에요"를 붙이면 바로 아래 적힌 도착 시각이 그 말을
  * 즉시 들킨다 — 약속 45분 전에 닿는 길을 두고 그렇게 말할 수는 없다.
  */
 export const ON_TARGET_EARLY_SEC = 5 * 60;
@@ -74,7 +77,7 @@ export const ON_TARGET_EARLY_SEC = 5 * 60;
  *
  * `arrivesOnTime`이 "내놓아도 되는가"라면 이건 "맞췄다고 말해도 되는가"다.
  * 둘을 한 함수로 합쳤을 때 후보가 전부 늦어 최단으로 물러선 날에도 화면이
- * "5분 전에 닿는 길이에요"라고 말했다 — 최단은 늦지 않으니까. 물러선 날은
+ * "N분 전에 닿는 길이에요"라고 말했다 — 최단은 늦지 않으니까. 물러선 날은
  * 물러섰다고 말해야 한다.
  */
 export function landsOnTarget(durationSec: number, targetSec: number): boolean {

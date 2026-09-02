@@ -13,9 +13,14 @@ import type { Weather } from '../domain/weather';
  * 같은 칸에 떨어지고, 첫 화면을 여는 데 GPS를 오래 붙잡을 이유가 없다.
  * 목적지 검색이 이미 위치를 부르므로 권한이 새로 생기지도 않는다.
  *
- * `refreshKey`가 바뀌면 다시 읽는다. 첫 화면은 다시 보일 때마다 이 값을 올린다 —
- * 아침에 켜 둔 앱으로 저녁 약속을 잡는 날, 그새 비가 시작됐으면 계획도 그걸 알아야
- * 한다. 10분 캐시(`fetchWeather`)가 있어 자주 올려도 서버를 자주 부르지는 않는다.
+ * `refreshKey`가 바뀌면 다시 읽는다. 첫 화면은 화면이 다시 보일 때마다 — 다른
+ * 화면에서 돌아올 때도, 딴 앱에 갔다 돌아올 때도 — 이 값을 올린다. 아침에 켜 둔
+ * 앱으로 저녁 약속을 잡는 날, 그새 비가 시작됐으면 계획도 그걸 알아야 한다.
+ * 위치는 그때마다 한 번 읽지만 날씨 요청은 10분 캐시(`fetchWeather`)가 받는다.
+ *
+ * **한 번 읽은 값은 다음 읽기가 실패해도 지키지 않는다.** 비 오는 날 7분으로 계획해
+ * 두고 잠깐 오프라인이 됐다고 다시 5분으로 미끄러지면, 사용자는 아무것도 안 했는데
+ * 약속이 바뀐다. 못 읽은 것은 모르는 것이지 갠 것이 아니다.
  */
 export function useWeather(refreshKey = 0): Weather | null {
   const [weather, setWeather] = useState<Weather | null>(null);
@@ -28,7 +33,7 @@ export function useWeather(refreshKey = 0): Weather | null {
         fetchWeather({ lat: position.coords.latitude, lng: position.coords.longitude })
       )
       .then((latest) => {
-        if (!cancelled) {
+        if (!cancelled && latest != null) {
           setWeather(latest);
         }
       })

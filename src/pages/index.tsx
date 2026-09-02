@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { createRoute, useKeyboardHeight, useNavigation } from '@granite-js/react-native';
+import {
+  createRoute,
+  useKeyboardHeight,
+  useNavigation,
+  useVisibilityChange,
+  type VisibilityState,
+} from '@granite-js/react-native';
 import { radius, spacing } from '../ui/theme';
 import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
@@ -54,7 +60,7 @@ function Home() {
   const [period, setPeriod] = useState<'am' | 'pm' | null>(null);
   const minuteRef = useRef<TextInput>(null);
   const { results, searching } = usePlaceSearch(query);
-  // 화면이 다시 보인 횟수. 날씨를 그때마다 다시 읽는다(캐시가 있어 싸다).
+  // 화면이 다시 보인 횟수. 날씨를 그때마다 다시 읽는다(요청은 10분 캐시가 받는다).
   const [shownCount, setShownCount] = useState(0);
   // 편지의 첫 줄이자 "몇 분 전"의 갈림. 못 읽으면 null이고, 그러면 그 줄은 없고 맑은 날이다.
   const weather = useWeather(shownCount);
@@ -108,10 +114,33 @@ function Home() {
     const unsubscribe = navigation.addListener('focus', () => {
       refreshNow();
       refreshWalked();
-      setShownCount((n) => n + 1);
     });
     return unsubscribe;
   }, [navigation, refreshNow, refreshWalked]);
+
+  /**
+   * 화면이 다시 보일 때 — 다른 화면에서 돌아올 때뿐 아니라 **딴 앱에 갔다 돌아올 때도.**
+   *
+   * 내비게이션 'focus'는 뒤의 경우에 오지 않는다. 아침에 켜 둔 채 잠갔다가 저녁에
+   * 다시 열어 약속을 적는 사람에게는 그새 시작된 비가 곧 "몇 분 전"이라, 여기서
+   * 날씨와 '지금'을 다시 잡는다. 처음 보일 때는 건너뛴다 — 마운트 때 이미 읽고 있다.
+   */
+  const seenOnce = useRef(false);
+  const onVisibility = useCallback(
+    (state: VisibilityState) => {
+      if (state !== 'visible') {
+        return;
+      }
+      if (!seenOnce.current) {
+        seenOnce.current = true;
+        return;
+      }
+      refreshNow();
+      setShownCount((n) => n + 1);
+    },
+    [refreshNow]
+  );
+  useVisibilityChange(onVisibility);
 
   // 읽은 날씨를 이동에 싣는다. 길 찾기·걷기 화면이 "몇 분 전"을 같은 날씨로 내야 한다.
   // `reset()`이 지운 뒤에도 값이 같으면 effect가 안 돌므로, 이동 쪽 값과 비교해 되채운다.

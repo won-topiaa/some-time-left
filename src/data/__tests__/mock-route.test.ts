@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MockRouteProvider } from '../route-provider';
 import { distanceM, pathLengthM } from '../../domain/geo';
 import { arrivesOnTime, landsOnTarget, nextRoute, rankRoutes } from '../../domain/route-plan';
-import { planWalk } from '../../domain/time';
+import { ARRIVE_EARLY_SEC, planWalk } from '../../domain/time';
 import { weightsFor } from '../../domain/mood';
 
 /**
@@ -31,7 +31,7 @@ describe('MockRouteProvider', () => {
   ] as const) {
     it(`${name}으로 난 길에서 후보가 목표 언저리로 흩어진다`, async () => {
       const shortest = await provider.shortest(origin, destination);
-      const plan = planWalk({
+      const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC,
         nowMs: now,
         arriveAtMs: now + 45 * MIN * 1000,
         shortestSec: shortest.durationSec,
