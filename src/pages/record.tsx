@@ -19,6 +19,7 @@ import { formatRecordDate } from '../domain/trace';
 import { moodById } from '../domain/mood';
 import { pathLengthM } from '../domain/geo';
 import { RouteMap } from '../ui/RouteMap';
+import { RouteSource } from '../ui/RouteSource';
 import { isWalkablePath } from '../domain/route-sanity';
 import { moodTint } from '../ui/moodTint';
 import { spacing, radius } from '../ui/theme';
@@ -111,9 +112,12 @@ function RecordDetail() {
           않고, **그릴 수 없는 모양일 때만 지도를 접는다.**
         */}
         {isWalkablePath(record.path) ? (
-          <View style={styles.map}>
-            <RouteMap path={record.path} height={260} tint={tint} />
-          </View>
+          <>
+            <View style={styles.map}>
+              <RouteMap path={record.path} height={260} tint={tint} />
+            </View>
+            <RouteSource routeId={record.routeId} />
+          </>
         ) : (
           <Text style={styles.noMap}>이 날의 경로는 다시 그릴 수 없어요.</Text>
         )}

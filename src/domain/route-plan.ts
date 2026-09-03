@@ -84,6 +84,26 @@ export function landsOnTarget(durationSec: number, targetSec: number): boolean {
   return arrivesOnTime(durationSec, targetSec) && targetSec - durationSec <= ON_TARGET_EARLY_SEC;
 }
 
+/**
+ * 지금 보여주는 길이 **최단으로 물러선 그 길**인가.
+ *
+ * 화면은 이 값이 참이면 추천 이유를 붙이지 않는다. 최단은 첫 화면을 빠르게
+ * 띄우려고 환경 데이터 없이 만들어서 성질이 재본 값이 아니기 때문이다
+ * (novelty가 늘 1.0이라, 매일 걷는 출근길에 "아직 안 가보신 길이에요"가 된다).
+ *
+ * **껍데기가 아니라 감싼 길을 비교한다.** 부르는 쪽은 `rankRoutes`를 두 번 따로
+ * 부르므로, 같은 길이라도 `ScoredRoute` 객체는 서로 다르다. 예전에 `===`로
+ * 껍데기를 비교했다가 후보가 하나도 안 나온 날 — 이 깃발이 가장 필요한 날 —
+ * 에 거짓이 됐고, 화면이 "돌아갈 길을 못 찾았어요"와 "아직 안 가보신 길이에요"를
+ * 나란히 말했다. `candidate`는 두 호출이 같은 객체를 그대로 물고 있다.
+ */
+export function isFallbackRoute(
+  current: ScoredRoute | null,
+  floor: ScoredRoute | null
+): boolean {
+  return current != null && floor != null && current.candidate === floor.candidate;
+}
+
 export function rankRoutes(
   candidates: RouteCandidate[],
   { targetSec, weights, recentRouteIds = [] }: RankOptions

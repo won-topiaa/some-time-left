@@ -287,6 +287,27 @@ describe('dominantFeature — 모르는 걸 이유로 대지 않는다', () => {
     expect(dominantFeature(flat, weightsFor('pensive'))).toBeNull();
   });
 
+  it('그 기분이 안 찾는 성질은 두드러져도 이유가 되지 않는다', () => {
+    /*
+     * '긴장돼요'의 가중치에는 novelty가 없다(0). 그런데 기여(값 × 가중치)만
+     * 비교하면 0도 `-Infinity`보다는 커서, 두드러진 게 novelty뿐인 날 그게
+     * 뽑혔다 — "긴장된다고 하셔서, 아직 안 가보신 길이에요."
+     * 긴장한 사람에게 처음 가는 길을 권하는 말이다.
+     */
+    const onlyNovelty = {
+      quiet: 0.5,
+      flat: 0.5,
+      shade: 0.5,
+      scenic: 0.5,
+      novelty: 0.9,
+      unbroken: 0.5,
+    };
+
+    expect(dominantFeature(onlyNovelty, weightsFor('nervous'))).toBeNull();
+    // 같은 길이라도 novelty를 찾는 기분에는 이유가 된다.
+    expect(dominantFeature(onlyNovelty, weightsFor('plain'))).toBe('novelty');
+  });
+
   it('여섯 기분 모두, 두드러진 성질이 있으면 이유를 낸다', () => {
     for (const mood of MOODS) {
       // `unknown`은 flat 0.8 · novelty 1 · unbroken 0.9가 재져 있다.

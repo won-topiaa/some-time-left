@@ -12,6 +12,7 @@ import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/
 import { arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { walkFootnote } from '../domain/copy';
 import { RouteMap } from '../ui/RouteMap';
+import { RouteSource } from '../ui/RouteSource';
 import { moodTint } from '../ui/moodTint';
 import { radius, spacing } from '../ui/theme';
 import { type Palette, type Scheme, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
@@ -347,6 +348,7 @@ function Walk() {
           progress={alongRatio}
         />
       )}
+      {path.length >= 2 && <RouteSource routeId={trip.route?.candidate.id} />}
 
       {/* 위아래 여백으로 가운데를 잡고, 맨 아래에만 도망갈 문을 둔다. */}
       <View style={styles.spacer} />

@@ -138,6 +138,18 @@ export function dominantFeature(
     if (features[k] < NOTABLE) {
       continue;
     }
+    /*
+     * 이 기분이 안 찾는 성질도 후보가 아니다.
+     *
+     * 기분마다 가중치가 0인 성질이 있다 — '긴장돼요'는 novelty가 0이다. 그런데
+     * 기여(값 × 가중치)만 비교하면 0도 `-Infinity`보다는 커서, 두드러진 것이
+     * 그것 하나뿐인 날 그게 이유로 뽑혔다. "긴장된다고 하셔서, 아직 안 가보신
+     * 길이에요" — 긴장한 사람에게 처음 가는 길을 권하는 말이 된다.
+     * 고르는 데 쓰지 않은 성질은 고른 이유도 될 수 없다.
+     */
+    if (weights[k] <= 0) {
+      continue;
+    }
     const contribution = features[k] * weights[k];
     if (contribution > bestValue) {
       bestValue = contribution;

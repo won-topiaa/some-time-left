@@ -16,6 +16,7 @@ import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useThem
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RouteMap } from '../ui/RouteMap';
+import { RouteSource } from '../ui/RouteSource';
 import { useTrip } from '../state/TripContext';
 import { useRouteSuggestion } from '../state/useRouteSuggestion';
 
@@ -265,17 +266,7 @@ function RouteScreen() {
               tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
             />
 
-            {/*
-              길을 누가 찾아 줬는지.
-
-              지도 타일의 출처는 MapLibre가 알아서 적지만, **경로**의 출처는 따로다.
-              키 없이 쓰는 OSRM(FOSSGIS)은 정책으로 경로 출처 표기를 요구한다.
-              남의 무료 서버에 얹혀 가는 값이라 지우지 않는다. TMAP으로 받은 날은
-              우리 할당량이라 적지 않는다 — 화면에 군더더기를 늘리지 않는다.
-            */}
-            {route.candidate.id.startsWith('osrm-') && (
-              <Text style={styles.routeSource}>경로 OSRM · OpenStreetMap</Text>
-            )}
+            <RouteSource routeId={route.candidate.id} />
 
             <View style={styles.meta}>
               <Text style={styles.duration}>
@@ -407,8 +398,6 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     arrival: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
     metaSub: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
     // 추천 이유는 이 앱의 생명줄이라 또렷하게 두되, 색이 아니라 자리로 강조한다.
-    /** 경로 출처. 의무 표기라 지우지 않되, 화면에서 가장 옅게 둔다. */
-    routeSource: { ...type.caption, color: colors.inkGhost, marginTop: spacing.sm },
     reason: {
       ...type.body,
       color: colors.ink,

@@ -8,21 +8,16 @@ import { isTmapConfigured } from '../config';
 import { RECENT_WINDOW, loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
-import { firstRoute, landsOnTarget, nextRoute, rankRoutes } from '../domain/route-plan';
+import {
+  firstRoute,
+  isFallbackRoute,
+  landsOnTarget,
+  nextRoute,
+  rankRoutes,
+} from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
-/**
- * 시도할 공급자들, 좋은 순서대로.
- *
- * **전부 실제 도로망이다.** 예전엔 키가 없으면 좌표를 지어내는 공급자로 떨어졌고,
- * 그래서 산을 가로지르는 삼각형이 실기기에 떴다. 키가 없다는 건 조금 못한 진짜를
- * 쓴다는 뜻이지 거짓말을 해도 된다는 뜻이 아니다.
- *
- * TMAP은 횡단보도·계단까지 세어 주므로 성질이 더 잘 재진다. OSRM은 그런 건
- * 모르지만(모르는 건 중립값이 된다) 좌표는 똑같이 진짜다. 키가 있으면 앞을 쓰고,
- * 없거나 죽었으면 뒤로 넘어간다. 둘 다 안 되면 사실대로 말한다.
- */
 /**
  * 마지막 실패를 사람이 읽을 한 줄로.
  *
@@ -45,6 +40,17 @@ export function routeFailureLine(failure: unknown): string {
   return '길을 찾지 못했어요. 잠시 뒤에 다시 해볼까요?';
 }
 
+/**
+ * 시도할 공급자들, 좋은 순서대로.
+ *
+ * **전부 실제 도로망이다.** 예전엔 키가 없으면 좌표를 지어내는 공급자로 떨어졌고,
+ * 그래서 산을 가로지르는 삼각형이 실기기에 떴다. 키가 없다는 건 조금 못한 진짜를
+ * 쓴다는 뜻이지 거짓말을 해도 된다는 뜻이 아니다.
+ *
+ * TMAP은 횡단보도·계단까지 세어 주므로 성질이 더 잘 재진다. OSRM은 그런 건
+ * 모르지만(모르는 건 중립값이 된다) 좌표는 똑같이 진짜다. 키가 있으면 앞을 쓰고,
+ * 없거나 죽었으면 뒤로 넘어간다. 둘 다 안 되면 사실대로 말한다.
+ */
 function providerChain(): Array<() => RouteProvider> {
   const osrm = () => new OsrmRouteProvider();
   return isTmapConfigured() ? [() => new TmapRouteProvider(), osrm] : [osrm];
@@ -363,6 +369,7 @@ export function useRouteSuggestion({
     clockOffsetMs,
     onTarget: current != null && landsOnTarget(current.candidate.durationSec, targetSec),
     // 늘리는 계획에서만 뜻이 있다. 곧장 가는 계획은 최단이 곧 답이라 물러선 게 아니다.
-    fallback: plan?.kind === 'stretch' && current != null && current === floor,
+    // 판정 자체는 도메인에 있다 — 여기서 손으로 비교하다 한 번 틀렸다.
+    fallback: plan?.kind === 'stretch' && isFallbackRoute(current, floor),
   };
 }

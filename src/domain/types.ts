@@ -74,10 +74,11 @@ export interface ScoredRoute {
   moodScore: number;
   /** 최종 점수 */
   score: number;
-  /** 이 경로를 고르게 만든 성질 */
   /**
-   * 이 길을 고르게 만든 성질. **두드러진 게 없으면 null**이고, 그때 화면은
-   * 추천 이유를 아예 안 붙인다 — 재보지 못한 중립값을 이유로 대지 않기 위해서다.
+   * 이 길을 고르게 만든 성질. 추천 이유 문구에 쓴다.
+   *
+   * **두드러진 게 없으면 null**이고, 그때 화면은 이유를 아예 안 붙인다 —
+   * 재보지 못한 중립값을 이유로 대지 않기 위해서다.
    */
   dominantFeature: FeatureKey | null;
 }

@@ -332,8 +332,18 @@ describe('이유 한 줄 — 데이터가 없는 날', () => {
     expect(dominantFeature(neutral, weightsFor('hot'))).toBeNull();
   });
 
-  it('하나라도 두드러지면 모르는 성질은 이유가 되지 않는다', () => {
-    expect(dominantFeature({ ...neutral, novelty: 0.7 }, weightsFor('hot'))).toBe('novelty');
+  it('하나라도 두드러지면 그게 이유가 된다', () => {
+    // '햇볕이 싫어요'는 그늘을 찾는다. 그늘이 재져 있으면 그늘이 이유다.
+    expect(dominantFeature({ ...neutral, shade: 0.8 }, weightsFor('hot'))).toBe('shade');
+  });
+
+  it('그 기분이 안 찾는 성질만 두드러지면 이유를 대지 않는다', () => {
+    /*
+     * '햇볕이 싫어요'의 가중치는 shade·quiet·flat·unbroken뿐이라 novelty가 0이다.
+     * 예전엔 기여가 0이어도 `-Infinity`보다는 커서 그게 뽑혔고, 그늘을 찾는
+     * 사람에게 "아직 안 가보신 길이에요"라고 답했다 — 물어본 것과 다른 대답이다.
+     */
+    expect(dominantFeature({ ...neutral, novelty: 0.7 }, weightsFor('hot'))).toBeNull();
   });
 
   it('키 없는 번들에서 자주 걷던 동네를 걸으면 이유가 비어 있다', () => {
