@@ -10,6 +10,13 @@
  *    아래 기본값은 문서 표기를 따른 것이며, 키를 받은 뒤 한 번 실측해야 한다.
  */
 
+/**
+ * 밖에 나가는 요청이 자신을 밝히는 이름. 한 곳에만 둔다 —
+ * OSRM과 Photon이 같은 값을 쓰는데 문자열을 두 벌 두면 반드시 어긋난다.
+ * (웹뷰의 fetch는 User-Agent를 조용히 떨어뜨리지만, 네이티브 fetch는 싣는다.)
+ */
+export const APP_USER_AGENT = 'some-time-left/1.0 (apps-in-toss mini app)';
+
 export interface ApiConfig {
   /** TMAP 보행자 경로안내 / POI 검색 */
   tmap: {
@@ -92,6 +99,8 @@ export interface ApiConfig {
    */
   osmSearch: {
     baseUrl: string;
+    /** Photon에 밝히는 이름. 공개 OSM 서비스들의 공통 요구다. */
+    userAgent: string;
   };
   /**
    * 지도 타일 — CARTO Positron.
@@ -180,10 +189,11 @@ const config: ApiConfig = {
   osrmRoute: {
     // routed-foot = 보행 프로파일. routed-car로 바꾸면 사람이 못 걷는 길이 나온다.
     baseUrl: 'https://routing.openstreetmap.de/routed-foot',
-    userAgent: 'some-time-left/1.0 (apps-in-toss mini app)',
+    userAgent: APP_USER_AGENT,
   },
   osmSearch: {
     baseUrl: 'https://photon.komoot.io',
+    userAgent: APP_USER_AGENT,
   },
   mapTiles: {
     /*

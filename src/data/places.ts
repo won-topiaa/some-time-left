@@ -91,10 +91,22 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
 
   // 바닥부터. 이건 실패할 수 없다.
   const offline = offlinePlaces(trimmed, near);
-  // 이미 답이 있으면 온라인은 잠깐만 기다린다. 없으면 끝까지 기다린다.
-  const grace = offline.length > 0 ? ONLINE_GRACE_MS : Number.POSITIVE_INFINITY;
-  const wait = (lookup: Promise<Place[]>) =>
-    Number.isFinite(grace) ? withinGrace(lookup, grace) : lookup.catch(() => [] as Place[]);
+
+  /*
+   * 유예는 **온라인 전체에 한 덩어리**다. 호출마다 새로 주면 TMAP이 유예를 다
+   * 태우고 빈손일 때 OSM 뒷배가 유예를 또 받아, "잠깐만 기다린다"던 화면이
+   * 두 배(5초)를 돈다 — 답을 손에 쥐고서. 시계 하나로 재고, 남은 게 없으면
+   * 다음 시도는 아예 안 한다(요청만 나가고 결과는 못 쓰는 셈이니까).
+   */
+  const startedAt = Date.now();
+  const remaining = () =>
+    offline.length > 0
+      ? Math.max(0, ONLINE_GRACE_MS - (Date.now() - startedAt))
+      : Number.POSITIVE_INFINITY;
+  const wait = (lookup: Promise<Place[]>) => {
+    const grace = remaining();
+    return Number.isFinite(grace) ? withinGrace(lookup, grace) : lookup.catch(() => [] as Place[]);
+  };
 
   let online: Place[];
   if (!isTmapConfigured()) {
@@ -107,7 +119,7 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
     }
     online = (await Promise.all(lookups)).flat();
     // TMAP이 빈손이면 OSM에 한 번 더. 두 지도는 서로 모르는 이름을 안다.
-    if (online.length === 0) {
+    if (online.length === 0 && remaining() > 0) {
       online = await wait(searchOsmPlaces(trimmed, near));
     }
   }
@@ -127,29 +139,48 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
 function rankPlaces(query: string, places: Place[], near?: LatLng): Place[] {
   const needle = fold(query);
   return places
-    .map((place, index) => ({ place, index, rank: matchRank(needle, place.name) ?? 3 }))
+    .map((place, index) => ({
+      place,
+      index,
+      rank: matchRank(needle, place.name) ?? 3,
+      // 거리는 여기서 한 번만. 비교자 안에서 재면 정렬이 하버사인을 n log n 번 다시 돈다
+      // — regions/search.ts가 정확히 이 이유로 미리 재 둔다. 같은 규칙이다.
+      distance: near == null ? 0 : distanceM(near, place.at),
+    }))
     .sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       if (a.rank === 3) return a.index - b.index;
-      if (near != null) {
-        const da = distanceM(near, a.place.at);
-        const db = distanceM(near, b.place.at);
-        if (da !== db) return da - db;
-      }
+      if (a.distance !== b.distance) return a.distance - b.distance;
       return a.place.name.length - b.place.name.length;
     })
     .map(({ place }) => place);
 }
 
+/**
+ * 같은 장소가 이 안이면 하나로 본다 (m).
+ *
+ * 오프라인 색인의 흑석동과 Photon의 흑석동은 같은 동네인데 중심점이 몇십 m
+ * 다르다. 좌표를 자릿수로 뭉쳐 비교하면 그 차이가 그대로 남아, "흑석동"을 치면
+ * 흑석동이 두 줄 나란히 뜬다 — 같은 이름이 이 거리 안에 있으면 먼저 온 쪽
+ * (오프라인이 앞이라 상위 구역 주소가 붙은 쪽)만 남긴다. 다른 도시의 같은 이름
+ * (중앙동 238쌍)은 이보다 한참 멀어 둘 다 살아남는다.
+ */
+const SAME_PLACE_M = 300;
+
 /** 같은 장소가 두 소스에서 겹쳐 오는 걸 정리한다. */
 function dedupe(places: Place[]): Place[] {
-  const seen = new Set<string>();
+  const seenByName = new Map<string, LatLng[]>();
   return places.filter((place) => {
-    const key = `${place.name}|${place.at.lat.toFixed(5)},${place.at.lng.toFixed(5)}`;
-    if (seen.has(key)) {
+    const key = fold(place.name);
+    const kept = seenByName.get(key);
+    if (kept != null && kept.some((at) => distanceM(at, place.at) < SAME_PLACE_M)) {
       return false;
     }
-    seen.add(key);
+    if (kept == null) {
+      seenByName.set(key, [place.at]);
+    } else {
+      kept.push(place.at);
+    }
     return true;
   });
 }

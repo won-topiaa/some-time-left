@@ -64,6 +64,38 @@ describe('findPlaces — 네트워크가 없어도 지역은 찾아진다', () =
   });
 });
 
+describe('findPlaces — 온라인이 같은 동네를 다른 좌표로 줘도 겹줄이 안 생긴다', () => {
+  const realFetch = globalThis.fetch;
+  beforeAll(() => {
+    // Photon이 흑석동을 색인과 몇십 m 다른 중심점으로 돌려준다고 치자 — 실제로 그렇다.
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        features: [
+          {
+            geometry: { coordinates: [126.9663, 37.5041] },
+            properties: { name: '흑석동', countrycode: 'KR', city: '서울' },
+          },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it('"흑석동"이 한 줄만 나온다 — 오프라인 쪽(상위 구역 주소가 붙은 쪽)이 남는다', async () => {
+    configureApi({ tmap: { appKey: null } });
+
+    const found = await findPlaces('흑석동');
+    const heukseok = found.filter((p) => p.name === '흑석동');
+
+    expect(heukseok).toHaveLength(1);
+    expect(heukseok[0].address).toBe('서울특별시 동작구');
+  });
+});
+
 describe('findPlaces — 키가 있어도 오프라인 바닥은 그대로다', () => {
   const realFetch = globalThis.fetch;
   beforeAll(() => {

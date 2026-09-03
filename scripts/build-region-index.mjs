@@ -171,7 +171,9 @@ for (const r of rows) {
  */
 const BASE_OF = [
   [/^(.+?)\d+가\d+동$/, '$1동'], // 성수1가1동 → 성수동
-  [/^(.+?)\d+동$/, '$1동'], // 상도3동 → 상도동
+  // 숫자와 중간점을 함께 걷어낸다 — 면목3·8동 → 면목동. 숫자만 보면('\d+동')
+  // 뒤의 '8동'만 떨어져 '면목3·동'이라는 없는 동을 만든다. 실제로 13개 만들었다.
+  [/^(.+?)[0-9·]+동$/, '$1동'],
 ];
 const groups = new Map(); // `${muni}|${base}` → {code, name, lats[], lngs[]}
 const existing = new Set(rows.map((r) => `${r.code.slice(0, 5)}|${r.name}`));
@@ -181,6 +183,8 @@ for (const r of rows) {
     if (!re.test(r.name)) continue;
     const base = r.name.replace(re, tpl);
     if (base === r.name) break;
+    // 접고도 숫자나 중간점이 남았으면 이름을 잘못 접은 것이다. 만들지 않는다.
+    if (/[0-9·]/.test(base)) break;
     const key = `${r.code.slice(0, 5)}|${base}`;
     if (existing.has(key)) break;
     const g = groups.get(key) ?? { muni: r.code.slice(0, 5), name: base, lats: [], lngs: [] };

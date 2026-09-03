@@ -145,6 +145,25 @@ describe('색인 자체 — 누군가 잘라 내지 않았는지', () => {
     }
   });
 
+  it('파생한 이름에는 숫자도 중간점도 없다 — 가짜 동을 만들지 않는다', () => {
+    /*
+     * 파생 규칙이 '\d+동'만 보던 시절, '면목3·8동'에서 뒤의 '8동'만 떨어져
+     * '면목3·동'이라는 **없는 동** 13개가 색인에 실렸다. 사용자가 '상계'를 치면
+     * 진짜 동들 사이에 '상계6·동'이 나란히 떴을 것이다. 지어내지 않는다는 것이
+     * 이 색인의 존재 이유인데, 만들다가 지어내면 안 된다.
+     */
+    for (const [code, name] of KOREA_REGIONS) {
+      if (code.includes('D')) {
+        expect(name, code).not.toMatch(/[0-9·]/);
+      }
+    }
+  });
+
+  it('중간점 이름이 제대로 접힌다 — 면목3·8동에서 면목동이 나온다', () => {
+    expect(searchRegions('면목동')[0]?.name).toBe('면목동');
+    expect(searchRegions('상계동')[0]?.name).toBe('상계동');
+  });
+
   it('읍면동마다 시군구와 시도가 있다', () => {
     const codes = new Set(KOREA_REGIONS.map(([code]) => code));
     for (const [code, name] of KOREA_REGIONS) {

@@ -81,8 +81,13 @@ export function parsePhotonPlaces(response: PhotonResponse): Place[] {
 export async function searchOsmPlaces(query: string, near?: LatLng): Promise<Place[]> {
   const { osmSearch } = getApiConfig();
 
-  // lang=ko: 한글 이름 태그를 우선한다. 없으면 OSM 기본 이름(대개 현지어)이 온다.
-  const params = new URLSearchParams({ q: query, limit: String(LIMIT), lang: 'ko' });
+  /*
+   * lang 파라미터는 **넣지 않는다.** photon.komoot.io는 색인에 넣은 언어
+   * (default·en·de·fr)만 받고 그 밖의 값에는 400을 던진다 — 'ko'를 넣는 순간
+   * 모든 검색이 조용히(.catch) 빈손이 되어, 키 없는 번들의 POI 검색이 통째로
+   * 죽는다. 한국 장소의 기본 이름은 어차피 한글이라 default로 충분하다.
+   */
+  const params = new URLSearchParams({ q: query, limit: String(LIMIT) });
   if (near != null) {
     params.set('lat', near.lat.toFixed(6));
     params.set('lon', near.lng.toFixed(6));
@@ -93,7 +98,7 @@ export async function searchOsmPlaces(query: string, near?: LatLng): Promise<Pla
     headers: {
       Accept: 'application/json',
       // 공개 OSM 서비스들은 누가 부르는지 밝히길 요구한다(FOSSGIS는 없으면 403).
-      'User-Agent': 'some-time-left/1.0 (apps-in-toss mini app)',
+      'User-Agent': osmSearch.userAgent,
     },
   });
 
