@@ -61,6 +61,23 @@ export function fold(text: string): string {
 }
 
 /**
+ * 다듬어 둔 이름들. 색인과 같은 순서.
+ *
+ * 검색마다 4,163개 이름을 다시 다듬으면(정규식 + toLowerCase) Hermes에는 JIT이
+ * 없어서 타이핑 한 번에 수십 ms가 된다 — 디바운스 뒤라 해도 목록이 뜨는 게
+ * 눈에 띄게 늦다. 첫 검색 때 한 번만 다듬고 계속 쓴다. 앱 켤 때가 아니라
+ * 첫 검색 때 하는 이유: 검색 없이 최근 목적지만 눌러 나가는 날도 있다.
+ */
+let foldedNames: string[] | null = null;
+
+function foldedNameAt(index: number): string {
+  if (foldedNames == null) {
+    foldedNames = KOREA_REGIONS.map((row) => fold(row[1]));
+  }
+  return foldedNames[index];
+}
+
+/**
  * 얼마나 잘 맞는가. 작을수록 좋다. `needle`은 `fold`를 거친 값이어야 한다.
  *
  *  0  정확히 그 이름          "흑석동" → 흑석동
@@ -72,7 +89,11 @@ export function fold(text: string): string {
  * 있지"가 된다.
  */
 export function matchRank(needle: string, name: string): number | null {
-  const folded = fold(name);
+  return rankFolded(needle, fold(name));
+}
+
+/** `matchRank`의 안쪽 — 이름이 이미 다듬어져 있을 때. 색인 검색이 이걸 쓴다. */
+function rankFolded(needle: string, folded: string): number | null {
   if (folded === needle) return 0;
   /*
    * 한 글자에는 "시작" 우대를 주지 않는다.
@@ -89,6 +110,8 @@ export function matchRank(needle: string, name: string): number | null {
 interface Hit {
   row: RegionRow;
   rank: number;
+  /** 현재 위치에서의 거리 (m). 위치를 모르면 0 — 그때는 순서에 안 쓰인다. */
+  distance: number;
 }
 
 /**
@@ -105,20 +128,23 @@ export function searchRegions(query: string, near?: LatLng): Place[] {
   }
 
   const hits: Hit[] = [];
-  for (const row of KOREA_REGIONS) {
-    const rank = matchRank(needle, row[1]);
+  for (let i = 0; i < KOREA_REGIONS.length; i += 1) {
+    const rank = rankFolded(needle, foldedNameAt(i));
     if (rank != null) {
-      hits.push({ row, rank });
+      const row = KOREA_REGIONS[i];
+      /*
+       * 거리는 여기서 한 번만 잰다. 비교자 안에서 재면 정렬이 같은 값을 몇 번이고
+       * 다시 계산한다 — '동' 한 글자는 3,500줄이 걸리는데, n log n 번의 하버사인
+       * (삼각함수 넷)을 Hermes가 그대로 다 돈다.
+       */
+      const distance = near == null ? 0 : distanceM(near, { lat: row[2], lng: row[3] });
+      hits.push({ row, rank, distance });
     }
   }
 
   hits.sort((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
-    if (near != null) {
-      const da = distanceM(near, { lat: a.row[2], lng: a.row[3] });
-      const db = distanceM(near, { lat: b.row[2], lng: b.row[3] });
-      if (da !== db) return da - db;
-    }
+    if (a.distance !== b.distance) return a.distance - b.distance;
     return a.row[1].length - b.row[1].length;
   });
 
