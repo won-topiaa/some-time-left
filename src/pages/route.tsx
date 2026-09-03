@@ -32,6 +32,8 @@ const LEAVE_HINT_MIN_SEC = 60;
 
 export const Route = createRoute('/route', {
   component: RouteScreen,
+  // 토스 내비게이션 바의 뒤로가기와 겹치지 않게 라우터 기본 헤더는 끈다.
+  screenOptions: { headerShown: false },
 });
 
 /**

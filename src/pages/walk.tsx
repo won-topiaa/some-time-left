@@ -22,6 +22,8 @@ import type { LatLng } from '../domain/types';
 
 export const Route = createRoute('/walk', {
   component: Walk,
+  // 토스 내비게이션 바의 뒤로가기와 겹치지 않게 라우터 기본 헤더는 끈다.
+  screenOptions: { headerShown: false },
 });
 
 /** 도착 판정 반경 (m). */

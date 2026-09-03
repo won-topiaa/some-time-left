@@ -28,6 +28,9 @@ import type { Place } from '../data/places';
 
 export const Route = createRoute('/', {
   component: Home,
+  // 토스 내비게이션 바가 이미 뒤로가기를 그린다. 라우터 기본 헤더까지 켜 두면
+  // 뒤로가기 버튼이 두 개가 된다 — 실제로 심사에서 그렇게 지적받았다.
+  screenOptions: { headerShown: false },
 });
 
 /**

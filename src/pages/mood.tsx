@@ -11,6 +11,8 @@ import type { MoodId } from '../domain/types';
 
 export const Route = createRoute('/mood', {
   component: Mood,
+  // 토스 내비게이션 바의 뒤로가기와 겹치지 않게 라우터 기본 헤더는 끈다.
+  screenOptions: { headerShown: false },
 });
 
 /**

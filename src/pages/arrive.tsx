@@ -16,6 +16,8 @@ import { useTrip } from '../state/TripContext';
 
 export const Route = createRoute('/arrive', {
   component: Arrive,
+  // 토스 내비게이션 바의 뒤로가기와 겹치지 않게 라우터 기본 헤더는 끈다.
+  screenOptions: { headerShown: false },
 });
 
 /**
