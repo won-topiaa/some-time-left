@@ -81,7 +81,8 @@ export function parsePhotonPlaces(response: PhotonResponse): Place[] {
 export async function searchOsmPlaces(query: string, near?: LatLng): Promise<Place[]> {
   const { osmSearch } = getApiConfig();
 
-  const params = new URLSearchParams({ q: query, limit: String(LIMIT) });
+  // lang=ko: 한글 이름 태그를 우선한다. 없으면 OSM 기본 이름(대개 현지어)이 온다.
+  const params = new URLSearchParams({ q: query, limit: String(LIMIT), lang: 'ko' });
   if (near != null) {
     params.set('lat', near.lat.toFixed(6));
     params.set('lon', near.lng.toFixed(6));
@@ -89,7 +90,11 @@ export async function searchOsmPlaces(query: string, near?: LatLng): Promise<Pla
 
   const response = await requestJson<PhotonResponse>(`${osmSearch.baseUrl}/api?${params}`, {
     method: 'GET',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      // 공개 OSM 서비스들은 누가 부르는지 밝히길 요구한다(FOSSGIS는 없으면 403).
+      'User-Agent': 'some-time-left/1.0 (apps-in-toss mini app)',
+    },
   });
 
   return parsePhotonPlaces(response);

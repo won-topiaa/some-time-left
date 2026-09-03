@@ -5,15 +5,14 @@ import { SEOUL_HOTSPOTS } from '../seoul/hotspots';
 import type { LatLng } from '../../domain/types';
 
 /**
- * 키 없이 도는 화면의 목적지 검색.
+ * 오프라인 바닥 중 서울 핫스팟 쪽 — 역·공원·번화가 122곳.
  *
- * TMAP 키가 없으면 진짜 검색이 없다. 그때 findPlaces가 빈 목록을 주면 목적지를
- * 못 골라 첫 화면에 갇힌다 — 경로가 mock으로 떨어지도록 만든 의미가 사라진다.
- * 그래서 키가 없을 땐 서울 실좌표(SEOUL_HOTSPOTS)를 목적지로 빌려 준다.
+ * 지역(동·구·시)은 전국 색인(`regions/`)이 받고, 그 색인에 없는 서울의 역과
+ * 명소는 여기가 받는다. 둘 다 번들 안에 있어 네트워크와 무관하다.
+ * 이 파일은 핫스팟 쪽의 성질(실좌표 그대로, 대소문자 무시, 가까운 순, 상한 8)을 본다.
  */
-describe('findPlaces — 키 없을 때 mock 목적지', () => {
-  // 키가 없으면 OSM(Photon)이 먼저 답한다. 이 테스트는 그마저 못 읽는 날의
-  // 마지막 안전망(핫스팟)을 보는 것이라 네트워크를 끊어 둔다.
+describe('findPlaces — 오프라인 바닥: 서울 핫스팟', () => {
+  // 온라인(Photon·TMAP)이 죽어도 이 결과는 그대로여야 하므로 네트워크를 끊어 둔다.
   const realFetch = globalThis.fetch;
   beforeAll(() => {
     globalThis.fetch = (() => Promise.reject(new Error('offline'))) as typeof fetch;

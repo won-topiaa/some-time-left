@@ -83,6 +83,9 @@ src/
     osrm-route-provider.ts  OSRM으로 부른다 (키 없을 때도 진짜 도로망)
     tmap/                TMAP 클라이언트와 순수 파서
     osrm/                키 없는 OSRM 클라이언트
+    regions/             전국 행정구역 오프라인 색인 (생성 파일 + 검색). 네트워크 없이 "흑석동"이 찾아진다
+    osm-places.ts        키 없는 Photon(OSM) 장소 검색
+    places.ts            목적지 찾기 — 오프라인 색인 + 핫스팟 위에 OSM·TMAP을 얹는다
     seoul/               서울 실시간 인구데이터 (혼잡도) + 순수 스코어러
     parks/               도시공원 표준데이터 + 경치 스코어러
     buildings/           브이월드 건물(공간) · 건축물대장(주소) · 도로 단면

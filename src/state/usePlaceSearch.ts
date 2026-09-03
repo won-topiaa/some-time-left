@@ -25,7 +25,8 @@ export function usePlaceSearch(query: string): PlaceSearch {
 
   useEffect(() => {
     // 약속 장소는 대개 근처라 가까운 곳부터 보여주려고 현재 위치를 잡아 둔다.
-    // 키가 없어 mock으로 검색할 때도 이 위치로 가까운 순으로 정렬한다.
+    // 같은 이름의 동이 전국에 238쌍이라(중앙동·연동…), 이 위치가 있어야
+    // 오프라인 지역 색인도 "내 동네의 그것"을 앞세울 수 있다.
     getCurrentLocation({ accuracy: Accuracy.Balanced })
       .then((position) => {
         near.current = {
