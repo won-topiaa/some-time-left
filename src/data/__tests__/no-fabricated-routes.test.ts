@@ -60,6 +60,35 @@ describe('가짜 좌표는 출하 경로에 없다', () => {
 
     expect(revived).toEqual([]);
   });
+
+  it('공급자를 만드는 곳이 RoadRouteProvider를 거친다', () => {
+    /*
+     * `implements RouteProvider`만 보면 구멍이 남는다. 그 인터페이스는 클래스가
+     * 아니어도 만족시킬 수 있어서, 객체 리터럴 하나면
+     *
+     *   const dev: RouteProvider = { shortest: async () => 지어낸것, ... }
+     *
+     * 로 관문도 타입 검사도 위 테스트도 전부 지나간다. 그래서 **공급자를 고르는
+     * 자리**를 따로 본다 — 거기 오르는 것은 전부 RoadRouteProvider의 자손이어야 한다.
+     */
+    const chain = readFileSync(join(SRC, 'state', 'useRouteSuggestion.ts'), 'utf8');
+    const body = chain.slice(
+      chain.indexOf('function providerChain'),
+      chain.indexOf('export function useRouteSuggestion')
+    );
+
+    // 연쇄에 오르는 공급자는 이 둘뿐이고, 둘 다 RoadRouteProvider를 상속한다.
+    const constructed = [...body.matchAll(/new\s+(\w+)\s*\(/g)].map((m) => m[1]);
+    expect(constructed.sort()).toEqual(['OsrmRouteProvider', 'TmapRouteProvider']);
+
+    for (const name of constructed) {
+      const file = readFileSync(
+        join(SRC, 'data', `${name === 'TmapRouteProvider' ? 'tmap' : 'osrm'}-route-provider.ts`),
+        'utf8'
+      );
+      expect(file).toMatch(new RegExp(`class\\s+${name}\\s+extends\\s+RoadRouteProvider`));
+    }
+  });
 });
 
 /** 도로망이 삼각형을 돌려줬다고 치고 공급자가 무엇을 하는지 본다. */

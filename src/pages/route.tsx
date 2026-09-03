@@ -170,6 +170,21 @@ function RouteScreen() {
       earlySec: plan.earlySec,
       clockOffsetMs,
       walkedDistanceM: null,
+      walkedPath: null,
+      /*
+       * 지난 산책의 기록 장부를 여기서 지운다.
+       *
+       * `reset()`은 도착 화면의 버튼에서만 불린다. 그래서 도착 화면에서 버튼 대신
+       * **뒤로 나가면** `recordSaved: true`와 그때의 `recordId`가 다음 이동까지
+       * 그대로 따라왔다. 그 상태로 두 번째 산책을 마치면 도착 화면이 "이미 남겼다"고
+       * 판단해 새 기록을 만들지 않고 **첫 기록에 메모만 얹는다** — 둘째 날 걸은
+       * 거리와 좌표가 통째로 사라진다. 누적 거리가 이 앱에서 유일하게 쌓이는 것이라
+       * 조용히 줄어드는 것이 특히 나쁘다.
+       *
+       * 걷기 시작이 곧 새 산책의 시작이므로, 그 장부는 여기서 백지가 된다.
+       */
+      recordSaved: false,
+      recordId: null,
       // 상한에서 잘렸거나, 아예 못 늘렸거나, 늘린 길이 목표에 못 미쳤으면(onTarget
       // === false) 목표 시각 도착을 약속할 수 없다. 걷는 화면이 알아야 같은 말을
       // 하지 않는다 — 계획만 보고 정하면 그 화면만 혼자 옛말을 하게 된다.
@@ -250,6 +265,18 @@ function RouteScreen() {
               tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
             />
 
+            {/*
+              길을 누가 찾아 줬는지.
+
+              지도 타일의 출처는 MapLibre가 알아서 적지만, **경로**의 출처는 따로다.
+              키 없이 쓰는 OSRM(FOSSGIS)은 정책으로 경로 출처 표기를 요구한다.
+              남의 무료 서버에 얹혀 가는 값이라 지우지 않는다. TMAP으로 받은 날은
+              우리 할당량이라 적지 않는다 — 화면에 군더더기를 늘리지 않는다.
+            */}
+            {route.candidate.id.startsWith('osrm-') && (
+              <Text style={styles.routeSource}>경로 OSRM · OpenStreetMap</Text>
+            )}
+
             <View style={styles.meta}>
               <Text style={styles.duration}>
                 {formatDuration(route.candidate.durationSec)}
@@ -285,11 +312,20 @@ function RouteScreen() {
               (novelty가 늘 1.0으로 나온다). 매일 걷는 출근길에 "아직 안 가보신 길이에요"라고
               말하게 되므로, 고르지 않은 길에는 이유도 붙이지 않는다.
             */}
-            {trip.mood != null && plan.kind === 'stretch' && !fallback && (
-              <Text style={styles.reason}>
-                {routeReason(trip.mood, route.dominantFeature)}
-              </Text>
-            )}
+            {/*
+              두드러진 성질이 없으면 `dominantFeature`가 null이고, 그러면 이유를
+              안 붙인다. 재보지 못해 중립값인 성질을 "이 길이 그렇다"고 말할 수는
+              없다 — 횡단보도를 못 세는 공급자로 도는 날 "신호에 거의 안 걸리는
+              길이에요"라고 하던 것이 그 경우다.
+            */}
+            {trip.mood != null &&
+              plan.kind === 'stretch' &&
+              !fallback &&
+              route.dominantFeature != null && (
+                <Text style={styles.reason}>
+                  {routeReason(trip.mood, route.dominantFeature)}
+                </Text>
+              )}
 
             {nearbyPlace != null && (
               <Text style={styles.nearby}>{alongRouteHint(nearbyPlace.name)}</Text>
@@ -371,6 +407,8 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     arrival: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
     metaSub: { ...type.caption, color: colors.inkFaint, marginTop: 2 },
     // 추천 이유는 이 앱의 생명줄이라 또렷하게 두되, 색이 아니라 자리로 강조한다.
+    /** 경로 출처. 의무 표기라 지우지 않되, 화면에서 가장 옅게 둔다. */
+    routeSource: { ...type.caption, color: colors.inkGhost, marginTop: spacing.sm },
     reason: {
       ...type.body,
       color: colors.ink,

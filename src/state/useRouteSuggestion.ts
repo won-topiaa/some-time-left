@@ -257,13 +257,23 @@ export function useRouteSuggestion({
           .map((r) => r.path)
           .filter((p) => isWalkablePath(p));
 
-        const candidates = await provider.candidates({
-          origin,
-          destination,
-          targetSec: walkPlan.targetWalkSec,
-          departAtMs: nowMs,
-          previousPaths,
-        });
+        /*
+         * 후보 찾기가 통째로 던져도 최단 경로는 버리지 않는다.
+         *
+         * 바로 아래 주석이 "늘리진 못해도 최단 경로로라도 걷게 한다"고 약속하는데,
+         * 그 약속은 후보가 **빈 배열**로 왔을 때만 지켜지고 있었다. 경유지 계산이나
+         * 성질 계산이 한 번 던지면 여기서 그대로 실패 화면으로 갔다 — 관문을 이미
+         * 지난, 손에 쥔 길 한 장을 두고서.
+         */
+        const candidates = await provider
+          .candidates({
+            origin,
+            destination,
+            targetSec: walkPlan.targetWalkSec,
+            departAtMs: nowMs,
+            previousPaths,
+          })
+          .catch(() => []);
 
         if (cancelled) return;
 

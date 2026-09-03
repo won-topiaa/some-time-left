@@ -110,31 +110,42 @@ export function scoreFeatures(features: RouteFeatures, weights: FeatureWeights):
 const NOTABLE = 0.6;
 
 /**
- * 이 경로를 고르게 만든 성질 하나.
- * 추천 이유 한 줄을 쓰기 위해 필요하다 — 자동 추천의 생명줄.
+ * 이 경로를 고르게 만든 성질 하나. **없을 수도 있다.**
  *
- * 가중치를 곱한 기여가 가장 큰 것을 고르되, **이 길이 실제로 두드러진 성질** 중에서
- * 고른다. 아무것도 두드러지지 않으면 그때는 기여가 가장 큰 것을 그대로 쓴다.
+ * 가중치를 곱한 기여가 가장 큰 것을 고르되, **이 길이 실제로 두드러진 성질**
+ * 중에서만 고른다. 아무것도 두드러지지 않으면 null이고, 그러면 화면은
+ * 이유를 아예 안 붙인다.
+ *
+ * 예전엔 두드러진 게 없으면 기여가 가장 큰 것을 그냥 골랐다. 바로 위
+ * `NOTABLE`의 주석이 "중립값보다 뚜렷하게 높은 것만 이유가 될 수 있다"고 적어
+ * 두고서 정작 그 아래에서 뒤집은 것이다. 그 폴백은 전부 중립값(0.5)인 길에서
+ * 가중치가 가장 큰 성질을 뽑았고, 그 값은 **재본 적이 없는 값**이다 —
+ * 횡단보도를 못 세는 공급자로 돌 때 '생각이 많아요'를 고르면 unbroken이 뽑혀
+ * "신호에 거의 안 걸리는 길이에요"라고 말하게 된다. 세어 보지도 않고.
+ *
+ * 이유가 한 줄 비는 것은 손해가 아니다. 이 앱이 파는 것은 문장이 아니라
+ * 제때 닿는다는 믿음이고, 근거 없는 문장은 그 믿음을 갉는다.
  */
 export function dominantFeature(
   features: RouteFeatures,
   weights: FeatureWeights
-): FeatureKey {
-  const pick = (keys: FeatureKey[]): FeatureKey | null => {
-    let best: FeatureKey | null = null;
-    let bestValue = -Infinity;
-    for (const k of keys) {
-      const contribution = features[k] * weights[k];
-      if (contribution > bestValue) {
-        bestValue = contribution;
-        best = k;
-      }
-    }
-    return best;
-  };
+): FeatureKey | null {
+  let best: FeatureKey | null = null;
+  let bestValue = -Infinity;
 
-  const notable = FEATURE_KEYS.filter((k) => features[k] >= NOTABLE);
-  return pick(notable) ?? pick(FEATURE_KEYS) ?? FEATURE_KEYS[0];
+  for (const k of FEATURE_KEYS) {
+    // 두드러지지 않은 성질은 후보가 아니다 — 재보지 못해 중립값인 것이 여기 걸린다.
+    if (features[k] < NOTABLE) {
+      continue;
+    }
+    const contribution = features[k] * weights[k];
+    if (contribution > bestValue) {
+      bestValue = contribution;
+      best = k;
+    }
+  }
+
+  return best;
 }
 
 export function moodById(id: MoodId): Mood {

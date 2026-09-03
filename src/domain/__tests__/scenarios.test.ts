@@ -322,13 +322,36 @@ describe('지나온 길 — 넘친 날', () => {
 describe('이유 한 줄 — 데이터가 없는 날', () => {
   const neutral: RouteFeatures = { quiet: 0.5, flat: 0.5, shade: 0.5, scenic: 0.5, novelty: 0.5, unbroken: 0.5 };
 
-  it('전부 중립이면 두드러진 게 없어 가중치가 큰 성질로 물러선다 (알려진 한계)', () => {
-    // 건물 데이터가 없어도 '햇볕이 싫어요'에는 그늘이 이유가 된다.
-    // NOTABLE 문턱은 다른 성질이 하나라도 재졌을 때만 이 말을 막는다.
-    expect(dominantFeature(neutral, weightsFor('hot'))).toBe('shade');
+  it('전부 중립이면 이유를 대지 않는다', () => {
+    /*
+     * 이 자리에 예전엔 "(알려진 한계)"라고 적힌 테스트가 있었다 — 건물 데이터가
+     * 하나도 없어도 '햇볕이 싫어요'에는 그늘이 이유로 나간다는 것을, 그게 틀린
+     * 줄 알면서 고정해 두었다. 재보지 못한 값을 근거로 대는 것이 한계로 남을
+     * 이유가 없어서 고쳤다. 이유 한 줄이 비는 편이 낫다.
+     */
+    expect(dominantFeature(neutral, weightsFor('hot'))).toBeNull();
   });
 
   it('하나라도 두드러지면 모르는 성질은 이유가 되지 않는다', () => {
     expect(dominantFeature({ ...neutral, novelty: 0.7 }, weightsFor('hot'))).toBe('novelty');
+  });
+
+  it('키 없는 번들에서 자주 걷던 동네를 걸으면 이유가 비어 있다', () => {
+    /*
+     * 실제로 있을 수 있는 조합이라 따로 못 박아 둔다.
+     *
+     * TMAP 키가 없으면 OSRM으로 도는데, OSRM은 횡단보도·계단을 안 세어 주므로
+     * unbroken·flat이 중립값이 된다. 혼잡도·공원·건물 키까지 없으면 quiet·scenic·
+     * shade도 중립이다. 거기에 자주 걷던 동네라 novelty까지 낮으면 **여섯 개가
+     * 전부 문턱 아래**가 된다.
+     *
+     * 예전엔 이때 가중치가 가장 큰 것을 골랐다 — '생각이 많아요'면 unbroken이
+     * 뽑혀 "신호에 거의 안 걸리는 길이에요"가 나갔다. 신호를 세어 본 적이 없는데.
+     */
+    const nothingMeasured: RouteFeatures = { ...neutral, novelty: 0.3 };
+
+    for (const mood of ['pensive', 'hot', 'excited', 'tired', 'plain'] as const) {
+      expect(dominantFeature(nothingMeasured, weightsFor(mood))).toBeNull();
+    }
   });
 });

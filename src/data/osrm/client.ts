@@ -13,6 +13,7 @@ import { getApiConfig } from '../../config';
 import { requestJson } from '../http';
 import type { ParsedRoute } from '../tmap/parse';
 import type { LatLng } from '../../domain/types';
+import { distanceM } from '../../domain/geo';
 import { ApiError } from '../http';
 
 /**
@@ -111,6 +112,23 @@ export async function fetchOsrmRoute({
   // 점 하나로는 길이 아니다. 여기서 막지 않으면 걷는 화면이 좌표 없이 열린다.
   if (path.length < 2) {
     throw new ApiError('길을 찾지 못했어요', null);
+  }
+
+  /*
+   * 받은 길이 **우리가 물어본 자리**에서 시작하고 끝나는지 직접 본다.
+   *
+   * 위의 `waypoints` 검사만으로는 모자란다. 그 필드는 서버가 넣어 줄 때만 있고,
+   * `skip_waypoints`를 켠 인스턴스나 중간에 끼는 프록시가 벗겨 내면 배열이 비어
+   * 루프가 한 번도 안 돈다 — 그러면 28km 밖에서 주워 온 좌표가 그대로 통과한다.
+   * 서버가 자진해서 알려 주는 값에 안전을 걸어 두지 않는다.
+   *
+   * 시작·끝 좌표는 응답에 언제나 있으므로 우리가 직접 잰다.
+   */
+  if (
+    distanceM(path[0], origin) > MAX_SNAP_M ||
+    distanceM(path[path.length - 1], destination) > MAX_SNAP_M
+  ) {
+    throw new ApiError('그 근처에는 걸을 수 있는 길이 없어요', null);
   }
 
   return {

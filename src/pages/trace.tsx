@@ -9,6 +9,7 @@ import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useThem
 import { useScreenInsets } from '../ui/screenInsets';
 import { moodTint } from '../ui/moodTint';
 import { RouteGlyph } from '../ui/RoutePreview';
+import { isWalkablePath } from '../domain/route-sanity';
 import { openRecord } from './record';
 import type { WalkRecord } from '../domain/types';
 
@@ -126,8 +127,21 @@ function Trace() {
         아래 목록이 사실을 말한다면, 여기는 한눈에 보이는 무늬를 말한다.
       */}
       <View style={styles.grid}>
+        {/*
+          그릴 수 없는 모양은 안 그린다.
+
+          좌표를 지어내던 시절의 기록이 기기에 남아 있고, 그대로 그리면 그때의
+          삼각형이 무늬로 남는다. 그 산책은 실제로 있었으므로 자리는 지키되,
+          걷지 않은 모양을 '걸은 무늬'라고 내놓지는 않는다.
+          (`RouteGlyph`는 그릴 게 없으면 빈 칸을 낸다)
+        */}
         {records.slice(0, GRID_MAX).map((record) => (
-          <RouteGlyph key={record.id} path={record.path} tint={moodTint(record.mood, scheme)} size={GLYPH} />
+          <RouteGlyph
+            key={record.id}
+            path={isWalkablePath(record.path) ? record.path : []}
+            tint={moodTint(record.mood, scheme)}
+            size={GLYPH}
+          />
         ))}
         {/* 아직 빈 자리는 비워 두되 보이게 둔다. 채우라고 재촉하지는 않는다. */}
         {emptySlots.map((i) => (
@@ -158,7 +172,7 @@ function Trace() {
                   navigation.navigate('/record');
                 }}
               >
-                <RouteGlyph path={record.path} tint={tint} />
+                <RouteGlyph path={isWalkablePath(record.path) ? record.path : []} tint={tint} />
 
                 <View style={styles.rowBody}>
                   <Text style={styles.rowTitle} numberOfLines={1}>

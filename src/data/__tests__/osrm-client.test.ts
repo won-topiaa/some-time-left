@@ -130,6 +130,34 @@ describe('fetchOsrmRoute', () => {
     await expect(fetchOsrmRoute({ origin, destination })).rejects.toThrow();
   });
 
+  it('waypoints가 없어도 엉뚱한 자리에서 시작하면 거절한다', async () => {
+    /*
+     * `waypoints`는 서버가 넣어 줄 때만 있다. `skip_waypoints`를 켠 인스턴스나
+     * 중간에 끼는 프록시가 벗겨 내면 위의 snap 검사가 한 번도 안 돌아, 28km 밖에서
+     * 주워 온 좌표가 그대로 통과했다. 서버가 자진해서 알려 주는 값에 안전을
+     * 걸어 두지 않는다 — 시작·끝 좌표는 언제나 있으므로 우리가 직접 잰다.
+     */
+    reply = {
+      code: 'Ok',
+      routes: [
+        {
+          distance: 15.4,
+          duration: 12.3,
+          geometry: {
+            // 물어본 곳은 서울인데 남해에서 시작한다.
+            coordinates: [
+              [128.5, 33.0],
+              [128.5001, 33.0001],
+            ] as [number, number][],
+          },
+        },
+      ],
+      // waypoints가 통째로 없다 — 그래도 걸러야 한다.
+    };
+
+    await expect(fetchOsrmRoute({ origin, destination })).rejects.toThrow();
+  });
+
   it('도로망에 안 붙는 경유지는 거절로 받는다', async () => {
     reply = { code: 'NoSegment' };
 

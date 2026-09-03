@@ -276,13 +276,20 @@ describe('dominantFeature — 모르는 걸 이유로 대지 않는다', () => {
     expect(dominantFeature(shady, weightsFor('hot'))).toBe('shade');
   });
 
-  it('두드러진 게 하나도 없으면 그래도 하나는 고른다', () => {
+  it('두드러진 게 하나도 없으면 아무것도 고르지 않는다', () => {
+    /*
+     * 예전엔 여기서 가중치가 가장 큰 성질을 그냥 골랐다. 전부 중립값(0.5)이라는 건
+     * **하나도 재보지 못했다**는 뜻인데, 그 상태로 '생각이 많아요'를 고르면
+     * unbroken이 뽑혀 "신호에 거의 안 걸리는 길이에요"라고 말했다 — 횡단보도를
+     * 세어 보지도 않고. 이유가 한 줄 비는 편이 낫다.
+     */
     const flat = { quiet: 0.5, flat: 0.5, shade: 0.5, scenic: 0.5, novelty: 0.5, unbroken: 0.5 };
-    expect(FEATURE_KEYS).toContain(dominantFeature(flat, weightsFor('pensive')));
+    expect(dominantFeature(flat, weightsFor('pensive'))).toBeNull();
   });
 
-  it('여섯 기분 모두 이유를 하나씩 낸다', () => {
+  it('여섯 기분 모두, 두드러진 성질이 있으면 이유를 낸다', () => {
     for (const mood of MOODS) {
+      // `unknown`은 flat 0.8 · novelty 1 · unbroken 0.9가 재져 있다.
       expect(FEATURE_KEYS).toContain(dominantFeature(unknown, weightsFor(mood.id)));
     }
   });
