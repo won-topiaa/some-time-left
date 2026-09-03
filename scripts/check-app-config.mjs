@@ -135,7 +135,7 @@ function mark(value) {
 }
 
 console.log('설정 상태\n');
-console.log(`  TMAP appKey        ${mark(config.tmap.appKey)}   → 없으면 경로가 mock`);
+console.log(`  TMAP appKey        ${mark(config.tmap.appKey)}   → 없으면 OSRM(실제 도로망)으로`);
 console.log(`  프록시 토큰         ${mark(config.congestionProxy.token)}   → 없으면 quiet 중립값`);
 console.log(`  공공데이터 인증키    ${mark(config.publicData.serviceKey)}   → 없으면 scenic 중립값`);
 console.log(`  브이월드 키         ${mark(config.vworld.key)}   → 없으면 shade 기본 높이`);

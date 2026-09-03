@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Accuracy, getCurrentLocation, getServerTime } from '@apps-in-toss/framework';
-import { MockRouteProvider, type RouteProvider } from '../data/route-provider';
+import { type RouteProvider } from '../data/route-provider';
 import { TmapRouteProvider } from '../data/tmap-route-provider';
+import { OsrmRouteProvider } from '../data/osrm-route-provider';
+import { isWalkablePath } from '../domain/route-sanity';
 import { isTmapConfigured } from '../config';
 import { RECENT_WINDOW, loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
@@ -11,11 +13,41 @@ import { planWalk, type WalkPlan } from '../domain/time';
 import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
 
 /**
- * 키가 설정돼 있으면 실제 도보 경로를, 아니면 mock을 쓴다.
- * 키 없이도 화면 개발이 막히지 않아야 한다.
+ * 시도할 공급자들, 좋은 순서대로.
+ *
+ * **전부 실제 도로망이다.** 예전엔 키가 없으면 좌표를 지어내는 공급자로 떨어졌고,
+ * 그래서 산을 가로지르는 삼각형이 실기기에 떴다. 키가 없다는 건 조금 못한 진짜를
+ * 쓴다는 뜻이지 거짓말을 해도 된다는 뜻이 아니다.
+ *
+ * TMAP은 횡단보도·계단까지 세어 주므로 성질이 더 잘 재진다. OSRM은 그런 건
+ * 모르지만(모르는 건 중립값이 된다) 좌표는 똑같이 진짜다. 키가 있으면 앞을 쓰고,
+ * 없거나 죽었으면 뒤로 넘어간다. 둘 다 안 되면 사실대로 말한다.
  */
-function routeProvider(): RouteProvider {
-  return isTmapConfigured() ? new TmapRouteProvider() : new MockRouteProvider();
+/**
+ * 마지막 실패를 사람이 읽을 한 줄로.
+ *
+ * 기다리면 풀릴 일과 그렇지 않은 일을 나눈다. 도로가 없는 곳을 찍은 사람에게
+ * "잠시 뒤에 다시 해볼까요?"라고 하면, 눌러도 같은 화면이 돌아오는 막다른 길이
+ * 된다 — 이 앱에서 재시도 버튼은 정말 다시 해볼 만할 때만 뜻이 있다.
+ */
+export function routeFailureLine(failure: unknown): string {
+  const message = failure instanceof Error ? failure.message : '';
+
+  // 도로망이 그 근처를 아예 모른다. 다시 눌러도 같은 답이 온다.
+  if (message.includes('걸을 수 있는 길이 없어요')) {
+    return '그 근처에는 걸을 수 있는 길이 없어요.\n장소를 다시 골라볼까요?';
+  }
+  // 공급자가 길이라고 보기 어려운 좌표를 보냈다. 이것도 다시 부른다고 안 바뀐다.
+  if (message.includes('걸을 수 있는 모양이 아니에요')) {
+    return '길을 제대로 받지 못했어요.\n장소를 다시 골라볼까요?';
+  }
+  // 나머지는 대개 네트워크다. 그때는 정말 다시 해볼 만하다.
+  return '길을 찾지 못했어요. 잠시 뒤에 다시 해볼까요?';
+}
+
+function providerChain(): Array<() => RouteProvider> {
+  const osrm = () => new OsrmRouteProvider();
+  return isTmapConfigured() ? [() => new TmapRouteProvider(), osrm] : [osrm];
 }
 
 export interface Suggestion {
@@ -155,8 +187,34 @@ export function useRouteSuggestion({
       }
 
       try {
-        const provider = routeProvider();
-        const shortest = await provider.shortest(origin, destination);
+        /*
+         * 공급자를 순서대로 시도한다.
+         *
+         * 최단 경로까지 같은 공급자로 받아야 한다 — 최단은 시간 예산 전체의
+         * 기준점이라, 최단은 TMAP이 후보는 OSRM이 내면 두 속도 모형을 섞어 재는
+         * 셈이 되고 "3분 전"이 그만큼 어긋난다. 그래서 하나를 고르면 끝까지 간다.
+         */
+        let provider: RouteProvider | null = null;
+        let shortest: Awaited<ReturnType<RouteProvider['shortest']>> | null = null;
+        let lastError: unknown = null;
+
+        for (const make of providerChain()) {
+          try {
+            const attempted = make();
+            shortest = await attempted.shortest(origin, destination);
+            provider = attempted;
+            break;
+          } catch (failure) {
+            lastError = failure;
+          }
+        }
+
+        if (cancelled) return;
+        // 전부 실패했다. 지어내지 않고 위 catch로 보낸다.
+        if (provider == null || shortest == null) {
+          throw lastError ?? new Error('길을 찾지 못했어요');
+        }
+
         const walkPlan = planWalk({
           nowMs,
           arriveAtMs,
@@ -183,7 +241,21 @@ export function useRouteSuggestion({
 
         const records = await loadRecords().catch(() => []);
         const recent = records.slice(0, RECENT_WINDOW).map((r) => r.routeId);
-        const previousPaths = records.slice(0, 20).map((r) => r.path);
+        /*
+         * 지어낸 좌표가 남아 있는 기록은 여기서 걸러 낸다.
+         *
+         * 좌표를 지어내던 시절의 기록이 기기에 그대로 있고, 그게 다시 입력으로
+         * 돌아온다. 산을 가로지르는 직선이 '가 본 길'로 등록되면 그 근처를 지나는
+         * **진짜** 길이 처음 걷는 길인데도 novelty를 깎인다 — 버그가 지나간 자국이
+         * 앞으로의 추천을 계속 갉아먹는 셈이다.
+         *
+         * 기록 자체는 지우지 않는다. 그 산책은 실제로 있었고 걸은 거리도 사실이다.
+         * 다만 걸을 수 없는 모양의 좌표를 '가 본 길'로 치지 않을 뿐이다.
+         */
+        const previousPaths = records
+          .slice(0, 20)
+          .map((r) => r.path)
+          .filter((p) => isWalkablePath(p));
 
         const candidates = await provider.candidates({
           origin,
@@ -212,9 +284,18 @@ export function useRouteSuggestion({
         setRanked(rankRoutes(usable, rankOptions));
         // 늘린 후보가 전부 목표를 넘겨도 내놓을 한 장은 남겨 둔다.
         setFloor(rankRoutes([shortest], rankOptions)[0] ?? null);
-      } catch {
+      } catch (failure) {
         if (!cancelled) {
-          setError('길을 찾지 못했어요. 잠시 뒤에 다시 해볼까요?');
+          /*
+           * 원인을 살려서 보여준다.
+           *
+           * 예전엔 `catch {`로 받아 무조건 "잠시 뒤에 다시 해볼까요?"를 띄웠다.
+           * 그런데 원인 중에는 기다려도 안 풀리는 것이 있다 — 도로가 없는 곳을
+           * 찍었다든지. 그 사람에게 "잠시 뒤에"라고 하면 눌러도 같은 화면이
+           * 돌아오는 막다른 길이 된다. 공급자들이 애써 남긴 마지막 실패 이유를
+           * 여기서 버리지 않는다.
+           */
+          setError(routeFailureLine(failure));
         }
       } finally {
         if (!cancelled) {

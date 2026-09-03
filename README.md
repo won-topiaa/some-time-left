@@ -77,9 +77,12 @@ src/
     pace.ts          걷는 중 페이스 코칭
     copy.ts          추천 이유·프롬프트 문구
   data/
-    route-provider.ts    경로 공급자 인터페이스 + mock
-    tmap-route-provider.ts  TMAP 기반 실제 구현
+    route-provider.ts    경로 공급자 인터페이스 (구현은 전부 실제 도로망)
+    road-route-provider.ts  겨냥·보정 라운드·기하 관문 (공급자 공통)
+    tmap-route-provider.ts  TMAP으로 부른다 (키 있을 때)
+    osrm-route-provider.ts  OSRM으로 부른다 (키 없을 때도 진짜 도로망)
     tmap/                TMAP 클라이언트와 순수 파서
+    osrm/                키 없는 OSRM 클라이언트
     seoul/               서울 실시간 인구데이터 (혼잡도) + 순수 스코어러
     parks/               도시공원 표준데이터 + 경치 스코어러
     buildings/           브이월드 건물(공간) · 건축물대장(주소) · 도로 단면
@@ -219,8 +222,13 @@ npm run check-config
 공공데이터는 Decoding 키인지, 브이월드는 레이어 아이디와 도메인 등록인지.
 비밀값은 출력하지 않고 길이만 보여준다.
 
-값이 없으면 그 기능만 꺼지고 앱은 계속 돈다. TMAP 키가 없으면 경로가 mock으로,
-프록시 토큰이 없으면 `quiet`이 중립값으로 떨어진다.
+값이 없으면 그 기능만 꺼지고 앱은 계속 돈다. TMAP 키가 없으면 경로가
+OSRM(키 없는 실제 도로망)으로, 프록시 토큰이 없으면 `quiet`이 중립값으로 떨어진다.
+
+**어느 쪽이든 좌표는 실제 도로망에서 온다.** 예전엔 키가 없으면 좌표를 지어내는
+공급자로 떨어졌고, 그 번들이 산자락을 가로지르는 삼각형을 "3분 전에는 닿는
+길이에요"와 함께 실기기에 띄웠다. 지어내는 쪽은 지웠다 —
+자세한 것은 `src/data/route-provider.ts` 맨 위 주석에.
 
 **클라이언트 번들에 들어간 값은 뜯으면 나온다.** `src/config.local.ts`의 값은
 `_app.tsx`가 읽어 쓰므로 빌드하면 그대로 번들에 박힌다 — TMAP 키, 공공데이터 인증키,
@@ -326,7 +334,7 @@ curl -s -H "appKey: invalid" "https://apis.openapi.sk.com<경로>" | grep -o '"c
 
 | 무엇 | 어디서 | 없으면 |
 |---|---|---|
-| **TMAP** appKey | [openapi.sk.com](https://openapi.sk.com) → 앱 등록 | 경로 자체가 mock |
+| **TMAP** appKey | [openapi.sk.com](https://openapi.sk.com) → 앱 등록 | OSRM으로 돈다 (좌표는 진짜, 횡단보도·계단은 모름) |
 | 서울 열린데이터광장 | [data.seoul.go.kr](https://data.seoul.go.kr) → 인증키 신청 | `quiet` 중립값 |
 | (서울 키는 앱이 아니라 [`proxy/`](proxy/README.md)에 넣는다) | | |
 | 공공데이터포털 | [data.go.kr](https://www.data.go.kr) → 활용신청 | `scenic` 중립값 |

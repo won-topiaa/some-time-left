@@ -60,6 +60,29 @@ export interface ApiConfig {
     baseUrl: string;
   };
   /**
+   * 키 없는 **실제 도로망** 보행 경로 — FOSSGIS가 운영하는 OSRM 보행 프로파일.
+   *
+   * 여기 있는 이유는 사고 하나다. 예전엔 TMAP 키가 없으면 좌표를 **지어내는**
+   * 공급자로 떨어졌고, 그 번들이 산자락을 가로지르는 삼각형을 "3분 전에는 닿는
+   * 길이에요"와 함께 내놓았다. 걸을 수 없는 길이었다.
+   *
+   * 그래서 지어내는 쪽을 지우고 그 자리에 이것을 놓았다. 키도 등록도 없이 실제
+   * OSM 도로망 위의 보행 경로를 준다(실측: 중앙대→흑석역 859m에 정점 43개,
+   * 최장 직선 56m). 경유지도 받아서 길을 늘릴 수 있고, 도로망에 안 붙는 경유지는
+   * `NoSegment`로 **거절**한다 — 지어내던 쪽이 하던 일의 정확한 반대다.
+   *
+   * 운영 정책이 있다: 초당 1회, 유효한 User-Agent, 출처 표기, 과용 금지.
+   * 그래서 이건 **TMAP이 없거나 실패했을 때의 뒷배**이지 주력이 아니다.
+   */
+  osrmRoute: {
+    baseUrl: string;
+    /**
+     * FOSSGIS는 User-Agent가 없으면 403으로 거절한다(실측). 브라우저 흉내가 아니라
+     * 누가 부르는지 밝히라는 뜻이므로, 앱 이름을 정직하게 적는다.
+     */
+    userAgent: string;
+  };
+  /**
    * 키 없는 보조 장소 검색 — Photon (OSM 지오코더). **키가 없다.**
    *
    * TMAP 키가 없는 번들(심사용)에서도 중앙대학교·흑석역 같은 진짜 장소가
@@ -154,6 +177,11 @@ const config: ApiConfig = {
   weather: {
     baseUrl: 'https://api.open-meteo.com',
   },
+  osrmRoute: {
+    // routed-foot = 보행 프로파일. routed-car로 바꾸면 사람이 못 걷는 길이 나온다.
+    baseUrl: 'https://routing.openstreetmap.de/routed-foot',
+    userAgent: 'some-time-left/1.0 (apps-in-toss mini app)',
+  },
   osmSearch: {
     baseUrl: 'https://photon.komoot.io',
   },
@@ -234,7 +262,12 @@ export function getApiConfig(): Readonly<ApiConfig> {
   return config;
 }
 
-/** 실제 도보 경로를 부를 준비가 됐는가. 안 됐으면 mock으로 떨어진다. */
+/**
+ * TMAP을 부를 준비가 됐는가.
+ *
+ * 안 됐어도 좌표를 지어내지는 않는다 — 키 없는 실제 도로망(OSRM)으로 넘어간다.
+ * `providerChain()`이 그 순서를 정한다.
+ */
 export function isTmapConfigured(): boolean {
   return config.tmap.appKey != null || config.tmap.baseUrl !== 'https://apis.openapi.sk.com';
 }

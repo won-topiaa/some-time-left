@@ -16,10 +16,16 @@ export interface ParsedRoute {
   distanceM: number;
   /** 전체 소요 시간 (초) — TMAP이 계산한 값 */
   durationSec: number;
-  /** 횡단보도 개수. 많을수록 생각이 자주 끊긴다. */
-  crossings: number;
-  /** 계단·육교 개수. 오르내림의 대리 지표. */
-  stairs: number;
+  /**
+   * 횡단보도 개수. 많을수록 생각이 자주 끊긴다.
+   *
+   * **null은 "모른다"** — 0(“하나도 없다”)과 다르다. 도로망은 주지만 이런 시설
+   * 정보는 안 주는 공급자가 있고(OSRM), 그때 0으로 적으면 신호에 자주 걸리는 길에
+   * 대고 "생각이 안 끊기는 길이에요"라고 말하게 된다. 모르면 모른다고 둔다.
+   */
+  crossings: number | null;
+  /** 계단·육교 개수. 오르내림의 대리 지표. null은 "모른다". */
+  stairs: number | null;
 }
 
 /** TMAP 좌표는 [경도, 위도] 순서다. 뒤집으면 지구 반대편으로 간다. */

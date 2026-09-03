@@ -27,6 +27,14 @@ const STAIRS_PER_KM_WORST = 4;
 /** 건물 높이를 못 받았을 때의 그늘. 혼잡도·경치와 같은 규칙이다. */
 export const NEUTRAL_SHADE = 0.5;
 
+/**
+ * 재보지 못한 성질의 값. "모른다"는 뜻이지 "중간쯤"이라는 뜻이 아니다.
+ *
+ * 이 값이면 랭킹에서 그 성질로는 앞서지도 뒤처지지도 않는다 — 모르는 것으로
+ * 길을 고르지 않겠다는 뜻이다. `NEUTRAL_SHADE`와 같은 규칙을 다른 성질에도 쓴다.
+ */
+const NEUTRAL = 0.5;
+
 function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v));
 }
@@ -34,8 +42,10 @@ function clamp01(v: number): number {
 export interface FeatureInput {
   distanceM: number;
   durationSec: number;
-  crossings: number;
-  stairs: number;
+  /** 횡단보도 개수. null이면 재보지 못한 것이라 `unbroken`이 중립값이 된다. */
+  crossings: number | null;
+  /** 계단·육교 개수. null이면 재보지 못한 것이라 `flat`이 중립값이 된다. */
+  stairs: number | null;
   path: LatLng[];
   segments: StreetSegment[];
   origin: LatLng;
@@ -67,10 +77,18 @@ export function deriveFeatures({
   const km = Math.max(0.1, distance / 1000);
 
   return {
-    // 횡단보도가 적을수록 생각이 안 끊긴다.
-    unbroken: clamp01(1 - crossings / km / CROSSINGS_PER_KM_WORST),
-    // 계단이 적을수록 평탄하다고 본다. 진짜 경사는 DEM을 붙여야 한다.
-    flat: clamp01(1 - stairs / km / STAIRS_PER_KM_WORST),
+    /*
+     * 횡단보도가 적을수록 생각이 안 끊긴다.
+     *
+     * 못 받았으면(null) **모르는 것**이라 중립값으로 둔다. 0으로 치면
+     * "횡단보도가 하나도 없는 길"이 되어, 신호에 자주 걸리는 길에 대고
+     * "생각이 안 끊기는 길이에요"라고 말하게 된다 — 이 파일이 그늘에서
+     * 이미 정한 규칙(모르면 중립)을 여기서도 지킨다.
+     */
+    unbroken:
+      crossings == null ? NEUTRAL : clamp01(1 - crossings / km / CROSSINGS_PER_KM_WORST),
+    // 계단이 적을수록 평탄하다고 본다. 진짜 경사는 DEM을 붙여야 한다. 모르면 중립.
+    flat: stairs == null ? NEUTRAL : clamp01(1 - stairs / km / STAIRS_PER_KM_WORST),
     /*
      * 건물 높이를 하나도 못 받았으면 그늘은 **모르는 것**이다.
      *

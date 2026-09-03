@@ -19,6 +19,7 @@ import { formatRecordDate } from '../domain/trace';
 import { moodById } from '../domain/mood';
 import { pathLengthM } from '../domain/geo';
 import { RouteMap } from '../ui/RouteMap';
+import { isWalkablePath } from '../domain/route-sanity';
 import { moodTint } from '../ui/moodTint';
 import { spacing, radius } from '../ui/theme';
 import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
@@ -101,9 +102,21 @@ function RecordDetail() {
           {record.destinationName !== '' ? record.destinationName : '어딘가'}
         </Text>
 
-        <View style={styles.map}>
-          <RouteMap path={record.path} height={260} tint={tint} />
-        </View>
+        {/*
+          지도는 좌표가 진짜 길일 때만 깐다.
+
+          좌표를 지어내던 시절의 기록이 기기에 남아 있다. 그걸 실제 지도 위에
+          그리면 산자락을 가로지르는 삼각형이 오늘 다시 뜬다 — 고쳤다면서 같은
+          거짓말을 되풀이하는 셈이다. 그날 걸은 것은 사실이므로 기록은 지우지
+          않고, **그릴 수 없는 모양일 때만 지도를 접는다.**
+        */}
+        {isWalkablePath(record.path) ? (
+          <View style={styles.map}>
+            <RouteMap path={record.path} height={260} tint={tint} />
+          </View>
+        ) : (
+          <Text style={styles.noMap}>이 날의 경로는 다시 그릴 수 없어요.</Text>
+        )}
 
         {/* 그날의 사실들. 숫자 하나가 주인공이고 나머지는 곁에 붙는다. */}
         <View style={styles.meta}>
@@ -161,6 +174,8 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     date: { ...type.caption, color: colors.inkFaint },
     title: { ...type.title, color: colors.ink, marginTop: spacing.xs },
     map: { marginTop: spacing.lg },
+    /** 지도를 접었을 때의 한 줄. 사과가 아니라 사실이라 가장 옅게 둔다. */
+    noMap: { ...type.caption, color: colors.inkFaint, marginTop: spacing.lg },
     meta: { flexDirection: 'row', alignItems: 'flex-end', marginTop: spacing.lg },
     numeral: { ...type.numeral, fontSize: 44, lineHeight: 52, color: colors.ink },
     unit: {
