@@ -231,6 +231,23 @@ function Home() {
           <Text style={styles.sub}>{promiseLine(weather)}</Text>
         </View>
 
+        {/*
+          추신. 편지의 인사말 바로 아래, 입력칸들 위에 둔다.
+
+          처음 켠 사람은 스크롤을 내리며 이 앱이 무엇인지 읽게 되고, 읽고 나면
+          바로 아래에 입력칸이 기다린다. 매일 쓰는 사람은 빠르게 스크롤해 지나간다.
+          헤어라인으로 위와 나누고, 아래와도 나눈다 — 추신은 인사말도 입력칸도 아닌
+          별도의 단락이다.
+        */}
+        <View style={styles.postscript}>
+          <Text style={styles.postscriptLabel}>추신</Text>
+          {postscriptLines().map((line) => (
+            <Text key={line} style={styles.postscriptLine}>
+              {line}
+            </Text>
+          ))}
+        </View>
+
         <Text style={styles.label}>어디로 가세요?</Text>
         {trip.destination != null ? (
           <Pressable
@@ -379,21 +396,6 @@ function Home() {
           onChangeText={(companion) => update({ companion })}
         />
 
-        {/*
-          추신. 편지의 끝에 붙는 한 단락 — 이 앱이 무엇인지.
-
-          스크롤을 내려야 보이고, 읽지 않아도 아무 일도 없다. 처음 켠 사람은 여기서
-          이 앱이 무엇을 하는지 알게 되고, 매일 쓰는 사람에게는 그냥 편지의 끝이다.
-          면을 칠하지 않고 헤어라인 하나로만 위와 나눈다.
-        */}
-        <View style={styles.postscript}>
-          <Text style={styles.postscriptLabel}>추신</Text>
-          {postscriptLines().map((line) => (
-            <Text key={line} style={styles.postscriptLine}>
-              {line}
-            </Text>
-          ))}
-        </View>
       </ScrollView>
 
       <View style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : screen.bottom }}>
@@ -549,14 +551,18 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     trace: { paddingVertical: spacing.md, alignItems: 'center' },
     traceText: { ...type.caption, color: colors.inkFaint },
     /**
-     * 추신. 입력칸들보다 한참 아래, 헤어라인 하나로만 나눈다.
-     * 주인공(위의 인사말과 입력칸)을 뺏지 않도록 가장 옅은 잉크로, 그러나 읽을 수 있는 크기로.
+     * 추신. 인사말 아래, 입력칸 위. 위아래 헤어라인으로 나눈다.
+     * 처음 켠 사람이 스크롤하며 읽고 나면 바로 아래 입력칸이 기다린다.
      */
     postscript: {
-      marginTop: spacing.xxl,
+      marginTop: spacing.lg,
+      marginBottom: spacing.xl,
       paddingTop: spacing.lg,
+      paddingBottom: spacing.lg,
       borderTopWidth: 1,
       borderTopColor: colors.line,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
     },
     postscriptLabel: { ...type.caption, color: colors.inkFaint },
     // 문단 사이를 넉넉히 — 천천히 스크롤하며 한 문단씩 읽는 리듬을 여백이 만든다.
