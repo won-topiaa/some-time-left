@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ARRIVE_EARLY_SEC,
+  COMFORTABLE_WALK_SEC,
   WET_ARRIVE_EARLY_SEC,
   arrivalAt,
   arriveEarlySecFor,
@@ -54,9 +55,39 @@ describe('계획 — 경계에서 무엇이라 말하는가', () => {
     expect(planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: at(91), shortestSec: walk }).kind).toBe('stretch');
   });
 
-  it('두 블록 거리(2분)에 한 시간이 남으면 4.4분에서 자른다', () => {
+  /*
+   * 예전엔 여기서 4.4분(2분의 2.2배)에서 잘랐다. 한 시간이 비었는데 4분을 걷고
+   * 나머지 50여 분을 서 있으라는 뜻이라, 자투리 시간을 걷기로 채우자는 앱이
+   * 스스로를 부정하고 있었다. 이제 가까운 목적지는 절대 상한까지 늘어난다.
+   */
+  it('두 블록 거리(2분)에 한 시간이 남으면 배율이 아니라 절대 상한까지 늘린다', () => {
     const plan = planWalk({ earlySec: ARRIVE_EARLY_SEC, nowMs: now, arriveAtMs: 60 * MIN * 1000, shortestSec: 120 });
-    expect(plan).toMatchObject({ kind: 'stretch', capped: true, targetWalkSec: 264 });
+    expect(plan).toMatchObject({
+      kind: 'stretch',
+      // 55분(약속 앞 5분을 뺀 예산)은 산책이 아니라 일정이다. 40분에서 자르고
+      // 나머지는 '늦게 나서기'가 받는다.
+      capped: true,
+      targetWalkSec: COMFORTABLE_WALK_SEC,
+    });
+    expect(plan.kind === 'stretch' && plan.targetWalkSec).toBeGreaterThan(264);
+  });
+
+  /*
+   * 상도동에서 실기기로 나온 그 장면이다. 약속까지 37분, 최단 7분.
+   * 예전 상한(15.4분)은 32분을 손에 쥐고도 16분을 서 있으라고 답했다.
+   */
+  it('37분이 남은 7분 거리는 서 있으라고 하지 않고 예산을 다 걷는다', () => {
+    const plan = planWalk({
+      earlySec: ARRIVE_EARLY_SEC,
+      nowMs: now,
+      arriveAtMs: now + 37 * MIN * 1000,
+      shortestSec: 7 * MIN,
+    });
+    expect(plan.kind).toBe('stretch');
+    if (plan.kind !== 'stretch') return;
+    // 예산(37분 − 약속 앞 5분)을 그대로 걷는다. 잘리지 않았으므로 지금 나서면 된다.
+    expect(plan.capped).toBe(false);
+    expect(plan.targetWalkSec).toBe(32 * MIN);
   });
 
   it('약속이 이미 지났으면 too-late', () => {

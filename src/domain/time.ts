@@ -97,6 +97,23 @@ export const PROMISE_FLOOR_SEC = 3 * 60;
  */
 export const MAX_STRETCH_RATIO = 2.2;
 
+/**
+ * 사람이 기분 좋게 걷는 산책의 상한 (초).
+ *
+ * **배율만으로는 가까운 목적지를 감당하지 못한다.** 상도동에서 실제로 이렇게 나왔다 —
+ * 약속까지 37분이 남았는데 최단이 7분이라, 2.2배 상한이 15분에서 잘라 버리고
+ * 화면은 "오후 1시에 나서면 딱 맞아요 · 16분 뒤"라고 답했다. 자투리 시간을 걷기로
+ * 채우자는 앱이 32분을 손에 쥐고도 16분을 서 있으라고 한 것이다.
+ *
+ * 배율은 긴 길에는 맞지만 짧은 길에서는 상한이 같이 짧아진다는 게 문제였다.
+ * 그래서 둘 중 **큰 쪽**을 쓴다. 짧은 목적지는 이 절대값까지 늘어나고(7분 → 최대
+ * 40분), 이미 먼 목적지는 예전 배율 그대로다(20분 → 44분). 어느 쪽도 줄지 않는다.
+ *
+ * 40분인 이유는 위 주석이 정한 타겟의 위쪽 끝이다. 그보다 길어지면 자투리 시간이
+ * 아니라 일정이 되고, 그때는 늘리는 대신 늦게 나서라고 말하는 편이 맞다.
+ */
+export const COMFORTABLE_WALK_SEC = 40 * 60;
+
 /** 이 정도 여유로는 우회할 게 없다. 그냥 곧장 가는 게 낫다. */
 export const STRAIGHT_TOLERANCE_SEC = 90;
 
@@ -177,7 +194,16 @@ export function planWalk({ nowMs, arriveAtMs, shortestSec, earlySec }: PlanInput
     return { kind: 'straight', reason: 'no-slack', targetWalkSec: shortestSec, earlySec };
   }
 
-  const maxWalkSec = Math.round(shortestSec * MAX_STRETCH_RATIO);
+  /*
+   * 상한은 배율과 절대값 중 큰 쪽이다.
+   *
+   * 최단이 0이면(출발지가 곧 목적지) 늘릴 길 자체가 없으므로 절대값을 적용하지
+   * 않는다. 없는 구간을 40분짜리로 부풀리면 도로망이 만들 수 없는 것을 주문하게 된다.
+   */
+  const maxWalkSec =
+    shortestSec > 0
+      ? Math.round(Math.max(shortestSec * MAX_STRETCH_RATIO, COMFORTABLE_WALK_SEC))
+      : 0;
   const capped = budgetSec > maxWalkSec;
 
   return {

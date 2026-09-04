@@ -342,30 +342,34 @@ function Walk() {
         어느 쪽으로 가는 중인지, 다음 골목이 어느 쪽인지가 숫자를 읽기 전에 먼저 보인다.
         타일이 안 와도 경로는 그대로 그려진다.
       */}
-      {path.length >= 2 && (
+      {path.length >= 2 ? (
         <RouteMap
           path={path}
-          height={220}
+          fill
           tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
           progress={alongRatio}
         />
+      ) : (
+        <View style={styles.spacer} />
       )}
       {path.length >= 2 && <RouteSource routeId={trip.route?.candidate.id} />}
 
-      {/* 위아래 여백으로 가운데를 잡고, 맨 아래에만 도망갈 문을 둔다. */}
-      <View style={styles.spacer} />
-
-      <View style={styles.top}>
+      <View style={styles.readout}>
         <Text style={styles.remainingLabel}>도착까지</Text>
-        <Text style={styles.remaining}>{formatDuration(remainingSec)}</Text>
         {/*
-          자리를 늘 잡아 둔다. 첫 측정이 들어올 때 이 줄이 생기면 위의 큰 숫자가
-          아래로 밀리는데, 걷는 내내 위치는 끊겼다 붙었다 한다 —
+          남은 시간과 남은 거리를 한 줄에 세운다.
+          아래로 쌓으면 줄이 하나 늘고, 그만큼 지도가 줄어든다.
+
+          거리 자리는 늘 잡아 둔다. 첫 측정이 들어올 때 이 글자가 생기면 옆의 큰
+          숫자가 밀리는데, 걷는 내내 위치는 끊겼다 붙었다 한다 —
           가장 조용해야 할 화면이 그때마다 들썩이면 안 된다.
         */}
-        <Text style={styles.distance}>
-          {remainingM != null ? `${Math.round(remainingM)}m 남았어요` : ' '}
-        </Text>
+        <View style={styles.numberRow}>
+          <Text style={styles.remaining}>{formatDuration(remainingSec)}</Text>
+          <Text style={styles.distance}>
+            {remainingM != null ? `${Math.round(remainingM)}m 남았어요` : ' '}
+          </Text>
+        </View>
       </View>
 
       {blind ? (
@@ -412,8 +416,6 @@ function Walk() {
         })}
       </Text>
 
-      <View style={styles.spacer} />
-
       {/*
         도착 판정은 GPS 하나에 걸려 있다. 실내로 들어갔거나 위치가 흔들리면
         영영 안 잡히고, 그러면 도착 화면도 기록도 없다 — 직접 열 문을 하나 둔다.
@@ -455,20 +457,34 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       paddingHorizontal: spacing.lg,
     },
     spacer: { flex: 1 },
-    top: { alignItems: 'center', marginBottom: spacing.xl },
+    /*
+      읽을거리는 제 높이만 쓰고 나머지는 지도에 넘긴다.
+
+      예전엔 위아래 flex 여백 두 개가 남은 높이를 반씩 나눠 가져서, 220px짜리
+      지도가 화면의 4분의 1도 안 됐다 — 따라 걸으라고 만든 그림이 가장 작았다.
+    */
+    readout: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.md },
     remainingLabel: { ...type.caption, color: colors.inkSoft },
+    numberRow: { flexDirection: 'row', alignItems: 'flex-end' },
     // 굵기를 빼고 크기로만. 굵은 숫자는 재촉처럼 읽힌다.
-    remaining: { ...type.numeral, color: colors.ink },
+    // 56은 이 화면에서 너무 컸다 — 지도에 자리를 내주고도 흘깃 읽히는 크기로.
+    remaining: { ...type.numeral, fontSize: 40, lineHeight: 46, color: colors.ink },
     // 걸으면서 흘깃 보는 화면이다. 여기서는 작게 만들지 않는다.
-    distance: { ...type.body, color: colors.inkSoft, marginTop: spacing.xs },
+    distance: {
+      ...type.body,
+      color: colors.inkSoft,
+      marginLeft: spacing.sm,
+      // 큰 숫자의 밑선에 맞춰 앉힌다.
+      marginBottom: spacing.xs,
+    },
     // 안내가 한 줄이든 두 줄이든 높이가 같아야 위의 큰 숫자가 움직이지 않는다.
     advice: {
       borderRadius: radius.lg,
-      paddingVertical: spacing.lg,
+      paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 96,
+      minHeight: 68,
     },
     adviceText: { ...type.title, color: colors.ink },
     adviceSub: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
@@ -480,16 +496,16 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       ...type.caption,
       color: colors.inkSoft,
       textAlign: 'center',
-      marginTop: spacing.md,
+      marginTop: spacing.sm,
     },
     footnote: {
       ...type.caption,
       color: colors.inkFaint,
       textAlign: 'center',
-      marginTop: spacing.lg,
+      marginTop: spacing.sm,
     },
     // 도망갈 문. 재촉하지 않도록 가장 옅게, 그러나 눌린다는 건 보이게.
-    manual: { paddingVertical: spacing.md, alignItems: 'center' },
+    manual: { paddingVertical: spacing.sm, marginTop: spacing.xs, alignItems: 'center' },
     manualText: { ...type.body, color: colors.inkSoft, textDecorationLine: 'underline' },
     pressed: { opacity: 0.6 },
   });

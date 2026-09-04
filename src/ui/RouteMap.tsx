@@ -27,6 +27,14 @@ import type { LatLng } from '../domain/types';
 export function RouteMap(props: {
   path: LatLng[];
   height?: number;
+  /**
+   * 남은 높이를 다 쓴다. 걷는 화면처럼 **지도가 주인공**일 때.
+   *
+   * 벡터판만 이걸 지킨다. 래스터판은 타일을 깔 자리를 높이 숫자에서 직접 계산해서
+   * 늘어나는 상자를 받을 수 없다 — 지금 출하되는 건 벡터판이라(`kind: 'vector'`)
+   * 래스터에 측정 로직을 새로 넣지 않고, 그쪽은 고정 높이로 둔다.
+   */
+  fill?: boolean;
   tint?: string;
   /** 지금까지 온 만큼 (0~1). 주면 걸어온 길이 흐려지고 지금 자리에 점이 찍힌다. */
   progress?: number;
@@ -47,5 +55,6 @@ export function RouteMap(props: {
   if (mapTiles.kind === 'vector') {
     return <RouteMapVector {...props} />;
   }
-  return <RouteMapRaster {...props} />;
+  const { fill, ...raster } = props;
+  return <RouteMapRaster {...raster} />;
 }

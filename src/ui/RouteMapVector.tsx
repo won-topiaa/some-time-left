@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import WebView from '@granite-js/native/react-native-webview';
 import { getApiConfig } from '../config';
 import { splitPath } from '../domain/geo';
+import { arrowMetrics, arrowPolygon, routeArrows, type RouteArrow } from '../domain/route-arrows';
 import { MAPLIBRE_CSS, MAPLIBRE_JS, MAPLIBRE_LICENSE } from './vendor/maplibre';
 import { type Palette, type Scheme, type TypeScale, useStyles, useTheme } from './useTheme';
 import type { LatLng } from '../domain/types';
@@ -25,11 +26,14 @@ import type { LatLng } from '../domain/types';
 export function RouteMapVector({
   path,
   height = 220,
+  fill: fillBox = false,
   tint,
   progress,
 }: {
   path: LatLng[];
   height?: number;
+  /** 남은 높이를 다 쓴다. 걷는 화면에서 지도를 주인공으로 둘 때. */
+  fill?: boolean;
   /** 기분 색. 없으면 테마의 잉크색으로 그린다. */
   tint?: string;
   progress?: number;
@@ -84,7 +88,7 @@ export function RouteMapVector({
   };
 
   return (
-    <View style={[styles.box, { height }]}>
+    <View style={[styles.box, fillBox ? styles.fillBox : { height }]}>
       <WebView
         ref={webView}
         source={{ html }}
@@ -115,6 +119,21 @@ function lineString(points: LatLng[]): string {
   });
 }
 
+/** 화살표들. 링을 닫는 일은 `arrowPolygon`이 이미 했다. */
+function arrowsJson(arrows: RouteArrow[], sizeM: number): string {
+  return JSON.stringify({
+    type: 'FeatureCollection',
+    features: arrows.map((arrow) => ({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        coordinates: [arrowPolygon(arrow, sizeM).map((p) => [p.lng, p.lat])],
+      },
+    })),
+  });
+}
+
 function point(at: LatLng): string {
   return JSON.stringify({
     type: 'Feature',
@@ -134,8 +153,13 @@ function progressScript(path: LatLng[], progress: number): string {
   if (split == null) {
     return 'true;';
   }
+  // 자리는 길에 박혀 있고, 지나친 것만 사라진다. 남은 구간에 새로 배치하면
+  // 걸음마다 화살표가 재배치되어 지도가 들썩인다.
+  const { spacingM, sizeM } = arrowMetrics(path);
+  const ahead = routeArrows(path, spacingM).filter((a) => a.alongRatio > progress);
   return `window.__setProgress && window.__setProgress(
-    ${lineString(split.walked)}, ${lineString(split.ahead)}, ${point(split.at)}
+    ${lineString(split.walked)}, ${lineString(split.ahead)}, ${point(split.at)},
+    ${arrowsJson(ahead, sizeM)}
   ); true;`;
 }
 
@@ -153,6 +177,9 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
 
   const start = path[0];
   const end = path[path.length - 1];
+  // 아직 한 걸음도 안 걸었으므로 처음엔 전부 '남은' 화살표다.
+  const { spacingM, sizeM } = arrowMetrics(path);
+  const allArrows = arrowsJson(routeArrows(path, spacingM), sizeM);
 
   return `<!doctype html>
 <html>
@@ -183,7 +210,6 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
 <script>
 (function () {
   var TINT = ${JSON.stringify(tint)};
-  var GHOST = ${JSON.stringify(colors.inkGhost)};
   var PAPER = ${JSON.stringify(colors.surface)};
   var FAINT = ${JSON.stringify(colors.inkFaint)};
 
@@ -231,11 +257,19 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
     map.addSource(id, { type: 'geojson', data: data });
   }
 
-  function line(id, source, color, width, extra) {
+  function line(id, source, color, width, extra, layout) {
     if (map.getLayer(id)) { return; }
     map.addLayer({ id: id, type: 'line', source: source,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      // 점선은 'line-cap': 'round'와 같이 못 쓴다 — 둥근 끝이 칸을 메워
+      // 점선이 실선으로 보인다. 그래서 레이아웃을 열어 둔다.
+      layout: Object.assign({ 'line-cap': 'round', 'line-join': 'round' }, layout || {}),
       paint: Object.assign({ 'line-color': color, 'line-width': width }, extra || {}) });
+  }
+
+  function fill(id, source, color, extra) {
+    if (map.getLayer(id)) { return; }
+    map.addLayer({ id: id, type: 'fill', source: source,
+      paint: Object.assign({ 'fill-color': color }, extra || {}) });
   }
 
   function circle(id, source, radius, fill, stroke, strokeWidth, extra) {
@@ -255,13 +289,22 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
     src('here', latest ? latest.here : start);
     src('start', start);
     src('end', end);
+    src('arrows', latest ? latest.arrows : ${allArrows});
 
     // 길 밑에 흰 테. 밑그림의 길도 흰색이라 얇은 선만 얹으면 지워진 것처럼 보인다.
     line('casing', 'whole', PAPER, 7, { 'line-opacity': 0.9 });
-    // 걸어온 길은 물러난다. 지운 게 아니라 지나온 것이므로 남겨는 둔다.
-    line('walked', 'walked', GHOST, 4);
+    /*
+     * 걸어온 길은 실선으로 남고, 남은 길은 눈금으로 간다.
+     *
+     * 예전엔 둘 다 실선이라 굵기도 같았다. 색만 다른 두 선은 걷는 중에 흘깃 보는
+     * 화면에서 구분되지 않아서, 얼마나 왔는지가 지도에 안 보였다. 이제 질감이
+     * 다르므로 색을 못 알아봐도 어디까지 왔는지 읽힌다.
+     */
+    line('walked', 'walked', FAINT, 4);
     // 남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다.
-    line('ahead', 'ahead', TINT, 4);
+    line('ahead', 'ahead', TINT, 4, { 'line-dasharray': [2, 1.6] }, { 'line-cap': 'butt' });
+    // 어느 쪽으로 걷는지. 선 위에 얹어야 보이므로 선보다 뒤에 얹는다.
+    fill('arrows', 'arrows', TINT, { 'fill-outline-color': PAPER });
 
     // 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게.
     circle('start', 'start', 5, PAPER, FAINT, 2);
@@ -285,8 +328,8 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
     map.setStyle(BLANK);
   });
 
-  window.__setProgress = function (walked, ahead, here) {
-    latest = { walked: walked, ahead: ahead, here: here };
+  window.__setProgress = function (walked, ahead, here, arrows) {
+    latest = { walked: walked, ahead: ahead, here: here, arrows: arrows };
     // 스타일이 아직이면 그냥 들고 있는다 — 'styledata'가 올 때 이 값으로 그린다.
     if (map.getLayer('here')) { draw(); }
   };
@@ -300,5 +343,7 @@ const createStyles = (colors: Palette, type: TypeScale) =>
   StyleSheet.create({
     // 지도는 면이라 이 앱에서 유일하게 칠해진 자리다. 모서리를 둥글려 종이 위에 얹는다.
     box: { overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
+    // 아래 읽을거리가 쓰고 남은 높이를 전부 가져간다.
+    fillBox: { flex: 1, overflow: 'hidden', borderRadius: 14, backgroundColor: colors.bg },
     web: { flex: 1, backgroundColor: colors.bg },
   });
