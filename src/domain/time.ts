@@ -229,7 +229,7 @@ export function arrivalAt(departAtMs: number, durationSec: number): number {
 /**
  * 지금 나서면 너무 이른 날, **언제 나서면 되는가** (epoch ms).
  *
- * 여유가 상한을 넘으면(`capped`) 앱은 최단의 2.2배까지만 길을 늘린다. 그래서
+ * 여유가 상한을 넘으면(`capped`) 앱은 거기서 길을 자른다(`maxWalkSec`). 그래서
  * 87분 남았는데 44분짜리 길을 주고 "넉넉히 걸어볼까요"라고 말하는 날이 생긴다 —
  * 그건 대답이 아니라 회피다. 사용자가 정말 알고 싶은 건 **몇 시에 나서면 되는지**다.
  *

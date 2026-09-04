@@ -50,12 +50,28 @@ export function RouteMapVector({
    * 진행 상황은 아래에서 `injectJavaScript`로 밀어 넣는다 — 지도는 그대로 두고
    * 선 두 개만 갈아 끼우는 것이라 훨씬 가볍다.
    */
-  const html = useMemo(() => mapHtml(path, stroke, colors, scheme), [path, stroke, colors, scheme]);
+  /*
+   * 화살표는 **경로당 한 번만** 잰다.
+   *
+   * 자리와 크기는 경로에서만 나오는데 진행률과 함께 묶어 두면 위치가 들어올 때마다
+   * (3초·5m) 경로 전체를 다시 훑고 삼각형을 다시 만든다. Hermes에는 JIT이 없어서
+   * 그 반복이 그대로 값이 된다 — 걷는 내내, 화면이 켜져 있는 채로.
+   * 여기서 재 두고 아래에서는 지나친 것만 걷어낸다.
+   */
+  const arrows = useMemo(() => {
+    const { spacingM, sizeM } = arrowMetrics(path);
+    return { all: routeArrows(path, spacingM), sizeM };
+  }, [path]);
 
-  const update = useMemo(() => (progress == null ? null : progressScript(path, progress)), [
-    path,
-    progress,
-  ]);
+  const html = useMemo(
+    () => mapHtml(path, stroke, colors, scheme, arrows),
+    [path, stroke, colors, scheme, arrows]
+  );
+
+  const update = useMemo(
+    () => (progress == null ? null : progressScript(path, progress, arrows)),
+    [path, progress, arrows]
+  );
 
   /*
    * 렌더 중에 밀어 넣으면 안 된다.
@@ -148,22 +164,33 @@ function point(at: LatLng): string {
  * 끝에 `true;`를 붙이는 건 iOS 규칙이다 — `injectJavaScript`가 돌려주는 값이
  * 문자열이 아니면 경고가 뜬다.
  */
-function progressScript(path: LatLng[], progress: number): string {
+function progressScript(path: LatLng[], progress: number, arrows: Arrows): string {
   const split = splitPath(path, progress);
   if (split == null) {
     return 'true;';
   }
-  // 자리는 길에 박혀 있고, 지나친 것만 사라진다. 남은 구간에 새로 배치하면
+  // 자리는 길에 박혀 있고 지나친 것만 사라진다. 남은 구간에 새로 배치하면
   // 걸음마다 화살표가 재배치되어 지도가 들썩인다.
-  const { spacingM, sizeM } = arrowMetrics(path);
-  const ahead = routeArrows(path, spacingM).filter((a) => a.alongRatio > progress);
+  const ahead = arrows.all.filter((a) => a.alongRatio > progress);
   return `window.__setProgress && window.__setProgress(
     ${lineString(split.walked)}, ${lineString(split.ahead)}, ${point(split.at)},
-    ${arrowsJson(ahead, sizeM)}
+    ${arrowsJson(ahead, arrows.sizeM)}
   ); true;`;
 }
 
-function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme): string {
+/** 경로당 한 번 재 두는 화살표. 자리와 크기는 진행률과 무관하다. */
+interface Arrows {
+  all: RouteArrow[];
+  sizeM: number;
+}
+
+function mapHtml(
+  path: LatLng[],
+  tint: string,
+  colors: Palette,
+  scheme: Scheme,
+  arrows: Arrows
+): string {
   const { mapTiles } = getApiConfig();
   const bounds = path.reduce(
     (box, p) => ({
@@ -178,8 +205,7 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
   const start = path[0];
   const end = path[path.length - 1];
   // 아직 한 걸음도 안 걸었으므로 처음엔 전부 '남은' 화살표다.
-  const { spacingM, sizeM } = arrowMetrics(path);
-  const allArrows = arrowsJson(routeArrows(path, spacingM), sizeM);
+  const allArrows = arrowsJson(arrows.all, arrows.sizeM);
 
   return `<!doctype html>
 <html>
@@ -227,6 +253,9 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
     { id: 'paper', type: 'background', paint: { 'background-color': ${JSON.stringify(colors.bg)} } }
   ] };
 
+  var BOUNDS = [[${bounds.west}, ${bounds.south}], [${bounds.east}, ${bounds.north}]];
+  var FIT = { padding: 24, animate: false };
+
   var map = new maplibregl.Map({
     container: 'map',
     /*
@@ -240,8 +269,23 @@ function mapHtml(path: LatLng[], tint: string, colors: Palette, scheme: Scheme):
     // 손대지 못하게 둔다. 두 화면 모두 스크롤 안에 있어서 끌기가 겹친다.
     interactive: false,
     attributionControl: { compact: false },
-    bounds: [[${bounds.west}, ${bounds.south}], [${bounds.east}, ${bounds.north}]],
-    fitBoundsOptions: { padding: 24, animate: false }
+    bounds: BOUNDS,
+    fitBoundsOptions: FIT
+  });
+
+  /*
+   * 상자가 커지거나 줄면 경계를 **다시** 맞춘다.
+   *
+   * 지도는 처음 한 번만 경로에 맞춰 놓이고, 그 뒤에 컨테이너 크기가 바뀌면 중심과
+   * 배율만 지킨 채 다시 맞추지 않는다 — 경로가 한쪽으로 밀리거나 화면 밖으로 나간다.
+   *
+   * 걷는 화면에서 지도는 남은 높이를 전부 가져가므로, 아래 안내 카드가 한 줄에서
+   * 두 줄로 바뀌기만 해도 이 상자의 높이가 달라진다. 카드 쪽에서도 높이를 붙들어
+   * 두었지만(minHeight 88), 시스템 글꼴을 키우면 그 약속이 깨진다.
+   * 크기가 변하는 모든 경우를 여기서 한 번에 받는다.
+   */
+  window.addEventListener('resize', function () {
+    map.fitBounds(BOUNDS, FIT);
   });
 
   var whole = ${lineString(path)};

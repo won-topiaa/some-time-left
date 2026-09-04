@@ -18,6 +18,22 @@ import type { LatLng } from './types';
 
 const DEG = Math.PI / 180;
 
+/**
+ * 아무리 많아도 이만큼까지만 놓는다.
+ *
+ * 간격은 **경계 상자** 기준이라 화면상의 크기는 일정하지만, 길이는 상자와 상관없이
+ * 길어질 수 있다 — 좁은 동네 안에서 이리저리 꺾어 늘린 경로가 그렇다. 실측으로
+ * 133m짜리 상자 안의 40km 경로에서 화살표가 1,873개 나왔고, GeoJSON으로 만들면
+ * 470KB다. 그 문자열이 위치가 들어올 때마다(3초·5m) 웹뷰로 주입된다.
+ *
+ * 자투리 시간을 걷게 하려고 늘리는 상한을 40분까지 올린 뒤로 경로는 더 길고 더
+ * 굽어졌다. 늘리는 쪽을 열어 둔 만큼 이쪽에는 천장을 둔다.
+ *
+ * 40개면 굽은 길에서도 갈림길마다 하나씩은 놓인다. 그때 GeoJSON은 11.2KB다(실측) —
+ * 앞의 470KB와 견주면 자릿수가 다르고, 이 숫자가 천장을 다시 정할 때의 기준이다.
+ */
+const MAX_ARROWS = 40;
+
 export interface RouteArrow {
   /** 화살표가 놓이는 자리 */
   at: LatLng;
@@ -43,12 +59,21 @@ export function routeArrows(path: LatLng[], spacingM: number): RouteArrow[] {
     return [];
   }
 
+  /*
+   * 개수가 천장을 넘으면 간격을 벌린다.
+   *
+   * 보통 경로에서는 이 줄이 아무 일도 안 한다 — 1km짜리 길의 간격은 160m쯤인데
+   * 천장이 요구하는 최소 간격은 27m라 원래 값이 그대로 이긴다. 상자에 비해 길이
+   * 유난히 긴 경로에서만 걸린다.
+   */
+  const step = Math.max(spacingM, totalM / MAX_ARROWS);
+
   const arrows: RouteArrow[] = [];
   /*
    * 첫 화살표를 반 칸 띄워 놓는다. 0에서 시작하면 출발점 위에 겹쳐 앉아
    * 비어 있어야 할 출발 표시를 가린다.
    */
-  let next = spacingM / 2;
+  let next = step / 2;
   let travelled = 0;
 
   for (let i = 1; i < path.length; i += 1) {
@@ -66,7 +91,7 @@ export function routeArrows(path: LatLng[], spacingM: number): RouteArrow[] {
         headingDeg: bearingDeg(from, to),
         alongRatio: next / totalM,
       });
-      next += spacingM;
+      next += step;
     }
     travelled += legM;
   }

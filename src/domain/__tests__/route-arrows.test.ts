@@ -136,3 +136,63 @@ describe('arrowMetrics', () => {
     expect(arrowMetrics([walkPath[0], walkPath[0]])).toEqual({ spacingM: 0, sizeM: 0 });
   });
 });
+
+/**
+ * 화살표 개수는 천장이 있어야 한다.
+ *
+ * 간격은 경계 상자 기준이라 화면상의 크기는 일정한데, 길이는 상자와 상관없이
+ * 길어질 수 있다 — 좁은 동네 안에서 이리저리 꺾어 늘린 경로가 그렇다. 그 GeoJSON은
+ * 위치가 들어올 때마다(3초·5m) 웹뷰로 주입되므로 개수가 곧 값이다.
+ */
+describe('개수 천장', () => {
+  /** 100m 남짓한 상자 안에서 왕복하는 아주 긴 길. */
+  const zigzag: LatLng[] = [];
+  for (let i = 0; i < 400; i += 1) {
+    zigzag.push({ lat: 37.5 + (i % 2) * 0.0009, lng: 127 + i * 0.0000025 });
+  }
+
+  it('상자에 비해 길이 유난히 길어도 개수가 폭발하지 않는다', () => {
+    // 고치기 전 실측: 같은 입력에서 1,873개 · GeoJSON 470KB.
+    expect(pathLengthM(zigzag)).toBeGreaterThan(30_000);
+    const arrows = routeArrows(zigzag, arrowMetrics(zigzag).spacingM);
+    expect(arrows.length).toBeLessThanOrEqual(40);
+    expect(arrows.length).toBeGreaterThan(0);
+  });
+
+  it('간격을 아무리 잘게 줘도 마찬가지다', () => {
+    // 이 길에 1cm 간격이면 천장 없이는 399만 개다(길이 39,930m ÷ 0.01).
+    expect(routeArrows(zigzag, 0.01).length).toBeLessThanOrEqual(40);
+  });
+
+  /*
+   * 천장이 **보통 경로의 간격까지 건드리면** 안 된다. 화면상의 크기를 일정하게
+   * 지켜 주는 게 경계 상자 기준 간격인데, 천장이 그걸 덮어쓰면 멀쩡한 길에서
+   * 화살표가 성겨진다. 그래서 개수가 아니라 **간격 자체**를 재서 확인한다.
+   */
+  it('보통 경로에서는 천장이 간격을 건드리지 않는다', () => {
+    const { spacingM } = arrowMetrics(walkPath);
+    const totalM = pathLengthM(walkPath);
+    // 이 길의 간격은 178m, 천장이 요구하는 최소는 27.9m — 원래 값이 이긴다.
+    expect(spacingM).toBeGreaterThan(totalM / 40);
+
+    const arrows = routeArrows(walkPath, spacingM);
+    // 첫 화살표는 반 칸 자리, 그 뒤로는 정확히 한 칸씩. 천장이 벌렸다면 어긋난다.
+    expect(arrows[0].alongRatio * totalM).toBeCloseTo(spacingM / 2, 6);
+    for (let i = 1; i < arrows.length; i += 1) {
+      expect((arrows[i].alongRatio - arrows[i - 1].alongRatio) * totalM).toBeCloseTo(
+        spacingM,
+        6
+      );
+    }
+    expect(arrows.length).toBeGreaterThan(1);
+  });
+
+  it('alongRatio는 천장에 걸려도 순서를 지킨다', () => {
+    let previous = 0;
+    for (const arrow of routeArrows(zigzag, 0.01)) {
+      expect(arrow.alongRatio).toBeGreaterThan(previous);
+      expect(arrow.alongRatio).toBeLessThanOrEqual(1);
+      previous = arrow.alongRatio;
+    }
+  });
+});

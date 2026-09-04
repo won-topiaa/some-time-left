@@ -417,6 +417,15 @@ function Walk() {
       </Text>
 
       {/*
+        지도가 없는 날은 아래쪽 여백이 하나 더 필요하다.
+
+        지도가 있을 때는 지도가 남은 높이를 다 가져가지만, 없을 때는 위 여백
+        하나만 남아 읽을거리가 통째로 화면 바닥에 붙는다. 예전엔 여백이 위아래로
+        하나씩이라 가운데 잡혔다.
+      */}
+      {path.length < 2 && <View style={styles.spacer} />}
+
+      {/*
         도착 판정은 GPS 하나에 걸려 있다. 실내로 들어갔거나 위치가 흔들리면
         영영 안 잡히고, 그러면 도착 화면도 기록도 없다 — 직접 열 문을 하나 둔다.
       */}
@@ -477,14 +486,25 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       // 큰 숫자의 밑선에 맞춰 앉힌다.
       marginBottom: spacing.xs,
     },
-    // 안내가 한 줄이든 두 줄이든 높이가 같아야 위의 큰 숫자가 움직이지 않는다.
+    /*
+      안내가 한 줄이든 두 줄이든 높이가 같아야 한다.
+
+      이제 이 카드가 커지면 **지도가 그만큼 줄어든다** — 남은 높이를 지도가 다
+      가져가기 때문이다. 위치를 놓쳤다가 잡는 일은 걷는 내내 반복되는데, 그때마다
+      지도가 오르내리면 따라 걷는 그림이 가장 산만한 것이 된다.
+
+      한 줄은 30(title) + 32(위아래 여백) = 62,
+      두 줄은 30 + 4 + 19(caption) + 32 = 85. 둘 다 덮도록 88로 둔다.
+      (시스템 글꼴을 키우면 두 줄이 이보다 커질 수 있다. 그때를 위해 지도 쪽에도
+       크기가 바뀌면 경계를 다시 맞추는 길을 뒀다 — RouteMapVector의 resize.)
+    */
     advice: {
       borderRadius: radius.lg,
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 68,
+      minHeight: 88,
     },
     adviceText: { ...type.title, color: colors.ink },
     adviceSub: { ...type.caption, color: colors.inkSoft, marginTop: spacing.xs },
