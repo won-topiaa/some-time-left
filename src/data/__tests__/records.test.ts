@@ -23,6 +23,7 @@ import {
   saveRecord,
   updateRecordNote,
 } from '../records';
+import { moodById } from '../../domain/mood';
 import type { WalkRecord } from '../../domain/types';
 
 const KEY = 'stl:records:v1';
@@ -63,6 +64,49 @@ describe('records', () => {
       records: [{ id: '2' }, { id: '1' }],
       carried: { count: 0 },
     });
+  });
+
+  /**
+   * 저장소에서 온 것은 화면에 닿기 전에 걸러진다.
+   *
+   * 스키마는 이미 두 번 늘었고(destination·distanceM), 그 이전 모양이 기기에
+   * 그대로 있다. 그래서 `loadRecords`는 **모양을 모르는 값**을 읽는 함수다.
+   * 여기서 안 거르면 '지나온 길'이 렌더 중에 던져 앱 전체가 못 열리게 된다 —
+   * 거르는 자리가 `record-schema.ts`고, 그 자리로 가는 길이 여기다.
+   */
+  it('저장소가 상한 줄을 내놔도 목록은 화면에 올릴 수 있는 모양으로 온다', async () => {
+    memory.set(
+      KEY,
+      JSON.stringify({
+        records: [
+          record(3),
+          null,
+          { arrivedAt: 2, mood: 'furious' },
+          { note: '시각이 없어 버려진다' },
+        ],
+        carried: { count: 2, distanceM: NaN, noteCount: 1 },
+      })
+    );
+
+    const loaded = await loadRecords();
+    // 시각 없는 두 줄(null, note만 있는 것)만 빠진다. 나머지는 지킨다.
+    expect(loaded).toHaveLength(2);
+    for (const item of loaded) {
+      expect(Number.isFinite(item.arrivedAt)).toBe(true);
+      expect(typeof item.note).toBe('string');
+      expect(Array.isArray(item.path)).toBe(true);
+      expect(() => moodById(item.mood)).not.toThrow();
+    }
+    // 상한 칸만 0이 되고 나머지 누적은 살아남는다.
+    expect(await loadCarried()).toEqual({ count: 2, distanceM: 0, noteCount: 1 });
+  });
+
+  it('상한 줄이 섞여 있어도 새 기록을 저장할 수 있다', async () => {
+    // 저장은 엄격하게 읽고 밀려난 것을 합으로 옮긴다. 그 길에 상한 줄이 있으면
+    // 예전엔 통째로 던져서 **그날 걸은 것이 조용히 사라졌다.**
+    memory.set(KEY, JSON.stringify({ records: [null, { arrivedAt: 1 }], carried: null }));
+    await expect(saveRecord(record(9))).resolves.toBeUndefined();
+    expect((await loadRecords())[0].id).toBe('9');
   });
 
   it('최신이 앞에 온다', async () => {

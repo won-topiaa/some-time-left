@@ -303,6 +303,24 @@ function assertWalkable(parsed: ParsedRoute, what: string): void {
       `${what} 경로가 걸을 수 있는 모양이 아니에요 (${sanity.reason})`
     );
   }
+
+  /*
+   * 좌표만큼 숫자도 본다.
+   *
+   * 관문이 모양만 재고 있었다. 그런데 `durationSec`·`distanceM`은 응답에서
+   * 그대로 꺼낸 값이라 타입 선언이 약속해 줄 뿐 아무도 확인하지 않는다 —
+   * 필드가 빠진 응답이면 `Math.round(undefined)`가 NaN이 되어 넘어온다.
+   *
+   * 그 NaN은 여기서 안 막으면 `planWalk`의 기준점이 된다. 시간 예산 전체가
+   * 거기서 나오므로 화면의 모든 숫자가 한꺼번에 NaN이 되고, "3분 전"이라는
+   * 이 앱의 유일한 약속이 "NaN분 전"으로 나온다. 모양이 멀쩡한 좌표를
+   * 받았다는 이유로 그 상태를 통과시킬 이유가 없다.
+   *
+   * 0초짜리 경로도 막는다. 걷는 시간이 0인 길은 목표에 맞출 자가 없다.
+   */
+  if (!(parsed.durationSec > 0) || !Number.isFinite(parsed.distanceM)) {
+    throw new Error(`${what} 경로의 시간·거리를 제대로 받지 못했어요`);
+  }
 }
 
 function closestTo(candidates: RouteCandidate[], targetSec: number): RouteCandidate | null {

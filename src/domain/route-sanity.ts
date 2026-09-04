@@ -88,7 +88,11 @@ const COLLINEAR_TOLERANCE_M = 0.001;
  */
 const MIN_TESTABLE = 2;
 
-export type RouteRejection = 'too-few-points' | 'zero-length' | 'drawn-not-routed';
+export type RouteRejection =
+  | 'too-few-points'
+  | 'zero-length'
+  | 'not-a-place'
+  | 'drawn-not-routed';
 
 export interface RouteSanity {
   ok: boolean;
@@ -102,6 +106,24 @@ export interface RouteSanity {
 }
 
 const METERS_PER_DEG = 111320;
+
+/**
+ * 지구 위의 한 점인가.
+ *
+ * 유한한 숫자인지와 범위 안인지를 함께 본다. 위도 900은 숫자라서 NaN 검사만으로는
+ * 지나가는데, 그 점이 낀 길은 누적 거리를 지구 몇 바퀴로 만들고 지도를 아무 데도
+ * 아닌 곳으로 보낸다.
+ */
+function isPlace(point: LatLng | undefined): boolean {
+  if (point == null) {
+    return false;
+  }
+  const { lat, lng } = point;
+  return (
+    Number.isFinite(lat) && Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+  );
+}
 
 /**
  * `b`가 `a`와 `c`를 잇는 직선에서 옆으로 얼마나 벗어났나 (m).
@@ -131,6 +153,29 @@ function lateralOffsetM(a: LatLng, b: LatLng, c: LatLng): number {
 export function inspectPath(path: LatLng[]): RouteSanity {
   if (path.length < MIN_POINTS) {
     return { ok: false, reason: 'too-few-points', testable: 0, collinear: 0, lengthM: 0 };
+  }
+
+  /*
+   * 좌표가 **숫자이긴 한지** 먼저 본다. 아래 검사들보다 앞에 와야 한다.
+   *
+   * 이 관문은 NaN 앞에서 통째로 열려 있었다. NaN이 낀 비교는 무엇이든 거짓이라
+   * 세 겹이 한꺼번에 무너진다 —
+   *
+   *   `pathLengthM`은 NaN을 내놓는데 `NaN <= 0`이 거짓이라 길이 검사를 지나고,
+   *   `distanceM(...) < TESTABLE_LEG_M`이 거짓이라 짧은 구간 건너뛰기가 안 먹고,
+   *   `lateralOffsetM(...) < 0.001`도 거짓이라 공선으로 세지 않는다.
+   *
+   * 그래서 좌표가 전부 undefined인 배열이 '걸을 수 있는 길'로 통과했다(실측).
+   * 같은 이유로 OSRM 쪽의 스냅 거리 검사(`distanceM(...) > MAX_SNAP_M`)도 지난다.
+   * 지어낸 길을 막자고 세운 관문이 **가장 망가진 입력에만 열리는** 셈이었다.
+   *
+   * 숫자가 아닌 것은 의심스러운 게 아니라 확실히 길이 아니다. 여기서는
+   * "의심스러우면 통과"를 적용하지 않는다.
+   */
+  for (const point of path) {
+    if (!isPlace(point)) {
+      return { ok: false, reason: 'not-a-place', testable: 0, collinear: 0, lengthM: 0 };
+    }
   }
 
   const lengthM = pathLengthM(path);

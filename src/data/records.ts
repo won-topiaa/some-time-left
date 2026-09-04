@@ -7,6 +7,7 @@
 
 import { Storage } from '@apps-in-toss/framework';
 import { compactPath, pathLengthM } from '../domain/geo';
+import { sanitizeCarried, sanitizeRecords } from './record-schema';
 import { NO_CARRIED, addToCarried, type CarriedTotals } from '../domain/trace';
 import type { LatLng, WalkRecord } from '../domain/types';
 
@@ -47,18 +48,22 @@ interface RecordStore {
 
 const EMPTY_STORE: RecordStore = { records: [], carried: NO_CARRIED };
 
-/** 예전 형태(배열만)도 읽을 수 있게 한다. */
+/**
+ * 예전 형태(배열만)도 읽을 수 있게 한다.
+ *
+ * **저장소에서 오는 모든 값은 여기 한 곳을 지난다.** 그래서 검사도 여기서 한 번만
+ * 한다 — `sanitizeRecords`를 지난 뒤로는 화면도 도메인도 모양을 믿어도 된다.
+ * 왜 믿으면 안 되는 값이 들어오는지는 `record-schema.ts` 첫머리에 적어 뒀다.
+ */
 function toStore(raw: unknown): RecordStore {
   if (Array.isArray(raw)) {
-    return { records: raw as WalkRecord[], carried: NO_CARRIED };
+    return { records: sanitizeRecords(raw), carried: NO_CARRIED };
   }
   if (raw != null && typeof raw === 'object') {
     const value = raw as Partial<RecordStore>;
-    const carried = value.carried;
     return {
-      records: Array.isArray(value.records) ? value.records : [],
-      carried:
-        carried != null && typeof carried.count === 'number' ? carried : NO_CARRIED,
+      records: sanitizeRecords(value.records),
+      carried: sanitizeCarried(value.carried),
     };
   }
   return EMPTY_STORE;

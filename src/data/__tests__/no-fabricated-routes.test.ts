@@ -92,13 +92,17 @@ describe('가짜 좌표는 출하 경로에 없다', () => {
 });
 
 /** 도로망이 삼각형을 돌려줬다고 치고 공급자가 무엇을 하는지 본다. */
-function providerReturning(path: LatLng[]): RoadRouteProvider {
+function providerReturning(
+  path: LatLng[],
+  patch: Partial<ParsedRoute> = {}
+): RoadRouteProvider {
   const parsed: ParsedRoute = {
     path,
     distanceM: 1800,
     durationSec: 1440,
     crossings: null,
     stairs: null,
+    ...patch,
   };
   return new RoadRouteProvider({
     fetchRoute: async () => parsed,
@@ -142,5 +146,44 @@ describe('공급자가 걸을 수 없는 좌표를 받으면', () => {
      * "0분 · 0.0km"가 화면에 남았다.
      */
     await expect(providerReturning([]).shortest(origin, destination)).rejects.toThrow();
+  });
+
+  it('좌표에 NaN이 섞이면 던진다 — 관문이 NaN 앞에서 열려 있었다', async () => {
+    /*
+     * NaN이 낀 비교는 무엇이든 거짓이라 관문의 검사가 전부 통과한다.
+     * 응답에서 숫자를 못 꺼낸 좌표가 이 길로 화면까지 갔다.
+     */
+    const broken = [
+      origin,
+      { lat: NaN, lng: NaN },
+      destination,
+    ];
+    await expect(providerReturning(broken).shortest(origin, destination)).rejects.toThrow();
+  });
+
+  it('시간이나 거리가 숫자가 아니면 던진다 — 그 NaN이 시간 예산 전체의 기준점이 된다', async () => {
+    /*
+     * 좌표는 멀쩡한데 숫자만 빠진 응답이 있다. 관문이 모양만 재고 있어서
+     * 그 NaN이 `planWalk`의 기준점이 되고, 화면의 모든 숫자가 한꺼번에 NaN이 됐다 —
+     * "3분 전"이라는 이 앱의 유일한 약속이 "NaN분 전"으로 나온다.
+     */
+    const real = [
+      origin,
+      { lat: 37.5069, lng: 126.9601 },
+      destination,
+    ];
+    await expect(
+      providerReturning(real, { durationSec: NaN }).shortest(origin, destination)
+    ).rejects.toThrow();
+    await expect(
+      providerReturning(real, { distanceM: NaN }).shortest(origin, destination)
+    ).rejects.toThrow();
+    await expect(
+      providerReturning(real, { durationSec: 0 }).shortest(origin, destination)
+    ).rejects.toThrow();
+    // 멀쩡한 숫자는 그대로 통과한다.
+    await expect(
+      providerReturning(real).shortest(origin, destination)
+    ).resolves.toMatchObject({ durationSec: 1440 });
   });
 });

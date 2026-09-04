@@ -201,3 +201,64 @@ describe('inspectPath — 그려진 것인가, 도로를 따라간 것인가', (
     }
   });
 });
+
+/**
+ * NaN 앞에서 관문이 통째로 열려 있었다.
+ *
+ * NaN이 낀 비교는 무엇이든 거짓이라, 길이 검사도 짧은 구간 건너뛰기도 공선 판정도
+ * 한꺼번에 무너진다. 좌표가 전부 undefined인 배열이 '걸을 수 있는 길'로 통과했다.
+ * 지어낸 길을 막자고 세운 관문이 가장 망가진 입력에만 열려 있으면 안 된다.
+ */
+describe('숫자가 아닌 좌표', () => {
+  it('NaN이 섞이면 통과시키지 않는다', () => {
+    const path = [
+      { lat: 37.5, lng: 127 },
+      { lat: NaN, lng: NaN },
+      { lat: 37.51, lng: 127.01 },
+    ];
+    expect(isWalkablePath(path)).toBe(false);
+    expect(inspectPath(path).reason).toBe('not-a-place');
+  });
+
+  it('좌표가 통째로 없어도 통과시키지 않는다', () => {
+    const path = [
+      { lat: undefined, lng: undefined },
+      { lat: undefined, lng: undefined },
+    ] as unknown as Array<{ lat: number; lng: number }>;
+    expect(isWalkablePath(path)).toBe(false);
+    expect(inspectPath(path).reason).toBe('not-a-place');
+  });
+
+  it('점이 null이어도 던지지 않고 거절한다', () => {
+    const path = [{ lat: 37.5, lng: 127 }, null, { lat: 37.51, lng: 127 }] as unknown as Array<{
+      lat: number;
+      lng: number;
+    }>;
+    expect(() => inspectPath(path)).not.toThrow();
+    expect(inspectPath(path).reason).toBe('not-a-place');
+  });
+
+  it('지구 밖 좌표도 거절한다 — 숫자이긴 해도 갈 수 있는 곳이 아니다', () => {
+    expect(
+      inspectPath([
+        { lat: 900, lng: 127 },
+        { lat: 37.5, lng: 127 },
+      ]).reason
+    ).toBe('not-a-place');
+    expect(
+      inspectPath([
+        { lat: 37.5, lng: 4000 },
+        { lat: 37.51, lng: 127 },
+      ]).reason
+    ).toBe('not-a-place');
+  });
+
+  it('경계값은 그대로 통과한다 — 극점과 날짜변경선은 숫자로서 멀쩡하다', () => {
+    expect(
+      inspectPath([
+        { lat: 90, lng: 180 },
+        { lat: -90, lng: -180 },
+      ]).reason
+    ).not.toBe('not-a-place');
+  });
+});
