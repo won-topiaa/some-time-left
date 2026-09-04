@@ -156,24 +156,42 @@ function Home() {
   // 첫 진입에도 한 번 읽는다 — 'focus'는 이미 보이고 있는 첫 화면에는 안 올 수 있다.
   useEffect(refreshWalked, [refreshWalked]);
 
+  /** 지금 이 화면이 보이는가. 아래 타이머가 배경에서 돌지 않게 하는 데 쓴다. */
+  const [focused, setFocused] = useState(true);
+
   /*
    * '지금'을 흘려 준다.
    *
    * 남은 시간을 선으로 그리기 시작하면서 이 값이 화면에 직접 보이게 됐다
    * ("지금 12:43"). 화면에 들어올 때만 잡으면 적는 동안 그 숫자가 멈춰 있고,
    * 선의 길이도 같이 멈춘다. 분 단위로 보여주므로 30초면 충분히 자주다.
+   *
+   * **보이는 동안만 돈다.** 이 화면은 스택 맨 아래에 계속 살아 있어서, 막아 두지
+   * 않으면 걷는 내내 배경에서 '지금'이 흐른다. 그러면 약속 시각이 지나는 순간
+   * `resolveAppointment`가 그 시각을 **내일로** 굴리고, 그 값이 아래 effect를 타고
+   * 이동에 그대로 실린다 — 도착 화면의 카운트다운이 0:00에서 719:59로 튀고,
+   * 길 찾기는 24시간짜리 여유로 다시 계획한다. 걷고 있는 사람의 약속을
+   * 첫 화면이 배경에서 바꿔 놓는 셈이다.
    */
   useEffect(() => {
+    if (!focused) {
+      return;
+    }
     const timer = setInterval(refreshNow, 30_000);
     return () => clearInterval(timer);
-  }, [refreshNow]);
+  }, [refreshNow, focused]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
+    const onFocus = navigation.addListener('focus', () => {
+      setFocused(true);
       refreshNow();
       refreshWalked();
     });
-    return unsubscribe;
+    const onBlur = navigation.addListener('blur', () => setFocused(false));
+    return () => {
+      onFocus();
+      onBlur();
+    };
   }, [navigation, refreshNow, refreshWalked]);
 
   /**
@@ -414,6 +432,12 @@ function Home() {
                 <Text style={styles.blankValue} numberOfLines={1}>
                   {trip.destinationName}
                 </Text>
+                {/*
+                  누르면 지워진다는 걸 알린다. 밑줄만 남기면서 이 칸이 적는 칸과
+                  똑같이 생기게 됐는데, 적으려고 누른 사람의 선택이 말없이
+                  사라지면 다음 버튼이 왜 죽었는지도 알 수 없다.
+                */}
+                <Text style={styles.change}>변경</Text>
               </Pressable>
             ) : (
               <View style={[styles.blank, styles.blankWide]}>
@@ -627,8 +651,10 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     /** 이름이 들어가는 칸은 남는 너비를 가져간다. */
     blankWide: { flexGrow: 1, flexShrink: 1 },
     /** 시각 두 칸. 두 자리가 들어갈 만큼만 — 넓으면 숫자가 칸 안에서 떠다닌다. */
-    blankField: { ...type.title, color: colors.ink, width: 40, paddingVertical: 2 },
+    blankField: { ...type.title, color: colors.ink, width: 44, paddingVertical: 2 },
     blankValue: { ...type.title, color: colors.ink, flex: 1, paddingVertical: 2 },
+    /** 고른 장소를 무르는 자리. 링크색으로만 알린다 — 면도 테두리도 두지 않는다. */
+    change: { ...type.caption, color: colors.accent, marginLeft: spacing.sm },
     colon: { ...type.title, color: colors.inkFaint, marginHorizontal: 2 },
     /** 조사. 문장을 잇는 말이라 값보다 한 단계 물러난다. */
     particle: {

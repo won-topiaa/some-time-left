@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canWalk, spareSpan } from '../spare-time';
+import { canWalk, isFloor, spareSpan } from '../spare-time';
 import { ARRIVE_EARLY_SEC, COMFORTABLE_WALK_SEC } from '../time';
 
 const MIN = 60;
@@ -68,5 +68,56 @@ describe('spareSpan', () => {
       expect(span.walkSec).toBeGreaterThanOrEqual(0);
       expect(span.bufferSec).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  /*
+   * 화면은 분 단위로 적는다. 초로만 따지면 5초짜리도 '걸을 수 있다'가 되어
+   * "0분을 걸을 수 있어요"가 뜬다 — 그 문장은 안 나오기로 한 문장이다.
+   */
+  it('1분도 안 되는 여유는 걸을 자리로 치지 않는다', () => {
+    // 약속 5분 10초 뒤, 맑은 날 여백 5분 → 걸을 수 있는 건 10초뿐이다.
+    const sliver = spareSpan(now, now + 310 * 1000, ARRIVE_EARLY_SEC)!;
+    expect(sliver.walkSec).toBe(10);
+    expect(canWalk(sliver)).toBe(false);
+
+    // 딱 1분부터는 걷는다.
+    const minute = spareSpan(now, now + (ARRIVE_EARLY_SEC + 60) * 1000, ARRIVE_EARLY_SEC)!;
+    expect(minute.walkSec).toBe(60);
+    expect(canWalk(minute)).toBe(true);
+  });
+
+  it('화면에 적히는 분이 0이면 걸을 자리도 없다', () => {
+    // 반올림해서 0분이 되는 구간 전체를 훑는다. 하나라도 통과하면 "0분" 문장이 뜬다.
+    for (let extra = 1; extra < 30; extra += 1) {
+      const span = spareSpan(now, now + (ARRIVE_EARLY_SEC + extra) * 1000, ARRIVE_EARLY_SEC)!;
+      if (Math.round(span.walkSec / 60) === 0) {
+        expect(canWalk(span)).toBe(false);
+      }
+    }
+  });
+});
+
+/*
+ * `planWalk`의 상한은 배율과 절대값 중 큰 쪽인데, 첫 화면은 최단 경로를 모른다.
+ * 그래서 이 그림은 정확한 예고가 아니라 아래로 잡은 값이고, 화면은 그 사실대로
+ * "N분 이상"이라고 말해야 한다.
+ */
+describe('isFloor — 더 걷게 될 수도 있는 날', () => {
+  it('상한에 걸리면 참 — 화면은 "이상"이라고 말한다', () => {
+    const span = spareSpan(now, inMinutes(6 * 60), ARRIVE_EARLY_SEC)!;
+    expect(span.waitSec).toBeGreaterThan(0);
+    expect(isFloor(span)).toBe(true);
+  });
+
+  it('예산을 다 걷는 날은 거짓 — 그때는 딱 잘라 말해도 된다', () => {
+    const span = spareSpan(now, inMinutes(37), ARRIVE_EARLY_SEC)!;
+    expect(span.waitSec).toBe(0);
+    expect(isFloor(span)).toBe(false);
+  });
+
+  it('걸을 자리가 없는 날은 "이상"도 아니다', () => {
+    const span = spareSpan(now, inMinutes(2), ARRIVE_EARLY_SEC)!;
+    expect(isFloor(span)).toBe(false);
+    expect(canWalk(span)).toBe(false);
   });
 });

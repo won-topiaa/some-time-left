@@ -11,7 +11,7 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 import { formatClock } from '../domain/time';
-import { canWalk, type SpareSpan } from '../domain/spare-time';
+import { canWalk, isFloor, type SpareSpan } from '../domain/spare-time';
 import { spacing } from './theme';
 import { type Palette, type TypeScale, useStyles } from './useTheme';
 
@@ -56,8 +56,13 @@ export function SpareLine({
       */}
       {canWalk(span) ? (
         <Text style={styles.caption}>
-          이 중에 <Text style={styles.captionStrong}>{walkMin}분</Text>을 걸을 수 있어요
-          {span.waitSec > 0 ? ' · 나머지는 여유' : ''}
+          이 중에 <Text style={styles.captionStrong}>{walkMin}분</Text>
+          {/*
+            상한에 걸린 날은 '이상'이다. 여기서 아는 건 절대 상한뿐이고 실제 계획은
+            최단 경로에 따라 더 길어질 수 있어서, 딱 잘라 말하면 다음 화면이
+            더 긴 길을 내놓을 때 이 줄이 틀린 말이 된다.
+          */}
+          {isFloor(span) ? ' 이상 걸을 수 있어요' : '을 걸을 수 있어요'}
         </Text>
       ) : (
         <Text style={styles.caption}>지금 바로 나서야 하는 시간이에요</Text>
