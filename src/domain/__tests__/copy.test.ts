@@ -4,7 +4,7 @@ import {
   arrivalPrompt,
   memoryRecall,
   planHeadline,
-  postscriptLines,
+  postscriptGroups,
   promiseLine,
   routeReason,
   walkFootnote,
@@ -182,15 +182,17 @@ describe('promiseLine — 첫 화면의 약속', () => {
   });
 });
 
-describe('postscriptLines — 첫 화면의 추신', () => {
+describe('postscriptGroups — 첫 화면의 추신', () => {
+  const flat = () => postscriptGroups().flat();
+
   it('그 상황에서 시작한다 — 일찍 와 버려 애매하게 남은 시간', () => {
-    const [first] = postscriptLines();
+    const [first] = flat();
     expect(first).toContain('일찍 와 버린');
     expect(first).toContain('카페에 들어가기엔 애매');
   });
 
   it('숫자는 지킬 수 있는 3이고, 비 오는 날은 숫자 없이 "조금 더 일찍"', () => {
-    const text = postscriptLines().join('\n');
+    const text = flat().join('\n');
     expect(text).toContain(`약속 ${promisedMinutes(ARRIVE_EARLY_SEC)}분 전에는 닿는`);
     expect(text).toContain('비 오는 날은 3분보다 조금 더 일찍');
     expect(text).not.toContain('5분');
@@ -198,7 +200,7 @@ describe('postscriptLines — 첫 화면의 추신', () => {
   });
 
   it('기능 목록이 아니라 문단 몇 개다 — 빈 줄 없이, 다섯 문단 안에서', () => {
-    const lines = postscriptLines();
+    const lines = flat();
     expect(lines.length).toBeGreaterThanOrEqual(3);
     expect(lines.length).toBeLessThanOrEqual(5);
     for (const line of lines) {
@@ -208,6 +210,39 @@ describe('postscriptLines — 첫 화면의 추신', () => {
     }
     // 같은 문단이 둘 있으면 key가 겹쳐 화면이 경고를 낸다.
     expect(new Set(lines).size).toBe(lines.length);
+  });
+
+  /*
+   * 다섯 문단이 한꺼번에 깔리니 읽기 전에 밀린다는 말을 들었다. 스크롤을 내리는
+   * 만큼만 펴 보이려면 묶음이 필요하고, 묶음은 이야기의 마디를 따라야 한다.
+   */
+  it('세 묶음이고, 어느 묶음도 비어 있지 않다', () => {
+    const groups = postscriptGroups();
+    expect(groups).toHaveLength(3);
+    for (const group of groups) {
+      expect(group.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('마디대로 갈린다 — 상황, 하는 일, 남는 것', () => {
+    const [situation, doing, after] = postscriptGroups();
+    // 1묶음은 장면 하나뿐이다. 여기서 여러 문단을 주면 첫인상이 다시 벽이 된다.
+    expect(situation).toHaveLength(1);
+    expect(situation[0]).toContain('일찍 와 버린');
+    // 2묶음은 길을 고르는 일과 걷는 동안의 일 — 한 호흡이다.
+    expect(doing.join('\n')).toContain('걷는 길을 찾아드려요');
+    expect(doing.join('\n')).toContain('걷는 동안엔');
+    // 3묶음은 걷고 난 뒤. 도착과 비 오는 날은 둘 다 '그 뒤'의 이야기다.
+    expect(after.join('\n')).toContain('도착하면');
+    expect(after.join('\n')).toContain('비 오는 날은');
+  });
+
+  it('묶음 순서가 곧 읽는 순서다 — 상황이 하는 일보다 앞선다', () => {
+    const groups = postscriptGroups();
+    const flatIndex = (needle: string) =>
+      groups.flat().findIndex((line) => line.includes(needle));
+    expect(flatIndex('일찍 와 버린')).toBeLessThan(flatIndex('찾아드려요'));
+    expect(flatIndex('찾아드려요')).toBeLessThan(flatIndex('도착하면'));
   });
 });
 
