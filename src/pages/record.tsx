@@ -21,7 +21,6 @@ import { pathLengthM } from '../domain/geo';
 import { RouteMap } from '../ui/RouteMap';
 import { RouteSource } from '../ui/RouteSource';
 import { isWalkablePath } from '../domain/route-sanity';
-import { moodTint } from '../ui/moodTint';
 import { spacing, radius } from '../ui/theme';
 import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
@@ -35,7 +34,7 @@ export const Route = createRoute('/record', {
 
 function RecordDetail() {
   const navigation = useNavigation();
-  const { colors, scheme } = useTheme();
+  const { colors } = useTheme();
   const styles = useStyles(createStyles);
   const screen = useScreenInsets();
 
@@ -91,7 +90,6 @@ function RecordDetail() {
     return <View style={[styles.screen, { paddingTop: screen.top }]} />;
   }
 
-  const tint = moodTint(record.mood, scheme);
   const distanceM = record.distanceM ?? pathLengthM(record.path);
 
   return (
@@ -116,7 +114,7 @@ function RecordDetail() {
         {isWalkablePath(record.path) ? (
           <>
             <View style={styles.map}>
-              <RouteMap path={record.path} height={260} tint={tint} />
+              <RouteMap path={record.path} height={260} moodId={record.mood} />
             </View>
             <RouteSource routeId={record.routeId} />
           </>

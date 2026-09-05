@@ -14,7 +14,6 @@ import {
 import { radius, spacing } from '../ui/theme';
 import { type Palette, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
-import { moodTint } from '../ui/moodTint';
 import { RouteMap } from '../ui/RouteMap';
 import { RouteSource } from '../ui/RouteSource';
 import { useTrip } from '../state/TripContext';
@@ -41,7 +40,7 @@ export const Route = createRoute('/route', {
  * 그래서 이 화면의 주인공은 지도가 아니라 "왜 이 길인지" 한 줄이다.
  */
 function RouteScreen() {
-  const { colors, scheme } = useTheme();
+  const { colors } = useTheme();
   const styles = useStyles(createStyles);
   const navigation = useNavigation();
   const { trip, update } = useTrip();
@@ -265,7 +264,7 @@ function RouteScreen() {
             <RouteMap
               path={route.candidate.path}
               height={200}
-              tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
+              moodId={trip.mood ?? undefined}
             />
 
             <RouteSource routeId={route.candidate.id} />

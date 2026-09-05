@@ -10,7 +10,7 @@
  */
 
 import { StyleSheet, Text, View } from 'react-native';
-import { formatClock } from '../domain/time';
+import { formatClock, formatDuration } from '../domain/time';
 import { canWalk, isFloor, type SpareSpan } from '../domain/spare-time';
 import { spacing } from './theme';
 import { type Palette, type TypeScale, useStyles } from './useTheme';
@@ -25,8 +25,15 @@ export function SpareLine({
   arriveAtMs: number;
 }) {
   const styles = useStyles(createStyles);
-  const walkMin = Math.round(span.walkSec / 60);
-  const totalMin = Math.round(span.totalSec / 60);
+  /*
+   * 시간은 `formatDuration`이 쓴다.
+   *
+   * 분으로 직접 나눠 적었더니 두 가지가 어긋났다. 내일 약속이면 "약속까지 690분
+   * 남았어요"가 되어 다음 화면들이 쓰는 "1시간 30분"과 다른 언어를 말했고,
+   * 약속 30초 전에는 반올림이 0이 되어 "약속까지 0분 남았어요" — 바로 아래 주석이
+   * 나오면 안 된다고 적어 둔 그 문장 — 이 떴다.
+   */
+  const walkLeft = formatDuration(span.walkSec);
 
   return (
     <View style={styles.wrap}>
@@ -67,18 +74,25 @@ export function SpareLine({
         걸을 자리가 없는 날은 그 사실을 말한다 — 0분이라고 적어 두면 선이
         거짓말처럼 보인다.
       */}
-      <Text style={styles.caption}>
-        약속까지 <Text style={styles.captionStrong}>{totalMin}분</Text> 남았어요
-      </Text>
+      {span.totalSec < 60 ? (
+        <Text style={styles.caption}>약속 시각이 다 됐어요</Text>
+      ) : (
+        <Text style={styles.caption}>
+          약속까지 <Text style={styles.captionStrong}>{formatDuration(span.totalSec)}</Text> 남았어요
+        </Text>
+      )}
       {canWalk(span) ? (
         <Text style={styles.captionSub}>
           {/*
-            상한에 걸린 날은 '이상'이다. 여기서 아는 건 절대 상한뿐이고 실제 계획은
-            최단 경로에 따라 더 길어질 수 있어서, 딱 잘라 말하면 다음 화면이
-            더 긴 길을 내놓을 때 이 줄이 틀린 말이 된다.
+            '이상'을 색칠한 도막에 붙이면 안 된다. 상한에 걸린 날 색칠된 부분은
+            **정확히** 그 길이이고, 남는 시간은 걷지 않는 회색 도막이다. 줄자로
+            재 보면 딱 40분인데 "40분 이상"이라고 적혀 있는 셈이었다.
+            더 걸을 수도 있다는 건 색이 아니라 길이 정하는 일이므로 뒤로 뺀다.
           */}
-          색이 칠해진 {walkMin}분{isFloor(span) ? ' 이상' : ''}은 걷기로 채울 수 있는
-          시간이에요 — 그만큼 걷는 길을 찾아드릴게요
+          색이 칠해진 {walkLeft}은 걷기로 채울 수 있는 시간이에요
+          {isFloor(span)
+            ? ' — 길에 따라 조금 더 걷게 될 수도 있어요'
+            : ' — 그만큼 걷는 길을 찾아드릴게요'}
         </Text>
       ) : (
         <Text style={styles.captionSub}>지금 바로 나서야 하는 시간이에요</Text>

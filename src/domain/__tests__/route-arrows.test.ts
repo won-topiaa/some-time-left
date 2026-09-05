@@ -124,6 +124,24 @@ describe('arrowMetrics', () => {
     expect(sizeM).toBeLessThan(spacingM);
   });
 
+  /*
+   * 위 검사는 4배 넘게 헐거워서 상수가 0.038이든 0.0038이든 0이든 다 통과한다.
+   * 크기를 잘못 건드리면 화살표가 화면에서 사라지는데 tsc도 빌드도 조용하므로,
+   * 비율 자체에 못을 박는다. 눈에 맞춰 값을 바꾸는 건 얼마든지 좋지만
+   * 그때는 이 줄도 같이 고쳐야 한다 — 실수로 지나가지는 않게.
+   */
+  it('크기와 간격의 비율이 눈에 맞춰 둔 값 그대로다', () => {
+    const { spacingM, sizeM } = arrowMetrics(walkPath);
+    const diagonalM = distanceM(
+      { lat: 37.4981, lng: 126.9425 },
+      { lat: 37.5045, lng: 126.9522 }
+    );
+    expect(spacingM / diagonalM).toBeCloseTo(0.16, 4);
+    expect(sizeM / diagonalM).toBeCloseTo(0.038, 4);
+    // 화면에서 보이는 크기 — 간격의 4분의 1쯤이라야 길을 덮지 않으면서 읽힌다.
+    expect(sizeM / spacingM).toBeCloseTo(0.2375, 4);
+  });
+
   it('이 길에는 서넛에서 여남은 개가 놓인다', () => {
     const count = routeArrows(walkPath, arrowMetrics(walkPath).spacingM).length;
     expect(count).toBeGreaterThanOrEqual(3);

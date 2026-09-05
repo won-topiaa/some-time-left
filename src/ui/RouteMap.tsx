@@ -1,7 +1,7 @@
 import { getApiConfig } from '../config';
 import { RouteMapRaster } from './RouteMapRaster';
 import { RouteMapVector } from './RouteMapVector';
-import type { LatLng } from '../domain/types';
+import type { LatLng, MoodId } from '../domain/types';
 
 /**
  * 실제 지도 위의 경로.
@@ -35,8 +35,20 @@ export function RouteMap(props: {
    * 래스터에 측정 로직을 새로 넣지 않고, 그쪽은 고정 높이로 둔다.
    */
   fill?: boolean;
+  /**
+   * 기분. 주면 각 판이 **자기 바탕에 맞는** 색을 직접 고른다.
+   *
+   * `tint`만 받던 때는 부르는 쪽이 앱 테마로 색을 정해 넘겼는데, 벡터 지도는
+   * 어두운 테마에서도 밝은 타일을 쓰기 때문에 그 색이 흰 도로 위의 옅은
+   * 파스텔이 됐다. 어떤 바탕 위에 그리는지는 판이 아는 일이라 이쪽으로 옮긴다.
+   */
+  moodId?: MoodId;
   tint?: string;
-  /** 지금까지 온 만큼 (0~1). 주면 걸어온 길이 흐려지고 지금 자리에 점이 찍힌다. */
+  /**
+   * 지금까지 온 만큼 (0~1). 주면 걸어온 만큼이 실선으로 채워지고 남은 길은 눈금으로
+   * 남으며, 그 경계에 지금-자리 고리가 찍힌다. (래스터판은 아직 옛 방식 — 걸어온
+   * 쪽을 흐리게 둔다. 출하되는 건 벡터판이다.)
+   */
   progress?: number;
 }) {
   const { mapTiles } = getApiConfig();
@@ -55,6 +67,7 @@ export function RouteMap(props: {
   if (mapTiles.kind === 'vector') {
     return <RouteMapVector {...props} />;
   }
-  const { fill, ...raster } = props;
+  // 래스터판은 CARTO의 어두운 짝을 실제로 쓰므로 앱 테마 색을 그대로 받는다.
+  const { fill, moodId, ...raster } = props;
   return <RouteMapRaster {...raster} />;
 }

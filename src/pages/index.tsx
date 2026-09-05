@@ -26,7 +26,7 @@ import { arriveEarlySecFor, dayLabel, formatClock, resolveAppointment } from '..
 import { postscriptGroups, promiseLine } from '../domain/copy';
 import { objectParticle } from '../domain/particle';
 import { spareSpan } from '../domain/spare-time';
-import { RevealOnScroll } from '../ui/RevealOnScroll';
+import { RevealOnScroll, type RevealWindow } from '../ui/RevealOnScroll';
 import { SpareLine } from '../ui/SpareLine';
 import { weatherLine } from '../domain/weather';
 import {
@@ -95,9 +95,80 @@ function Home() {
   const [viewportHeight, setViewportHeight] = useState(0);
   /** 추신 상자가 스크롤 내용에서 앉은 자리. 묶음들의 좌표는 이 값 기준이다. */
   const [postscriptTop, setPostscriptTop] = useState(0);
+  /** 스크롤 내용의 전체 높이. 경계를 실제로 닿을 수 있는 범위 안에 두는 데 쓴다. */
+  const [contentHeight, setContentHeight] = useState(0);
+  /** 묶음마다 잰 자리(상자 기준). 이웃과 견줘 또렷한 구간을 낸다. */
+  const [groupTops, setGroupTops] = useState<Array<number | undefined>>([]);
+  const measureGroup = useCallback((index: number, y: number) => {
+    setGroupTops((previous) => {
+      // 같은 값이면 새 배열을 만들지 않는다 — onLayout은 다시 그릴 때마다 온다.
+      if (previous[index] === y) {
+        return previous;
+      }
+      const next = previous.slice();
+      next[index] = y;
+      return next;
+    });
+  }, []);
   /** 움직임을 줄여 달라고 한 기기에서는 그냥 다 보여준다. */
   const [animate, setAnimate] = useState(true);
   const groups = useMemo(() => postscriptGroups(), []);
+
+  /**
+   * 묶음마다 또렷한 스크롤 구간.
+   *
+   * 경계는 **이웃의 윗변이 화면 READ_LINE 높이에 닿는 순간**이다. 그 지점을 넘기면
+   * 앞 묶음이 물러나고 다음 묶음이 들어온다. 첫 묶음의 시작과 마지막 묶음의 끝은
+   * 열어 둔다 — 화면을 켜자마자 첫 문단이 또렷해야 하고, 바닥까지 내려도 마지막
+   * 문단이 남아 있어야 한다.
+   *
+   * 화면 비율로 문턱을 직접 잡던 방식은 첫 묶음의 또렷한 구간이 통째로 음수
+   * 스크롤에 놓여서, 켜자마자 첫 문단이 반투명하게 뜨고 조금만 내려도 사라졌다.
+   */
+  const revealWindows = useMemo<RevealWindow[] | null>(() => {
+    if (!animate || viewportHeight <= 0) {
+      return null;
+    }
+    const tops = groups.map((_, i) => groupTops[i]);
+    if (tops.some((t) => t == null)) {
+      return null;
+    }
+    const fade = Math.max(1, Math.round(viewportHeight * 0.06));
+    const maxScroll = Math.max(0, contentHeight - viewportHeight);
+
+    /*
+     * 경계를 **실제로 닿을 수 있는 범위** 안에 넣는다.
+     *
+     * 원래 자리(다음 묶음의 윗변이 화면 45%에 닿는 순간)를 그대로 쓰면 두 가지가
+     * 깨진다. 화면이 길면 그 순간이 스크롤 0보다 앞이라 첫 문단이 켜자마자 흐려지고,
+     * 내용이 짧으면 마지막 경계가 최대 스크롤 너머라 마지막 문단에 영영 못 닿는다.
+     * 앞뒤로 fade만큼 여유를 두고, 경계끼리도 창 하나가 들어갈 만큼은 벌린다.
+     */
+    const lo = fade + 1;
+    const hi = maxScroll - fade;
+    const step = 2 * fade + 1;
+    // 이 화면에서 배타적 공개를 지탱할 스크롤이 안 나오면 그냥 다 보여준다.
+    if (hi - lo < (groups.length - 2) * step) {
+      return null;
+    }
+
+    const READ_LINE = 0.45;
+    const bounds: number[] = [];
+    for (let i = 1; i < groups.length; i += 1) {
+      const raw = postscriptTop + (tops[i] as number) - viewportHeight * READ_LINE;
+      const floor = i === 1 ? lo : bounds[i - 2] + step;
+      // 뒤에 남은 경계들이 앉을 자리도 남겨 둔다.
+      const ceiling = hi - (groups.length - 1 - i) * step;
+      bounds.push(Math.min(Math.max(raw, floor), ceiling));
+    }
+
+    const OPEN = 1e7;
+    return groups.map((_, i) => ({
+      enter: i === 0 ? -OPEN : bounds[i - 1],
+      exit: i === groups.length - 1 ? OPEN : bounds[i],
+      fade,
+    }));
+  }, [animate, contentHeight, groups, groupTops, postscriptTop, viewportHeight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -330,6 +401,8 @@ function Home() {
         showsVerticalScrollIndicator={false}
         // 추신이 언제 화면에 들어오는지 재려면 스크롤 영역의 높이가 필요하다.
         onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+        // 경계를 닿을 수 있는 범위 안에 두려면 내용 전체 높이가 필요하다.
+        onContentSizeChange={(_width, height) => setContentHeight(height)}
         scrollEventThrottle={16}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
           useNativeDriver: true,
@@ -364,22 +437,16 @@ function Home() {
             <RevealOnScroll
               key={group[0]}
               scrollY={scrollY}
-              viewportHeight={viewportHeight}
-              offsetY={postscriptTop}
-              enabled={animate}
+              index={index}
+              onMeasure={measureGroup}
+              window={revealWindows == null ? null : revealWindows[index]}
               /*
-                묶음 사이를 화면 높이의 3분의 1쯤 벌린다. RevealOnScroll의 읽는
-                자리(화면 34~75%)보다 간격이 넓어야 두 묶음이 같이 또렷해지는
-                순간이 없다 — 이 간격이 곧 "한 번에 한 파트"를 만든다.
-                움직임을 줄인 기기에서는 다 보이므로 편지 문단 간격으로 돌아간다.
+                간격은 이제 아무 조건도 지지 않는다. 배타는 이웃이 정한 창이
+                보장하므로(RevealOnScroll), 여기서는 마디가 바뀌는 게 보일 만큼만
+                벌린다. 화면 비율로 잡던 때는 키보드가 올라와 스크롤 영역이 줄면
+                간격이 같이 줄어 손가락 밑의 내용이 튀었다.
               */
-              style={
-                index > 0
-                  ? animate && viewportHeight > 0
-                    ? { marginTop: Math.round(viewportHeight * 0.32) }
-                    : styles.postscriptGroup
-                  : undefined
-              }
+              style={index > 0 ? styles.postscriptGroup : undefined}
             >
               {group.map((line) => (
                 <Text key={line} style={styles.postscriptLine}>
@@ -763,5 +830,5 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     // 문단 사이를 넉넉히 — 천천히 스크롤하며 한 문단씩 읽는 리듬을 여백이 만든다.
     postscriptLine: { ...type.body, color: colors.inkSoft, marginTop: spacing.lg },
     /** 묶음 사이는 문단 사이보다 넓게 — 마디가 바뀐다는 걸 여백이 먼저 말한다. */
-    postscriptGroup: { marginTop: spacing.md },
+    postscriptGroup: { marginTop: spacing.xxl },
   });

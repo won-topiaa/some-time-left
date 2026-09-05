@@ -6,7 +6,9 @@ import { splitPath } from '../domain/geo';
 import { arrowMetrics, arrowPolygon, routeArrows, type RouteArrow } from '../domain/route-arrows';
 import { MAPLIBRE_CSS, MAPLIBRE_JS, MAPLIBRE_LICENSE } from './vendor/maplibre';
 import { type Palette, type Scheme, type TypeScale, useStyles, useTheme } from './useTheme';
-import type { LatLng } from '../domain/types';
+import { colors as lightColors } from './theme';
+import { moodTint } from './moodTint';
+import type { LatLng, MoodId } from '../domain/types';
 
 /**
  * 벡터 타일 지도 (OpenFreeMap + MapLibre).
@@ -27,11 +29,14 @@ export function RouteMapVector({
   path,
   height = 220,
   fill: fillBox = false,
+  moodId,
   tint,
   progress,
 }: {
   path: LatLng[];
   height?: number;
+  /** 기분. 주면 밝은 타일에 맞는 색을 여기서 고른다 — 아래 mapColors와 같은 이유. */
+  moodId?: MoodId;
   /** 남은 높이를 다 쓴다. 걷는 화면에서 지도를 주인공으로 둘 때. */
   fill?: boolean;
   /** 기분 색. 없으면 테마의 잉크색으로 그린다. */
@@ -40,7 +45,22 @@ export function RouteMapVector({
 }) {
   const { colors, scheme } = useTheme();
   const styles = useStyles(createStyles);
-  const stroke = tint ?? colors.ink;
+  /*
+   * **그리는 색은 어두운 테마에서도 밝은 쪽을 쓴다.**
+   *
+   * OpenFreeMap의 어두운 스타일은 이 저장소에서 확인된 적이 없어서 두 테마 모두
+   * 같은(밝은) 타일을 쓴다 — 바로 위 지도 생성 주석에 그 사정이 적혀 있다. 그런데
+   * 선 색만 테마를 따라가서, 어두운 모드에서는 흰 도로 위에 옅은 파스텔(#A6BCA8
+   * 같은)이 얹혔다. 대비 2:1 남짓이라 "걷는 게 안 보인다"는 그 피드백을 고치려고
+   * 올린 실선이 정작 어두운 모드에서는 더 안 보이게 됐다.
+   *
+   * 종이가 밝으면 잉크도 밝은 쪽 잉크여야 한다. 래스터판은 CARTO의 어두운 짝을
+   * 실제로 쓰므로 거기서는 테마를 그대로 따른다 — 그래서 이 보정은 여기에만 둔다.
+   */
+  const mapColors = lightColors;
+  // 밝은 종이 위의 잉크. 기분을 받으면 밝은 쪽 색으로 직접 고르고, 없으면 넘어온
+  // 색을 쓰되 기본값도 밝은 쪽 잉크다.
+  const stroke = moodId != null ? moodTint(moodId, 'light') : (tint ?? mapColors.ink);
   const webView = useRef<WebView>(null);
 
   /*
@@ -64,8 +84,8 @@ export function RouteMapVector({
   }, [path]);
 
   const html = useMemo(
-    () => mapHtml(path, stroke, colors, scheme, arrows),
-    [path, stroke, colors, scheme, arrows]
+    () => mapHtml(path, stroke, mapColors, 'light', arrows),
+    [path, stroke, mapColors, arrows]
   );
 
   const update = useMemo(
@@ -355,8 +375,12 @@ function mapHtml(
     // 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게.
     circle('start', 'start', 5, PAPER, FAINT, 2);
     circle('end', 'end', 6.5, TINT, PAPER, 2);
-    // 지금 자리. 실선의 앞 끝을 이 점이 끌고 간다. 진행이 들어오기 전에는 안 보인다.
-    circle('here', 'here', 6.5, TINT, PAPER, 3, {
+    /*
+     * 지금 자리는 **고리**다. 도착점과 같은 크기의 채운 점으로 뒀더니 지도에
+     * 같은 색 같은 크기의 원이 둘 놓여서, 어느 쪽이 '나'고 어느 쪽이 '갈 곳'인지
+     * 구분이 안 됐다. 안을 비우면 위치 표시로 읽히고 채운 점은 목적지로 남는다.
+     */
+    circle('here', 'here', 6, PAPER, TINT, 4, {
       'circle-opacity': 0, 'circle-stroke-opacity': 0
     });
 

@@ -13,7 +13,6 @@ import { arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { walkFootnote } from '../domain/copy';
 import { RouteMap } from '../ui/RouteMap';
 import { RouteSource } from '../ui/RouteSource';
-import { moodTint } from '../ui/moodTint';
 import { radius, spacing } from '../ui/theme';
 import { type Palette, type Scheme, type TypeScale, useStyles, useTheme } from '../ui/useTheme';
 import { useScreenInsets } from '../ui/screenInsets';
@@ -338,7 +337,7 @@ function Walk() {
       {/*
         따라갈 수 있는 지도.
 
-        걸어온 길은 흐려지고 남은 길에만 기분 색이 남는다. 지금 자리에 점이 찍혀서
+        걷는 만큼 눈금이 실선으로 채워지고, 그 앞 끝을 지금-자리 고리가 끌고 간다.
         어느 쪽으로 가는 중인지, 다음 골목이 어느 쪽인지가 숫자를 읽기 전에 먼저 보인다.
         타일이 안 와도 경로는 그대로 그려진다.
       */}
@@ -346,7 +345,7 @@ function Walk() {
         <RouteMap
           path={path}
           fill
-          tint={trip.mood != null ? moodTint(trip.mood, scheme) : colors.ink}
+          moodId={trip.mood ?? undefined}
           progress={alongRatio}
         />
       ) : (

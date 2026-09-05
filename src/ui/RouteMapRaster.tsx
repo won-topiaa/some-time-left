@@ -104,7 +104,12 @@ export function RouteMapRaster({
               {/* 걸어온 길은 물러난다. 지운 게 아니라 지나온 것이므로 남겨는 둔다. */}
               <Path d={toPath(split.walked)} stroke={colors.inkGhost} strokeWidth={4} fill="none"
                     strokeLinecap="round" strokeLinejoin="round" />
-              {/* 남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다. */}
+              {/*
+                남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다.
+                벡터판은 반대로 바뀌었다(걸어온 쪽을 실선으로 채운다) — 실기기에서
+                흐린 쪽이 안 보인다는 피드백을 받아서다. 이 판을 다시 켤 일이 있으면
+                여기도 같이 뒤집어야 한다.
+              */}
               <Path d={toPath(split.ahead)} stroke={stroke} strokeWidth={4} fill="none"
                     strokeLinecap="round" strokeLinejoin="round" />
             </>
