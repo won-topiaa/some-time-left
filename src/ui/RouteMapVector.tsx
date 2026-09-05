@@ -338,14 +338,16 @@ function mapHtml(
     // 길 밑에 흰 테. 밑그림의 길도 흰색이라 얇은 선만 얹으면 지워진 것처럼 보인다.
     line('casing', 'whole', PAPER, 7, { 'line-opacity': 0.9 });
     /*
-     * 걸어온 길은 실선으로 남고, 남은 길은 눈금으로 간다.
+     * 걷는 만큼 눈금이 실선으로 채워진다.
      *
-     * 예전엔 둘 다 실선이라 굵기도 같았다. 색만 다른 두 선은 걷는 중에 흘깃 보는
-     * 화면에서 구분되지 않아서, 얼마나 왔는지가 지도에 안 보였다. 이제 질감이
-     * 다르므로 색을 못 알아봐도 어디까지 왔는지 읽힌다.
+     * 처음엔 걸어온 쪽을 옅은 회색으로 두고 "물러난다"고 했는데, 실기기에서
+     * 옅은 회색 4px는 흰 도로 위에서 사실상 안 보였다 — 걷고 있는데 지도가
+     * 가만히 있다는 피드백이 그래서 왔다. 내가 따라가는 모습이 보이려면
+     * **자라나는 쪽이 진해야 한다.** 같은 기분 색이라도 실선과 눈금은 흘깃 봐도
+     * 갈리고, 굵기를 한 단계 올려 눈금 위에 또렷하게 얹힌다.
      */
-    line('walked', 'walked', FAINT, 4);
-    // 남은 길이 주인공. 기분 색은 앞으로 갈 길에만 남는다.
+    line('walked', 'walked', TINT, 5);
+    // 남은 길은 눈금으로 기다린다.
     line('ahead', 'ahead', TINT, 4, { 'line-dasharray': [2, 1.6] }, { 'line-cap': 'butt' });
     // 어느 쪽으로 걷는지. 선 위에 얹어야 보이므로 선보다 뒤에 얹는다.
     fill('arrows', 'arrows', TINT, { 'fill-outline-color': PAPER });
@@ -353,8 +355,8 @@ function mapHtml(
     // 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게.
     circle('start', 'start', 5, PAPER, FAINT, 2);
     circle('end', 'end', 6.5, TINT, PAPER, 2);
-    // 지금 자리. 진행이 들어오기 전에는 안 보인다.
-    circle('here', 'here', 5, TINT, PAPER, 3, {
+    // 지금 자리. 실선의 앞 끝을 이 점이 끌고 간다. 진행이 들어오기 전에는 안 보인다.
+    circle('here', 'here', 6.5, TINT, PAPER, 3, {
       'circle-opacity': 0, 'circle-stroke-opacity': 0
     });
 

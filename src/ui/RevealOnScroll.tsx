@@ -17,14 +17,23 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Animated, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 
 /**
- * 화면 아래에서 이만큼 들어왔을 때 다 떠오른다 (뷰포트 높이 대비).
+ * 떠오르고 물러나는 네 문턱 (뷰포트 높이 대비, 묶음 윗변이 화면 어디에 있는가).
  *
- * 0.82는 "바닥에 걸치면 흐리게, 한 뼘 올라오면 또렷하게"에 해당한다. 1에 가까우면
- * 보이기도 전에 이미 또렷해서 펴 보이는 느낌이 사라지고, 낮추면 한참 읽고 있는데도
- * 흐린 채로 남는다.
+ * 처음엔 떠오르기만 하고 안 사라지게 뒀는데, 그러면 몇 번 스크롤한 뒤에는 결국
+ * 다섯 문단이 다 보인다 — 벽을 없애려던 것이 자리만 벌려 놓은 셈이었다. 실기기
+ * 피드백대로 **지금 읽는 묶음만** 남긴다: 아래에서 올라오며 떠오르고, 위로
+ * 지나가면 물러난다. 스크롤 위치에 매인 값이라 도로 내리면 그대로 되돌아온다.
+ *
+ *   IN_*  — 화면 바닥 쪽. 윗변이 94%에서 75%로 올라오는 동안 떠오른다.
+ *   OUT_* — 화면 위쪽. 윗변이 34%에서 14%로 올라가는 동안 물러난다.
+ *
+ * 그 사이(34%~75%)가 읽는 자리다. 묶음 사이 간격이 이 폭보다 넓어야
+ * 두 묶음이 같이 또렷해지는 순간이 없다 — 간격은 부모(index.tsx)가 잰다.
  */
-const FADE_START = 1;
-const FADE_END = 0.82;
+const IN_START = 0.94;
+const IN_END = 0.75;
+const OUT_START = 0.34;
+const OUT_END = 0.14;
 
 export function RevealOnScroll({
   scrollY,
@@ -81,8 +90,16 @@ export function RevealOnScroll({
    * 구간을 지나 있다 — 따로 예외를 두지 않아도 처음부터 또렷하다.
    */
   const contentTop = offsetY + top;
-  const appear = contentTop - viewportHeight * FADE_START;
-  const full = contentTop - viewportHeight * FADE_END;
+  const appear = contentTop - viewportHeight * IN_START;
+  const shown = contentTop - viewportHeight * IN_END;
+  const leaving = contentTop - viewportHeight * OUT_START;
+  const gone = contentTop - viewportHeight * OUT_END;
+
+  // 네 문턱이 순서를 지키게 한다 — 뷰포트가 아주 작으면 이웃이 겹칠 수 있다.
+  const inputRange = [appear, shown, leaving, gone];
+  for (let i = 1; i < inputRange.length; i += 1) {
+    inputRange[i] = Math.max(inputRange[i], inputRange[i - 1] + 1);
+  }
 
   return (
     <Animated.View
@@ -90,9 +107,8 @@ export function RevealOnScroll({
         style,
         {
           opacity: scrollY.interpolate({
-            // 구간이 뒤집히지 않게 — 뷰포트가 아주 작으면 둘이 같아질 수 있다.
-            inputRange: [appear, Math.max(full, appear + 1)],
-            outputRange: [0, 1],
+            inputRange,
+            outputRange: [0, 1, 1, 0],
             extrapolate: 'clamp',
           }),
         },

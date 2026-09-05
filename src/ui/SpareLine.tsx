@@ -26,6 +26,7 @@ export function SpareLine({
 }) {
   const styles = useStyles(createStyles);
   const walkMin = Math.round(span.walkSec / 60);
+  const totalMin = Math.round(span.totalSec / 60);
 
   return (
     <View style={styles.wrap}>
@@ -58,22 +59,29 @@ export function SpareLine({
       </View>
 
       {/*
-        선만 있으면 무엇을 나눈 선인지 모른다. 걷는 도막이 무엇인지 한 줄로 말한다.
+        선만 있으면 무엇을 나눈 선인지 모른다. 실기기에서 "이게 뭔지 모르겠다"는
+        피드백이 실제로 왔다 — "이 중에 40분 이상"의 '이'가 무엇인지, 색이 무슨
+        뜻인지 화면이 말해주지 않았던 것이다. 두 줄로 나눈다: 윗줄은 선이 무엇인지
+        (약속까지 남은 시간), 아랫줄은 색이 무엇이고 앱이 그걸로 무엇을 할지.
+
         걸을 자리가 없는 날은 그 사실을 말한다 — 0분이라고 적어 두면 선이
         거짓말처럼 보인다.
       */}
+      <Text style={styles.caption}>
+        약속까지 <Text style={styles.captionStrong}>{totalMin}분</Text> 남았어요
+      </Text>
       {canWalk(span) ? (
-        <Text style={styles.caption}>
-          이 중에 <Text style={styles.captionStrong}>{walkMin}분</Text>
+        <Text style={styles.captionSub}>
           {/*
             상한에 걸린 날은 '이상'이다. 여기서 아는 건 절대 상한뿐이고 실제 계획은
             최단 경로에 따라 더 길어질 수 있어서, 딱 잘라 말하면 다음 화면이
             더 긴 길을 내놓을 때 이 줄이 틀린 말이 된다.
           */}
-          {isFloor(span) ? ' 이상 걸을 수 있어요' : '을 걸을 수 있어요'}
+          색이 칠해진 {walkMin}분{isFloor(span) ? ' 이상' : ''}은 걷기로 채울 수 있는
+          시간이에요 — 그만큼 걷는 길을 찾아드릴게요
         </Text>
       ) : (
-        <Text style={styles.caption}>지금 바로 나서야 하는 시간이에요</Text>
+        <Text style={styles.captionSub}>지금 바로 나서야 하는 시간이에요</Text>
       )}
     </View>
   );
@@ -98,4 +106,6 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     walk: { height: 3, borderRadius: 2, backgroundColor: colors.accent },
     caption: { ...type.caption, color: colors.inkSoft, marginTop: spacing.sm },
     captionStrong: { color: colors.ink, fontWeight: '600' },
+    /** 설명 줄. 사실 줄보다 한 단계 옅게 — 매일 보는 사람에게는 이미 아는 말이다. */
+    captionSub: { ...type.caption, color: colors.inkFaint, marginTop: spacing.xs },
   });

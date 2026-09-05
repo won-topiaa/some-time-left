@@ -194,6 +194,8 @@ export function arrowMetrics(path: LatLng[]): { spacingM: number; sizeM: number 
   return {
     // 대각선당 예닐곱 개. 더 촘촘하면 길이 화살표에 덮이고, 더 성기면 갈림길에서 놓친다.
     spacingM: diagonalM * 0.16,
-    sizeM: diagonalM * 0.05,
+    // 처음엔 0.05였는데 실기기에서 길보다 화살표가 먼저 보였다. 방향은 흘깃 보고
+    // 아는 정도면 되므로 한 뼘 줄인다.
+    sizeM: diagonalM * 0.038,
   };
 }

@@ -367,7 +367,19 @@ function Home() {
               viewportHeight={viewportHeight}
               offsetY={postscriptTop}
               enabled={animate}
-              style={index > 0 ? styles.postscriptGroup : undefined}
+              /*
+                묶음 사이를 화면 높이의 3분의 1쯤 벌린다. RevealOnScroll의 읽는
+                자리(화면 34~75%)보다 간격이 넓어야 두 묶음이 같이 또렷해지는
+                순간이 없다 — 이 간격이 곧 "한 번에 한 파트"를 만든다.
+                움직임을 줄인 기기에서는 다 보이므로 편지 문단 간격으로 돌아간다.
+              */
+              style={
+                index > 0
+                  ? animate && viewportHeight > 0
+                    ? { marginTop: Math.round(viewportHeight * 0.32) }
+                    : styles.postscriptGroup
+                  : undefined
+              }
             >
               {group.map((line) => (
                 <Text key={line} style={styles.postscriptLine}>
