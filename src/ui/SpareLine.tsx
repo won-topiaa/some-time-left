@@ -44,7 +44,15 @@ export function SpareLine({
       <View style={styles.track}>
         <View style={styles.dot} />
         {span.waitSec > 0 && <View style={[styles.rest, { flex: span.waitSec }]} />}
-        {span.walkSec > 0 && <View style={[styles.walk, { flex: span.walkSec }]} />}
+        {/*
+          1분이 안 되는 자투리는 색을 얻지 못한다. 아래 문구는 canWalk 기준으로
+          "지금 바로 나서야 하는 시간"이라고 말하는데, 선이 색칠한 걷기 도막을
+          그대로 보여주면 글과 그림이 서로 다른 말을 한다. 도막 자체는 남긴다 —
+          비율이 곧 시간이라는 약속은 지켜야 하므로, 색만 물러난다.
+        */}
+        {span.walkSec > 0 && (
+          <View style={[canWalk(span) ? styles.walk : styles.rest, { flex: span.walkSec }]} />
+        )}
         {span.bufferSec > 0 && <View style={[styles.rest, { flex: span.bufferSec }]} />}
         <View style={styles.dot} />
       </View>

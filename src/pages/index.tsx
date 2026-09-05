@@ -158,6 +158,11 @@ function Home() {
 
   /** 지금 이 화면이 보이는가. 아래 타이머가 배경에서 돌지 않게 하는 데 쓴다. */
   const [focused, setFocused] = useState(true);
+  /**
+   * 같은 값의 ref 거울. `onVisibility`가 읽는다 — 그 콜백은 구독을 다시 걸지
+   * 않으려고 의존성을 고정해 두는데, state를 직접 읽으면 옛 값이 갇힌다.
+   */
+  const focusedRef = useRef(true);
 
   /*
    * '지금'을 흘려 준다.
@@ -184,10 +189,18 @@ function Home() {
   useEffect(() => {
     const onFocus = navigation.addListener('focus', () => {
       setFocused(true);
+      focusedRef.current = true;
       refreshNow();
       refreshWalked();
+      // 날씨도 여기서 다시 본다. 예전엔 앱 복귀(onVisibility)가 걷는 중에도
+      // 날씨를 갱신해 줬는데, 그 길을 화면이 보일 때로 좁혔으므로 돌아온
+      // 사람에게는 이 자리가 그 몫을 한다. 요청은 10분 캐시가 받는다.
+      setShownCount((n) => n + 1);
     });
-    const onBlur = navigation.addListener('blur', () => setFocused(false));
+    const onBlur = navigation.addListener('blur', () => {
+      setFocused(false);
+      focusedRef.current = false;
+    });
     return () => {
       onFocus();
       onBlur();
@@ -200,6 +213,12 @@ function Home() {
    * 내비게이션 'focus'는 뒤의 경우에 오지 않는다. 아침에 켜 둔 채 잠갔다가 저녁에
    * 다시 열어 약속을 적는 사람에게는 그새 시작된 비가 곧 "몇 분 전"이라, 여기서
    * 날씨와 '지금'을 다시 잡는다. 처음 보일 때는 건너뛴다 — 마운트 때 이미 읽고 있다.
+   *
+   * **이 화면이 보이고 있을 때만이다.** 이 훅은 앱 단위 이벤트라 걷는 화면 밑에
+   * 깔려 있어도 발화한다. 걷다가 메시지를 확인하러 나갔다 돌아오는 것이 약속
+   * 시각이 지나는 가장 흔한 길인데, 그때 여기서 '지금'을 다시 잡으면 지나간 약속이
+   * 내일로 굴러 이동에 실린다 — 30초 타이머를 focus로 막은 것과 정확히 같은
+   * 부류라, 이 길도 같은 문으로 막는다. state 대신 ref를 읽는 이유는 위에 있다.
    */
   const seenOnce = useRef(false);
   const onVisibility = useCallback(
@@ -209,6 +228,9 @@ function Home() {
       }
       if (!seenOnce.current) {
         seenOnce.current = true;
+        return;
+      }
+      if (!focusedRef.current) {
         return;
       }
       refreshNow();
