@@ -395,6 +395,41 @@ function Home() {
 
   return (
     <View style={[styles.screen, { paddingTop: screen.top }]}>
+      {/*
+        화면의 윗변.
+
+        여기가 없을 때 첫 화면은 편지 한 장이 스크롤되는 모양이었다 — 어느 앱인지도
+        알 수 없었다. 토스 내비게이션 바는 제목을 안 그리도록 해 뒀으므로
+        (granite.config.ts의 withTitle: false) 앱 이름이 화면 어디에도 없었던 것이다.
+
+        왼쪽에 이름, 오른쪽에 지나온 길로 가는 문. 그 둘만으로 화면에 윗변이 생기고,
+        "여기가 어디고 무엇이 있는지"가 스크롤 전에 답해진다.
+
+        **뒤로가기도 닫기도 여기 두지 않는다.** 토스 내비게이션 바가 이미 그리고
+        있고, 그 둘이 겹쳐서 심사에서 한 번 반려됐다. 이 줄은 크롬이 아니라 내용이다 —
+        그래서 아래로 선도 긋지 않는다.
+      */}
+      <View style={styles.topBar}>
+        <Text style={styles.wordmark}>자투리 시간</Text>
+
+        <Pressable
+          style={({ pressed }) => [styles.trace, pressed && styles.pressed]}
+          onPress={() => navigation.navigate('/trace')}
+          accessibilityRole="button"
+          accessibilityLabel={
+            walkedKm != null ? `지나온 길, 지금까지 ${walkedKm}킬로미터` : '지나온 길'
+          }
+        >
+          <Text style={styles.traceText}>지나온 길</Text>
+          {/*
+            쌓인 거리. 걷고 돌아올 때마다 늘고, 그게 이 앱에서 유일하게 쌓이는
+            것이라 누를 이유도 이 숫자가 만든다 — 라벨보다 진하게 둔다.
+          */}
+          {walkedKm != null && <Text style={styles.traceDistance}>{walkedKm}km</Text>}
+          <Text style={styles.traceChevron}>›</Text>
+        </Pressable>
+      </View>
+
       <Animated.ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -672,35 +707,6 @@ function Home() {
         </Pressable>
 
         {missing != null && <Text style={styles.missing}>{missing}</Text>}
-
-        {/*
-          지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 다음 버튼보다
-          한 단계 물러나 있다. 다만 **문인 줄은 보여야 한다** — 13px을 inkFaint로
-          얹어 뒀더니(대비 2.48:1) 그냥 지나치게 된다는 말을 들었다. 테두리 없는
-          옅은 글씨는 이 앱에서 '아직 안 채워진 자리'를 뜻하는 표시라, 누를 수 있는
-          것에 쓰면 신호가 어긋난다.
-
-          이 앱이 이미 쓰는 보조 버튼 모양을 그대로 쓴다 — 헤어라인 알약에 inkSoft
-          글씨(`_404`의 '처음으로', 기록 화면의 '이 길 공유하기'와 같은 옷이다).
-          면은 여전히 안 칠한다.
-
-          쌓인 거리는 여기서 보인다. 걷고 돌아올 때마다 이 숫자가 늘고, 그게 이
-          앱에서 유일하게 쌓이는 것이라 누를 이유도 그 숫자가 만든다 — 그래서
-          라벨보다 진하게 둔다.
-        */}
-        <Pressable
-          style={({ pressed }) => [styles.trace, pressed && styles.pressed]}
-          onPress={() => navigation.navigate('/trace')}
-          accessibilityRole="button"
-          accessibilityLabel={
-            walkedKm != null ? `지나온 길, 지금까지 ${walkedKm}킬로미터` : '지나온 길'
-          }
-        >
-          <Text style={styles.traceText}>지나온 길</Text>
-          {walkedKm != null && <Text style={styles.traceDistance}>{walkedKm}km</Text>}
-          {/* 다음 화면으로 간다는 표시. 알약 하나로는 '누를 수 있다'까지만 말한다. */}
-          <Text style={styles.traceChevron}>›</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -731,6 +737,7 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       marginTop: spacing.sm,
     },
     content: { paddingBottom: spacing.lg },
+    /** 인사말 덩어리. 윗변이 생겼으니 위쪽 여백은 그쪽이 맡는다. */
     header: { marginBottom: spacing.xl },
     weather: { ...type.caption, color: colors.inkFaint, marginBottom: spacing.sm },
     hello: { ...type.display, color: colors.ink },
@@ -826,26 +833,56 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     ctaTextOff: { color: colors.inkFaint },
     ctaText: { ...type.title, color: colors.surface },
     /*
-      다음 버튼과 나란히 두되 급을 나눈다. 위는 면을 칠한 먹색 한 덩어리,
-      여기는 선 하나짜리 알약 — 폭도 글자만큼만 잡아(alignSelf) 가로로 꽉 찬
-      주 버튼과 섞이지 않게 한다.
+      화면의 윗변. 왼쪽에 이름, 오른쪽에 문.
+
+      아래로 선을 긋지 않는다 — 선을 그으면 헤더 바가 되고, 토스가 이미 그리는
+      내비게이션 바와 두 겹으로 보인다(그 겹침으로 심사에서 한 번 반려됐다).
+      여백만으로 아래 인사말과 나눈다.
     */
-    trace: {
-      alignSelf: 'center',
+    topBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
-      marginTop: spacing.md,
-      paddingVertical: spacing.sm + 4,
-      paddingHorizontal: spacing.lg,
+      justifyContent: 'space-between',
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.lg,
+    },
+    /**
+     * 앱 이름. 토스 내비게이션 바가 제목을 안 그리므로(withTitle: false)
+     * 화면에서 이름이 나오는 유일한 자리다. 주인공은 아래 인사말이라
+     * 작고 조용하되, 이름인 줄은 알아보게 자간을 조금 준다.
+     */
+    wordmark: {
+      ...type.caption,
+      color: colors.inkSoft,
+      fontWeight: '600',
+      letterSpacing: 0.4,
+    },
+    /*
+      지나온 길로 가는 문.
+
+      13px을 inkFaint로 얹어 뒀을 땐(대비 2.48:1) 그냥 지나치게 된다는 말을 들었다.
+      이 앱에서 테두리 없는 옅은 글씨는 '아직 안 채워진 자리'를 뜻하는 표시라,
+      누를 수 있는 것에 쓰면 신호가 어긋난다. 이미 쓰는 보조 버튼 옷을 입힌다 —
+      헤어라인 알약(`_404`의 '처음으로', 기록 화면의 '이 길 공유하기'와 같다).
+      면은 여전히 안 칠한다.
+
+      윗변에 있으므로 본문 크기 대신 캡션으로 둔다. 여기서 커지면 이름과 다투고,
+      주인공이어야 할 인사말과도 다툰다.
+    */
+    trace: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs + 2,
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.md - 2,
       borderRadius: radius.pill,
       borderWidth: 1,
       borderColor: colors.line,
     },
-    traceText: { ...type.body, color: colors.inkSoft },
+    traceText: { ...type.caption, color: colors.inkSoft },
     /** 누를 이유를 만드는 숫자. 라벨보다 진하다. */
-    traceDistance: { ...type.body, color: colors.ink, fontWeight: '600' },
-    traceChevron: { ...type.body, color: colors.inkFaint },
+    traceDistance: { ...type.caption, color: colors.ink, fontWeight: '600' },
+    traceChevron: { ...type.caption, color: colors.inkFaint },
     /**
      * 추신. 인사말 아래, 입력칸 위. 위아래 헤어라인으로 나눈다.
      * 처음 켠 사람이 스크롤하며 읽고 나면 바로 아래 입력칸이 기다린다.
