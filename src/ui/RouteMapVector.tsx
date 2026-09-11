@@ -107,12 +107,25 @@ export function RouteMapVector({
    * 그 반복이 그대로 값이 된다 — 걷는 내내, 화면이 켜져 있는 채로.
    * 여기서 재 두고 아래에서는 지나친 것만 걷어낸다.
    */
-  const arrows = useMemo(() => {
-    if (follows) {
-      return { all: routeArrows(path, FOLLOW_SPACING_M), sizeM: FOLLOW_ARROW_M };
-    }
+  /*
+   * 화살표를 **두 벌** 만든다.
+   *
+   * 화살표는 지리 좌표 폴리곤이라 화면 크기가 배율을 따라간다. 전체 보기에 맞춘
+   * 76m짜리는 따라가기 배율에서 80px가 되어 길을 덮고, 따라가기에 맞춘 16m짜리는
+   * 전체 보기에서 2.9px로 사라진다(실측). 한 벌로는 두 배율을 못 덮는다.
+   *
+   * 웹뷰는 자기 힘으로 화살표를 다시 만들 수 없으므로(모양 계산은 이쪽에 있다)
+   * 두 벌을 다 보내 두고 보기를 바꿀 때 켜고 끈다.
+   */
+  const arrows = useMemo<Arrows>(() => {
     const { spacingM, sizeM } = arrowMetrics(path);
-    return { all: routeArrows(path, spacingM), sizeM };
+    const wide = { all: routeArrows(path, spacingM), sizeM };
+    return {
+      wide,
+      near: follows
+        ? { all: routeArrows(path, FOLLOW_SPACING_M), sizeM: FOLLOW_ARROW_M }
+        : null,
+    };
   }, [path, follows]);
 
   const html = useMemo(
@@ -223,17 +236,42 @@ function progressScript(path: LatLng[], progress: number, arrows: Arrows): strin
   }
   // 자리는 길에 박혀 있고 지나친 것만 사라진다. 남은 구간에 새로 배치하면
   // 걸음마다 화살표가 재배치되어 지도가 들썩인다.
-  const ahead = arrows.all.filter((a) => a.alongRatio > progress);
   return `window.__setProgress && window.__setProgress(
     ${lineString(split.walked)}, ${lineString(split.ahead)}, ${point(split.at)},
-    ${arrowsJson(ahead, arrows.sizeM)}
+    ${aheadArrows(arrows.wide, progress)}, ${aheadArrows(arrows.near, progress)}
   ); true;`;
 }
 
-/** 경로당 한 번 재 두는 화살표. 자리와 크기는 진행률과 무관하다. */
-interface Arrows {
+/** 한 배율에서 쓸 화살표 한 벌. */
+interface ArrowSet {
   all: RouteArrow[];
   sizeM: number;
+}
+
+/**
+ * 경로당 한 번 재 두는 화살표. 자리와 크기는 진행률과 무관하다.
+ *
+ * 두 벌인 이유는 위 `arrows` 메모에 적어 뒀다 — 전체 보기와 따라가기는 배율이
+ * 대여섯 배 달라서 한 벌로는 양쪽에서 다 읽히지 않는다.
+ */
+interface Arrows {
+  /** 길 전체를 담은 배율에서 쓴다. */
+  wide: ArrowSet;
+  /** 걷는 사람을 따라가는 배율에서 쓴다. 걷는 화면이 아니면 없다. */
+  near: ArrowSet | null;
+}
+
+const NO_ARROWS = '{"type":"FeatureCollection","features":[]}';
+
+/** 아직 지나지 않은 화살표만. 지나친 것은 걷어낸다. */
+function aheadArrows(set: ArrowSet | null, progress: number): string {
+  if (set == null) {
+    return NO_ARROWS;
+  }
+  return arrowsJson(
+    set.all.filter((arrow) => arrow.alongRatio > progress),
+    set.sizeM
+  );
 }
 
 function mapHtml(
@@ -258,7 +296,10 @@ function mapHtml(
   const start = path[0];
   const end = path[path.length - 1];
   // 아직 한 걸음도 안 걸었으므로 처음엔 전부 '남은' 화살표다.
-  const allArrows = arrowsJson(arrows.all, arrows.sizeM);
+  const wideArrows = arrowsJson(arrows.wide.all, arrows.wide.sizeM);
+  const nearArrows = arrows.near == null
+    ? NO_ARROWS
+    : arrowsJson(arrows.near.all, arrows.near.sizeM);
 
   return `<!doctype html>
 <html>
@@ -281,11 +322,32 @@ function mapHtml(
   }
   .maplibregl-ctrl-attrib a { color: ${colors.inkSoft}; }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-logo { display: none; }
+  /*
+    보기 전환. 누를 수 있다는 걸 알리되 지도를 가리지 않게 — 출처 표기와 같은
+    반투명 판 위에 글자만 둔다. 걷는 화면이 아니면 아래 스크립트가 계속 숨긴다.
+  */
+  #view-toggle {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    border: 0;
+    border-radius: 999px;
+    padding: 7px 13px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1;
+    color: ${colors.inkSoft};
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.14);
+  }
 </style>
 <script>${MAPLIBRE_JS}</script>
 </head>
 <body>
 <div id="map"></div>
+<button id="view-toggle" type="button">전체 보기</button>
 <script>
 (function () {
   var TINT = ${JSON.stringify(tint)};
@@ -308,14 +370,41 @@ function mapHtml(
 
   var BOUNDS = [[${bounds.west}, ${bounds.south}], [${bounds.east}, ${bounds.north}]];
   var FIT = { padding: 24, animate: false };
-  /* 걷는 중이면 길 전체가 아니라 걷는 사람을 따라간다. */
-  var FOLLOW = ${follows ? 'true' : 'false'};
-  var FOLLOW_ZOOM = ${FOLLOW_ZOOM};
-
   /** 마지막으로 받은 진행 상황. 스타일이 바뀌어도 이 값으로 다시 그린다. */
   var latest = null;
   /** 마지막으로 알려진 지금-자리. 상자 크기가 바뀔 때 여기로 되돌아간다. */
   var latestCenter = null;
+
+  /*
+   * 걷는 중이면 길 전체가 아니라 걷는 사람을 따라간다.
+   *
+   * 다만 따라가면 길 전체가 안 보이므로(400m쯤만 담긴다) 눌러서 오갈 수 있게 한다.
+   * following은 그 상태고, CAN_FOLLOW는 이 화면에 그 선택지가 있는지다 —
+   * 길을 고르는 화면에는 진행이 없으니 전환할 것도 없다.
+   */
+  var CAN_FOLLOW = ${follows ? 'true' : 'false'};
+  var following = CAN_FOLLOW;
+  var FOLLOW_ZOOM = ${FOLLOW_ZOOM};
+  var toggle = document.getElementById('view-toggle');
+
+  /** 지금 보기에 맞는 화살표만 켜고, 버튼에 다음 동작을 적는다. */
+  function applyView() {
+    if (!map.getLayer('arrows-wide')) { return; }
+    map.setLayoutProperty('arrows-wide', 'visibility', following ? 'none' : 'visible');
+    map.setLayoutProperty('arrows-near', 'visibility', following ? 'visible' : 'none');
+    if (toggle) { toggle.textContent = following ? '전체 보기' : '따라가기'; }
+  }
+
+  /** 길 전체를 담는 자리로. */
+  function showWhole(animate) {
+    map.fitBounds(BOUNDS, { padding: 24, animate: !!animate, duration: 600 });
+  }
+
+  /** 걷는 사람 자리로. 아직 위치를 모르면 길 전체를 보여준다. */
+  function showWalker(duration) {
+    if (latestCenter == null) { showWhole(true); return; }
+    map.easeTo({ center: latestCenter, zoom: FOLLOW_ZOOM, duration: duration });
+  }
 
   var map = new maplibregl.Map({
     container: 'map',
@@ -347,12 +436,44 @@ function mapHtml(
    */
   window.addEventListener('resize', function () {
     // 따라가는 중에 경로 전체로 다시 맞추면 걷는 사람을 놓친다.
-    if (FOLLOW && latestCenter) {
+    if (following && latestCenter) {
       map.easeTo({ center: latestCenter, zoom: FOLLOW_ZOOM, duration: 0 });
       return;
     }
     map.fitBounds(BOUNDS, FIT);
   });
+
+  /*
+   * 눌러서 두 보기를 오간다.
+   *
+   * 지도는 여전히 손대지 못한다(interactive: false) — 끌기는 화면의 스크롤과
+   * 싸우기 때문이다. 누르는 것은 끌기가 아니라 그 다툼이 없고, 걷는 화면에는
+   * 스크롤 자체가 없다.
+   */
+  if (CAN_FOLLOW) {
+    if (toggle) { toggle.style.display = 'block'; }
+
+    function switchView(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      following = !following;
+      applyView();
+      if (following) { showWalker(600); } else { showWhole(true); }
+    }
+
+    /*
+     * 버튼과 지도 **둘 다** 받는다.
+     *
+     * 버튼은 지도의 형제라서 버튼을 눌러도 지도로 올라가지 않는다 — 지도에만
+     * 달아 뒀더니 정작 "전체 보기"라고 적힌 알약이 눌리지 않았다. 눌러야 할
+     * 것처럼 생긴 것이 안 눌리는 게 가장 나쁘다.
+     *
+     * 지도 쪽도 남겨 둔다. 걷는 화면에는 스크롤이 없어 탭이 다른 제스처와
+     * 싸우지 않고, 걸으면서 한 손으로 아무 데나 누르는 편이 쉽다.
+     */
+    if (toggle) { toggle.addEventListener('click', switchView); }
+    document.getElementById('map').addEventListener('click', switchView);
+  }
 
   var whole = ${lineString(path)};
   var start = ${point(start)};
@@ -397,7 +518,8 @@ function mapHtml(
     src('here', latest ? latest.here : start);
     src('start', start);
     src('end', end);
-    src('arrows', latest ? latest.arrows : ${allArrows});
+    src('arrows-wide', latest ? latest.wide : ${wideArrows});
+    src('arrows-near', latest ? latest.near : ${nearArrows});
 
     // 길 밑에 흰 테. 밑그림의 길도 흰색이라 얇은 선만 얹으면 지워진 것처럼 보인다.
     line('casing', 'whole', PAPER, 7, { 'line-opacity': 0.9 });
@@ -414,7 +536,9 @@ function mapHtml(
     // 남은 길은 눈금으로 기다린다.
     line('ahead', 'ahead', TINT, 4, { 'line-dasharray': [2, 1.6] }, { 'line-cap': 'butt' });
     // 어느 쪽으로 걷는지. 선 위에 얹어야 보이므로 선보다 뒤에 얹는다.
-    fill('arrows', 'arrows', TINT, { 'fill-outline-color': PAPER });
+    // 두 배율용 두 벌을 다 얹고 보기에 따라 하나만 켠다.
+    fill('arrows-wide', 'arrows-wide', TINT, { 'fill-outline-color': PAPER });
+    fill('arrows-near', 'arrows-near', TINT, { 'fill-outline-color': PAPER });
 
     // 출발은 비어 있고 도착은 차 있다. 어느 쪽으로 걷는지 한눈에 보이게.
     circle('start', 'start', 5, PAPER, FAINT, 2);
@@ -427,6 +551,8 @@ function mapHtml(
     circle('here', 'here', 6, PAPER, TINT, 4, {
       'circle-opacity': 0, 'circle-stroke-opacity': 0
     });
+
+    applyView();
 
     var visible = latest ? 1 : 0;
     map.setPaintProperty('here', 'circle-opacity', visible);
@@ -442,8 +568,8 @@ function mapHtml(
     map.setStyle(BLANK);
   });
 
-  window.__setProgress = function (walked, ahead, here, arrows) {
-    latest = { walked: walked, ahead: ahead, here: here, arrows: arrows };
+  window.__setProgress = function (walked, ahead, here, wide, near) {
+    latest = { walked: walked, ahead: ahead, here: here, wide: wide, near: near };
     // 스타일이 아직이면 그냥 들고 있는다 — 'styledata'가 올 때 이 값으로 그린다.
     if (map.getLayer('here')) { draw(); }
 
@@ -454,11 +580,11 @@ function mapHtml(
      * 처음 한 번은 길 전체를 보여 주고(생성 시 fitBounds), 첫 진행이 들어오면
      * 그 자리로 부드럽게 내려앉은 뒤로는 계속 붙어 다닌다.
      */
-    if (!FOLLOW || !here || !here.geometry) { return; }
-    var center = here.geometry.coordinates;
+    if (!CAN_FOLLOW || !here || !here.geometry) { return; }
     var first = latestCenter == null;
-    latestCenter = center;
-    map.easeTo({ center: center, zoom: FOLLOW_ZOOM, duration: first ? 900 : 600 });
+    latestCenter = here.geometry.coordinates;
+    // 전체 보기를 고른 사람을 걸음마다 끌어당기지 않는다.
+    if (following) { showWalker(first ? 900 : 600); }
   };
 }());
 </script>

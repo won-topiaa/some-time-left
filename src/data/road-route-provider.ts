@@ -25,6 +25,7 @@ import { buildVisitedIndex, deriveFeatures } from './features';
 import { toStreetSegments, type ParsedRoute } from './tmap/parse';
 import { planWaypoints, refineScale } from './waypoints';
 import { EMPTY_ENVIRONMENT, loadEnvironment, type Environment } from './environment';
+import { withDeadline } from './deadline';
 import { buildBuildingIndex, buildProfileLookup } from './buildings/profile';
 import { inspectPath } from '../domain/route-sanity';
 import type { LatLng, RouteCandidate } from '../domain/types';
@@ -89,19 +90,6 @@ const ENVIRONMENT_DEADLINE_MS = 1500;
  * 최단 경로는 없으면 아무것도 못 하므로 기본값 그대로 두고, 여기서만 짧게 끊는다.
  */
 const CANDIDATE_TIMEOUT_MS = 3500;
-
-/** 오래 걸리면 기다리지 않고 대신할 값으로 간다. */
-async function withDeadline<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<T>((resolve) => {
-    timer = setTimeout(() => resolve(fallback), ms);
-  });
-  try {
-    return await Promise.race([work.catch(() => fallback), deadline]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /**
  * 첫 라운드가 통째로 비었을 때 다시 해 볼 배율.
@@ -255,11 +243,24 @@ export class RoadRouteProvider implements RouteProvider {
      * 셈인데, 그 한 벌이 통째로 기다리는 시간에 얹혔다. 모든 후보의 좌표가
      * 모인 지금 한 번만 받으면 라운드 수와 상관없이 한 벌이면 된다.
      *
+     * **값이 하나 있다.** 브이월드 건물 조회는 경계 상자 하나에 최대 1000건이라,
+     * 두 라운드를 합친 더 넓은 상자에서는 잘릴 수 있다. 잘린 만큼은 그늘이
+     * 중립값이 된다 — 라운드마다 따로 받으면 각자 1000건을 받겠지만, 그러려면
+     * 이 함수가 고치려던 그 한 벌을 도로 들여야 한다. 길이 7초 늦는 것보다
+     * 그늘이 덜 정확한 편이 낫다고 보고 이쪽을 택했다.
+     *
      * 그리고 기다려 주는 시간에 천장을 둔다 — 이건 순위를 다듬는 값이지 길이 아니다.
      */
     const environment: Environment = await withDeadline(
-      loadEnvironment(parsed.map((route) => route.path)),
-      ENVIRONMENT_DEADLINE_MS,
+      // 시한은 **출처마다** 건다. 밖에서 셋을 묶어 한 번에 끊으면 이미 도착한
+      // 둘까지 같이 버려진다 — 하나가 느리다고 나머지를 잃을 이유가 없다.
+      // 바깥의 시한은 그래도 남겨 둔다. 안쪽이 어떤 이유로든 안 끝날 때의 바닥이다.
+      loadEnvironment(
+        parsed.map((route) => route.path),
+        undefined,
+        ENVIRONMENT_DEADLINE_MS
+      ),
+      ENVIRONMENT_DEADLINE_MS + 500,
       EMPTY_ENVIRONMENT
     );
 

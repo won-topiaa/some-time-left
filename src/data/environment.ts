@@ -16,6 +16,7 @@ import { parksNear } from './parks/scenic';
 import { fetchBuildings } from './buildings/vworld';
 import type { Building } from './buildings/types';
 import type { LatLng } from '../domain/types';
+import { withDeadline } from './deadline';
 
 export interface Environment {
   congestion: AreaCongestion[];
@@ -53,19 +54,33 @@ export function clearParkCache(): void {
  */
 export async function loadEnvironment(
   paths: LatLng[][],
-  sido = '서울특별시'
+  sido = '서울특별시',
+  /**
+   * 출처 하나를 기다려 주는 최대 시간 (ms). 없으면 요청 타임아웃까지 기다린다.
+   *
+   * **셋을 묶어서 재면 안 된다.** 묶어 놓고 밖에서 한 번에 끊었더니 이미 도착한
+   * 둘까지 같이 버려졌다 — 공원 천 건과 건물 천 채 중 하나만 느려도 혼잡도까지
+   * 중립값이 된다. 각자 재면 늦은 하나만 빠지고 나머지는 살아 온다.
+   */
+  perSourceDeadlineMs?: number
 ): Promise<Environment> {
   const allPoints = paths.flat();
   if (allPoints.length === 0) {
     return EMPTY_ENVIRONMENT;
   }
 
+  const within = <T>(work: Promise<T>, empty: T): Promise<T> =>
+    perSourceDeadlineMs == null
+      ? work.catch(() => empty)
+      : withDeadline(work, perSourceDeadlineMs, empty);
+
   const [congestion, parks, buildings] = await Promise.all([
-    fetchCongestionAlong(allPoints).catch(() => [] as AreaCongestion[]),
-    loadParks(sido)
-      .then((all) => parksNear(all, allPoints))
-      .catch(() => [] as Park[]),
-    fetchBuildings(allPoints).catch(() => [] as Building[]),
+    within(fetchCongestionAlong(allPoints), [] as AreaCongestion[]),
+    within(
+      loadParks(sido).then((all) => parksNear(all, allPoints)),
+      [] as Park[]
+    ),
+    within(fetchBuildings(allPoints), [] as Building[]),
   ]);
 
   return { congestion, parks, buildings };
