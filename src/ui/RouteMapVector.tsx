@@ -25,6 +25,28 @@ import type { LatLng, MoodId } from '../domain/types';
  * 지도는 손대지 못하게 둔다(`interactive: false`). 래스터판과 같은 성질이고,
  * 무엇보다 두 화면 모두 스크롤 안에 들어 있어서 끌기 제스처가 겹친다.
  */
+/**
+ * 걷는 동안 지도가 붙어 있는 배율.
+ *
+ * **길 전체를 담고 있으면 움직임이 안 보인다.** 2.3km 경로를 420px 상자에 맞추면
+ * 1px이 5.5m라, 다섯 걸음(5m)을 걸어도 점이 0.91px 움직인다 — 1픽셀도 못 간다.
+ * 걸어온 길을 실선으로 채워 넣어도 그 실선이 자라는 게 안 보이는 게 당연했다.
+ *
+ * 17은 1px이 0.95m라 다섯 걸음이 5px가 되고, 화면에 400m쯤 담긴다 —
+ * 다음 골목까지가 보이는 거리다.
+ */
+const FOLLOW_ZOOM = 17;
+
+/**
+ * 따라가는 동안의 화살표 간격·크기 (m).
+ *
+ * 평소 크기는 경계 상자 비율로 낸다(`arrowMetrics`). 그런데 따라가기는 상자와
+ * 무관한 배율로 보므로, 2.3km짜리 상자에 맞춰 만든 76m짜리 화살표가 화면에서
+ * 63px가 된다 — 길이 화살표에 덮인다. 따라갈 때는 땅 위의 실제 크기로 잡는다.
+ */
+const FOLLOW_SPACING_M = 80;
+const FOLLOW_ARROW_M = 16;
+
 export function RouteMapVector({
   path,
   height = 220,
@@ -45,6 +67,13 @@ export function RouteMapVector({
 }) {
   const { colors, scheme } = useTheme();
   const styles = useStyles(createStyles);
+  /**
+   * 진행이 들어오는 화면인가 — 걷는 중인가.
+   *
+   * 값이 아니라 **있는지 없는지**만 본다. 걷는 내내 참으로 고정되므로 이걸
+   * 의존성에 넣어도 HTML이 다시 만들어지지 않는다.
+   */
+  const follows = progress != null;
   /*
    * **그리는 색은 어두운 테마에서도 밝은 쪽을 쓴다.**
    *
@@ -79,13 +108,16 @@ export function RouteMapVector({
    * 여기서 재 두고 아래에서는 지나친 것만 걷어낸다.
    */
   const arrows = useMemo(() => {
+    if (follows) {
+      return { all: routeArrows(path, FOLLOW_SPACING_M), sizeM: FOLLOW_ARROW_M };
+    }
     const { spacingM, sizeM } = arrowMetrics(path);
     return { all: routeArrows(path, spacingM), sizeM };
-  }, [path]);
+  }, [path, follows]);
 
   const html = useMemo(
-    () => mapHtml(path, stroke, mapColors, 'light', arrows),
-    [path, stroke, mapColors, arrows]
+    () => mapHtml(path, stroke, mapColors, 'light', arrows, follows),
+    [path, stroke, mapColors, arrows, follows]
   );
 
   const update = useMemo(
@@ -209,7 +241,8 @@ function mapHtml(
   tint: string,
   colors: Palette,
   scheme: Scheme,
-  arrows: Arrows
+  arrows: Arrows,
+  follows: boolean
 ): string {
   const { mapTiles } = getApiConfig();
   const bounds = path.reduce(
@@ -275,6 +308,14 @@ function mapHtml(
 
   var BOUNDS = [[${bounds.west}, ${bounds.south}], [${bounds.east}, ${bounds.north}]];
   var FIT = { padding: 24, animate: false };
+  /* 걷는 중이면 길 전체가 아니라 걷는 사람을 따라간다. */
+  var FOLLOW = ${follows ? 'true' : 'false'};
+  var FOLLOW_ZOOM = ${FOLLOW_ZOOM};
+
+  /** 마지막으로 받은 진행 상황. 스타일이 바뀌어도 이 값으로 다시 그린다. */
+  var latest = null;
+  /** 마지막으로 알려진 지금-자리. 상자 크기가 바뀔 때 여기로 되돌아간다. */
+  var latestCenter = null;
 
   var map = new maplibregl.Map({
     container: 'map',
@@ -305,6 +346,11 @@ function mapHtml(
    * 크기가 변하는 모든 경우를 여기서 한 번에 받는다.
    */
   window.addEventListener('resize', function () {
+    // 따라가는 중에 경로 전체로 다시 맞추면 걷는 사람을 놓친다.
+    if (FOLLOW && latestCenter) {
+      map.easeTo({ center: latestCenter, zoom: FOLLOW_ZOOM, duration: 0 });
+      return;
+    }
     map.fitBounds(BOUNDS, FIT);
   });
 
@@ -312,8 +358,6 @@ function mapHtml(
   var start = ${point(start)};
   var end = ${point(end)};
 
-  /** 마지막으로 받은 진행 상황. 스타일이 바뀌어도 이 값으로 다시 그린다. */
-  var latest = null;
   var fellBack = false;
 
   function src(id, data) {
@@ -402,6 +446,19 @@ function mapHtml(
     latest = { walked: walked, ahead: ahead, here: here, arrows: arrows };
     // 스타일이 아직이면 그냥 들고 있는다 — 'styledata'가 올 때 이 값으로 그린다.
     if (map.getLayer('here')) { draw(); }
+
+    /*
+     * 걷는 사람을 따라간다.
+     *
+     * 길 전체를 담고 있으면 한 걸음이 1픽셀도 안 되어 움직임이 보이지 않는다.
+     * 처음 한 번은 길 전체를 보여 주고(생성 시 fitBounds), 첫 진행이 들어오면
+     * 그 자리로 부드럽게 내려앉은 뒤로는 계속 붙어 다닌다.
+     */
+    if (!FOLLOW || !here || !here.geometry) { return; }
+    var center = here.geometry.coordinates;
+    var first = latestCenter == null;
+    latestCenter = center;
+    map.easeTo({ center: center, zoom: FOLLOW_ZOOM, duration: first ? 900 : 600 });
   };
 }());
 </script>

@@ -29,6 +29,8 @@ export interface PedestrianQuery {
   destinationName?: string;
   waypoints?: LatLng[];
   searchOption?: TmapSearchOption;
+  /** 이 요청만 짧게 끊는다. 없으면 설정의 기본값 — 후보용이다. */
+  timeoutMs?: number;
 }
 
 /** 보행자 경로안내. 경유지를 넣으면 그만큼 돌아가는 경로가 나온다. */
@@ -39,6 +41,7 @@ export async function fetchPedestrianRoute({
   destinationName = '도착',
   waypoints = [],
   searchOption = '0',
+  timeoutMs,
 }: PedestrianQuery): Promise<ParsedRoute> {
   const { tmap } = getApiConfig();
 
@@ -61,7 +64,8 @@ export async function fetchPedestrianRoute({
 
   const response = await requestJson<TmapPedestrianResponse>(
     `${tmap.baseUrl}/tmap/routes/pedestrian?version=1`,
-    { method: 'POST', headers: headers(), body: JSON.stringify(body) }
+    { method: 'POST', headers: headers(), body: JSON.stringify(body) },
+    timeoutMs
   );
 
   return parsePedestrianResponse(response);

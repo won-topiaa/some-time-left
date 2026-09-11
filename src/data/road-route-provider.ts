@@ -25,7 +25,7 @@ import { buildVisitedIndex, deriveFeatures } from './features';
 import { toStreetSegments, type ParsedRoute } from './tmap/parse';
 import { planWaypoints, refineScale } from './waypoints';
 import { EMPTY_ENVIRONMENT, loadEnvironment, type Environment } from './environment';
-import { buildProfileLookup } from './buildings/profile';
+import { buildBuildingIndex, buildProfileLookup } from './buildings/profile';
 import { inspectPath } from '../domain/route-sanity';
 import type { LatLng, RouteCandidate } from '../domain/types';
 import type { RouteProvider, RouteRequest } from './route-provider';
@@ -59,6 +59,51 @@ export function aimSec(targetSec: number): number {
 const CANDIDATE_COUNT = 6;
 
 /**
+ * 보정 라운드에서 띄우는 개수. 첫 라운드보다 적다.
+ *
+ * 보정은 이미 답을 하나 손에 쥔 상태에서 **더 가까운 것**을 찾는 일이다. 여기서도
+ * 여섯을 던지면 요청도 두 배가 되고, 간격을 두는 공급자에서는 그 간격만큼
+ * (250ms × 5 = 1.25초) 화면이 더 기다린다. 넷이면 좌우 두 쌍이라 벌리는 자리는
+ * 그대로 다양하고, 기다림은 0.75초로 줄어든다.
+ */
+const REFINE_COUNT = 4;
+
+/**
+ * 환경 데이터를 기다려 주는 최대 시간 (ms).
+ *
+ * 혼잡도·공원·건물은 **순위를 다듬는** 값이지 길 자체가 아니다. 그런데 라운드마다
+ * 그걸 다 받고 나서야 후보가 만들어져서, 외부 API 셋 중 하나만 느려도 길을
+ * 기다리는 화면이 그만큼 길어졌다 — 요청 타임아웃이 7초라 최악에는 7초를
+ * 통째로 서 있었다.
+ *
+ * 못 받으면 중립값으로 간다(`EMPTY_ENVIRONMENT`). 그늘과 한적함이 조금 덜 정확한
+ * 길과, 7초 더 기다린 뒤에야 나오는 길 중에서는 앞이 낫다.
+ */
+const ENVIRONMENT_DEADLINE_MS = 1500;
+
+/**
+ * 후보 한 건을 기다려 주는 최대 시간 (ms).
+ *
+ * 후보는 여럿을 동시에 띄워 되는 것만 쓴다. 하나가 응답을 안 주면 나머지 다섯이
+ * 이미 와 있어도 라운드 전체가 그 하나를 기다렸다 — 기본 타임아웃이 7초다.
+ * 최단 경로는 없으면 아무것도 못 하므로 기본값 그대로 두고, 여기서만 짧게 끊는다.
+ */
+const CANDIDATE_TIMEOUT_MS = 3500;
+
+/** 오래 걸리면 기다리지 않고 대신할 값으로 간다. */
+async function withDeadline<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([work.catch(() => fallback), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * 첫 라운드가 통째로 비었을 때 다시 해 볼 배율.
  *
  * 경유지가 하나도 도로망에 안 붙었다는 뜻이므로, 더 멀리가 아니라 **안쪽으로**
@@ -76,6 +121,8 @@ export type FetchRoadRoute = (query: {
   origin: LatLng;
   destination: LatLng;
   waypoints?: LatLng[];
+  /** 이 요청만 짧게 끊고 싶을 때. 없으면 설정의 기본 타임아웃. */
+  timeoutMs?: number;
 }) => Promise<ParsedRoute>;
 
 /**
@@ -170,56 +217,113 @@ export class RoadRouteProvider implements RouteProvider {
     // 목표가 아니라 그 조금 밑을 겨눈다. 흩어진 것들이 목표 위로 넘어가지 않도록.
     const aim = aimSec(targetSec);
 
-    const build = (scale: number) =>
-      this.fetchRound({
-        origin,
-        destination,
-        targetSec: aim,
-        departAtMs,
-        previousPaths,
-        scale,
-      });
-
-    const first = await build(1);
+    const first = await this.fetchPaths({ origin, destination, targetSec: aim, scale: 1 });
 
     // 도로망은 직선이 아니라서 첫 추정은 빗나가는 게 정상이다.
     const best = closestTo(first, aim);
-    if (best != null && Math.abs(best.durationSec - aim) <= REFINE_THRESHOLD_SEC) {
-      return first;
+    const onTarget = best != null && Math.abs(best.durationSec - aim) <= REFINE_THRESHOLD_SEC;
+
+    let parsed = first;
+    if (!onTarget) {
+      /*
+       * 첫 라운드가 통째로 빈 날에도 한 번 더 해 본다.
+       *
+       * 경유지가 전부 도로망에 안 붙었다는 뜻이니 더 해 볼 게 없다고 본 적이
+       * 있는데, 배율을 줄여 안쪽으로 당기면 붙는 날이 있다. 여기서 포기하면
+       * 화면은 "돌아갈 길을 못 찾았어요"로 물러선다.
+       */
+      const nextScale = best == null ? EMPTY_ROUND_SCALE : refineScale(best.durationSec, aim, 1);
+      const second = await this.fetchPaths({
+        origin,
+        destination,
+        targetSec: aim,
+        scale: nextScale,
+        count: REFINE_COUNT,
+      }).catch(() => [] as ParsedRoute[]);
+      parsed = [...first, ...second];
+    }
+
+    if (parsed.length === 0) {
+      return [];
     }
 
     /*
-     * 첫 라운드가 통째로 빈 날에도 한 번 더 해 본다.
+     * 환경 데이터는 **검색 전체에서 한 번만** 받는다.
      *
-     * 예전엔 `best == null`이면 그대로 빈손으로 돌아갔다. 경유지가 전부 도로망에
-     * 안 붙었다는 뜻이니 더 해 볼 게 없다고 본 것인데, 배율을 줄여 경유지를
-     * 안쪽으로 당기면 붙는 날이 있다. 여기서 포기하면 화면은 "돌아갈 길을 못
-     * 찾았어요"로 물러선다 — 자투리 시간을 채우는 게 이 앱이 하는 일 전부인데.
+     * 예전엔 라운드 안에 있어서, 보정까지 가는 날이면 혼잡도·공원·건물을 두 벌
+     * 받았다. 같은 동네를 도는 후보들이라 두 번째는 거의 같은 답을 다시 받는
+     * 셈인데, 그 한 벌이 통째로 기다리는 시간에 얹혔다. 모든 후보의 좌표가
+     * 모인 지금 한 번만 받으면 라운드 수와 상관없이 한 벌이면 된다.
+     *
+     * 그리고 기다려 주는 시간에 천장을 둔다 — 이건 순위를 다듬는 값이지 길이 아니다.
      */
-    const nextScale = best == null ? EMPTY_ROUND_SCALE : refineScale(best.durationSec, aim, 1);
+    const environment: Environment = await withDeadline(
+      loadEnvironment(parsed.map((route) => route.path)),
+      ENVIRONMENT_DEADLINE_MS,
+      EMPTY_ENVIRONMENT
+    );
 
-    const second = await build(nextScale).catch(() => [] as RouteCandidate[]);
+    /*
+     * 건물 격자와 지나온 좌표 격자도 여기서 한 번만 만든다.
+     *
+     * 격자는 건물 목록에서만 나오는데(경로와 무관하다) 후보마다 만들면 같은 건물
+     * 천 채로 같은 격자를 열두 번 만든다. Hermes에는 JIT이 없어 그 반복이 그대로
+     * 기다리는 시간이 된다.
+     */
+    const buildingIndex = buildBuildingIndex(environment.buildings);
+    const visitedIndex = buildVisitedIndex(previousPaths);
 
-    return [...first, ...second];
+    return parsed.map((route) => {
+      const segments = toStreetSegments(
+        route.path,
+        buildProfileLookup(route.path, environment.buildings, buildingIndex)
+      );
+
+      return {
+        id: routeIdOf(this.idPrefix, route.path),
+        durationSec: route.durationSec,
+        distanceM: route.distanceM,
+        path: route.path,
+        segments,
+        features: deriveFeatures({
+          ...route,
+          segments,
+          origin,
+          departAtMs,
+          previousPaths,
+          visitedIndex,
+          environment,
+        }),
+      };
+    });
   }
 
-  private async fetchRound({
+  /**
+   * 한 라운드의 **좌표열만** 받아 온다. 성질 계산은 하지 않는다.
+   *
+   * 예전엔 여기서 환경 데이터까지 받아 후보를 완성했는데, 그러면 라운드마다
+   * 외부 API를 한 벌씩 더 때리게 된다. 받아 오는 일과 값을 매기는 일을 갈라
+   * 두면 라운드가 몇 번이든 값 매기기는 마지막에 한 번이면 된다.
+   */
+  private async fetchPaths({
     origin,
     destination,
     targetSec,
-    departAtMs,
-    previousPaths,
     scale,
-  }: RouteRequest & {
-    previousPaths: LatLng[][];
+    count = CANDIDATE_COUNT,
+  }: {
+    origin: LatLng;
+    destination: LatLng;
+    targetSec: number;
     scale: number;
-  }): Promise<RouteCandidate[]> {
+    count?: number;
+  }): Promise<ParsedRoute[]> {
     const waypoints = planWaypoints({
       origin,
       destination,
       targetSec,
       speedMps: DEFAULT_WALK_SPEED_MPS,
-      count: CANDIDATE_COUNT,
+      count,
       scale,
     });
 
@@ -233,7 +337,12 @@ export class RoadRouteProvider implements RouteProvider {
         if (this.requestSpacingMs > 0 && index > 0) {
           await delay(this.requestSpacingMs * index);
         }
-        return this.fetchRoute({ origin, destination, waypoints: [waypoint] });
+        return this.fetchRoute({
+          origin,
+          destination,
+          waypoints: [waypoint],
+          timeoutMs: CANDIDATE_TIMEOUT_MS,
+        });
       })
     );
 
@@ -244,48 +353,9 @@ export class RoadRouteProvider implements RouteProvider {
      * 것은 다른 말이다 — 공급자는 앞으로도 늘어날 것이고, 새로 붙는 쪽이 또
      * 직선을 그어 보낼 수 있다. 관문은 출처를 묻지 않는다.
      */
-    const routes = results.flatMap((result) =>
-      result.status === 'fulfilled' && inspectPath(result.value.path).ok
-        ? [{ parsed: result.value }]
-        : []
+    return results.flatMap((result) =>
+      result.status === 'fulfilled' && inspectPath(result.value.path).ok ? [result.value] : []
     );
-
-    if (routes.length === 0) {
-      return [];
-    }
-
-    // 후보들이 대개 같은 동네를 지난다. 환경 데이터는 한 번만 받아 나눠 쓴다.
-    const environment: Environment = await loadEnvironment(
-      routes.map((r) => r.parsed.path)
-    ).catch(() => EMPTY_ENVIRONMENT);
-
-    // 지나온 좌표 격자도 후보마다 다시 만들면 안 된다. 여기서 한 번 만들어 나눠 쓴다.
-    const visitedIndex = buildVisitedIndex(previousPaths);
-
-    return routes.map(({ parsed }) => {
-      // 건물 높이가 있으면 그늘 계산이 실제 값으로 바뀐다.
-      const segments = toStreetSegments(
-        parsed.path,
-        buildProfileLookup(parsed.path, environment.buildings)
-      );
-
-      return {
-        id: routeIdOf(this.idPrefix, parsed.path),
-        durationSec: parsed.durationSec,
-        distanceM: parsed.distanceM,
-        path: parsed.path,
-        segments,
-        features: deriveFeatures({
-          ...parsed,
-          segments,
-          origin,
-          departAtMs,
-          previousPaths,
-          visitedIndex,
-          environment,
-        }),
-      };
-    });
   }
 }
 
@@ -323,8 +393,8 @@ function assertWalkable(parsed: ParsedRoute, what: string): void {
   }
 }
 
-function closestTo(candidates: RouteCandidate[], targetSec: number): RouteCandidate | null {
-  return candidates.reduce<RouteCandidate | null>((best, candidate) => {
+function closestTo(candidates: ParsedRoute[], targetSec: number): ParsedRoute | null {
+  return candidates.reduce<ParsedRoute | null>((best, candidate) => {
     if (best == null) {
       return candidate;
     }

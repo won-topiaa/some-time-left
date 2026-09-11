@@ -57,6 +57,13 @@ export interface OsrmQuery {
   destination: LatLng;
   /** 지나갈 곳. 길을 늘릴 때 쓴다. OSRM은 경로 중간 좌표로 받는다. */
   waypoints?: LatLng[];
+  /**
+   * 이 요청만 짧게 끊는다. 없으면 설정의 기본값.
+   *
+   * 후보는 여럿 띄워 되는 것만 쓰므로 하나가 늦으면 버리는 편이 낫다. 최단
+   * 경로는 없으면 아무것도 못 하니 기본값(넉넉한 쪽)을 그대로 쓴다.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -69,6 +76,7 @@ export async function fetchOsrmRoute({
   origin,
   destination,
   waypoints = [],
+  timeoutMs,
 }: OsrmQuery): Promise<ParsedRoute> {
   const { osrmRoute } = getApiConfig();
 
@@ -87,7 +95,8 @@ export async function fetchOsrmRoute({
         // 없으면 403으로 거절당한다(실측). 누가 부르는지 밝히라는 뜻이다.
         'User-Agent': osrmRoute.userAgent,
       },
-    }
+    },
+    timeoutMs
   );
 
   if (response.code !== 'Ok') {

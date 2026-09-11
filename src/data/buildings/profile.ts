@@ -151,14 +151,22 @@ function buildingsNear(
  */
 export function buildProfileLookup(
   path: LatLng[],
-  buildings: Building[]
+  buildings: Building[],
+  /**
+   * 미리 만들어 둔 격자. 후보가 여럿일 때 **밖에서 한 번만** 만들어 넘기라고 있다.
+   *
+   * 격자는 건물 목록에서만 나오는데(경로와 무관하다) 여기서 만들면 후보 열두 개가
+   * 같은 건물 천 채로 같은 격자를 열두 번 만든다. Hermes에는 JIT이 없어서 그
+   * 반복이 그대로 기다리는 시간이 된다 — 길을 찾는 화면에서 가장 아까운 자리다.
+   */
+  prebuilt?: BuildingIndex | null
 ): (index: number) => StreetProfile {
   if (buildings.length === 0) {
     return () => DEFAULT_STREET_PROFILE;
   }
 
   // 격자는 경로마다 한 번만 만든다. 구간마다 다시 만들면 쓰는 의미가 없다.
-  const index = buildBuildingIndex(buildings);
+  const index = prebuilt !== undefined ? prebuilt : buildBuildingIndex(buildings);
 
   const profiles = new Map<number, StreetProfile>();
   for (let i = 1; i < path.length; i += 1) {
