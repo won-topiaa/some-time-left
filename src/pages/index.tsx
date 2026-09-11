@@ -674,17 +674,32 @@ function Home() {
         {missing != null && <Text style={styles.missing}>{missing}</Text>}
 
         {/*
-          지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 가장 옅게.
-          다만 얼마나 쌓였는지는 여기서 보인다 — 걷고 돌아올 때마다 이 숫자가 늘고,
-          그게 이 앱에서 유일하게 쌓이는 것이다.
+          지나온 길은 목적이 아니라 뒤돌아보는 자리다. 그래서 맨 아래, 다음 버튼보다
+          한 단계 물러나 있다. 다만 **문인 줄은 보여야 한다** — 13px을 inkFaint로
+          얹어 뒀더니(대비 2.48:1) 그냥 지나치게 된다는 말을 들었다. 테두리 없는
+          옅은 글씨는 이 앱에서 '아직 안 채워진 자리'를 뜻하는 표시라, 누를 수 있는
+          것에 쓰면 신호가 어긋난다.
+
+          이 앱이 이미 쓰는 보조 버튼 모양을 그대로 쓴다 — 헤어라인 알약에 inkSoft
+          글씨(`_404`의 '처음으로', 기록 화면의 '이 길 공유하기'와 같은 옷이다).
+          면은 여전히 안 칠한다.
+
+          쌓인 거리는 여기서 보인다. 걷고 돌아올 때마다 이 숫자가 늘고, 그게 이
+          앱에서 유일하게 쌓이는 것이라 누를 이유도 그 숫자가 만든다 — 그래서
+          라벨보다 진하게 둔다.
         */}
         <Pressable
           style={({ pressed }) => [styles.trace, pressed && styles.pressed]}
           onPress={() => navigation.navigate('/trace')}
+          accessibilityRole="button"
+          accessibilityLabel={
+            walkedKm != null ? `지나온 길, 지금까지 ${walkedKm}킬로미터` : '지나온 길'
+          }
         >
-          <Text style={styles.traceText}>
-            지나온 길{walkedKm != null && ` · ${walkedKm}km`}
-          </Text>
+          <Text style={styles.traceText}>지나온 길</Text>
+          {walkedKm != null && <Text style={styles.traceDistance}>{walkedKm}km</Text>}
+          {/* 다음 화면으로 간다는 표시. 알약 하나로는 '누를 수 있다'까지만 말한다. */}
+          <Text style={styles.traceChevron}>›</Text>
         </Pressable>
       </View>
     </View>
@@ -810,8 +825,27 @@ const createStyles = (colors: Palette, type: TypeScale) =>
     ctaOff: { backgroundColor: colors.line },
     ctaTextOff: { color: colors.inkFaint },
     ctaText: { ...type.title, color: colors.surface },
-    trace: { paddingVertical: spacing.md, alignItems: 'center' },
-    traceText: { ...type.caption, color: colors.inkFaint },
+    /*
+      다음 버튼과 나란히 두되 급을 나눈다. 위는 면을 칠한 먹색 한 덩어리,
+      여기는 선 하나짜리 알약 — 폭도 글자만큼만 잡아(alignSelf) 가로로 꽉 찬
+      주 버튼과 섞이지 않게 한다.
+    */
+    trace: {
+      alignSelf: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      paddingVertical: spacing.sm + 4,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    traceText: { ...type.body, color: colors.inkSoft },
+    /** 누를 이유를 만드는 숫자. 라벨보다 진하다. */
+    traceDistance: { ...type.body, color: colors.ink, fontWeight: '600' },
+    traceChevron: { ...type.body, color: colors.inkFaint },
     /**
      * 추신. 인사말 아래, 입력칸 위. 위아래 헤어라인으로 나눈다.
      * 처음 켠 사람이 스크롤하며 읽고 나면 바로 아래 입력칸이 기다린다.

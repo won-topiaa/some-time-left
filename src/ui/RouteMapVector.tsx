@@ -387,12 +387,25 @@ function mapHtml(
   var FOLLOW_ZOOM = ${FOLLOW_ZOOM};
   var toggle = document.getElementById('view-toggle');
 
+  /**
+   * 지금 **실제로** 따라가고 있는가.
+   *
+   * 따라가기를 골랐어도 위치를 아직 한 번도 못 받았으면 따라갈 자리가 없어서
+   * 카메라는 길 전체에 머문다. 그때 뜻만 보고 화살표를 바꾸면 길 전체를 담은
+   * 화면에 따라가기용 16m 화살표가 켜져 2.9px로 사라지고(실측), 버튼에는
+   * 이미 전체가 보이는데 "전체 보기"라고 적힌다. 뜻이 아니라 화면을 따른다.
+   */
+  function nowFollowing() {
+    return following && latestCenter != null;
+  }
+
   /** 지금 보기에 맞는 화살표만 켜고, 버튼에 다음 동작을 적는다. */
   function applyView() {
     if (!map.getLayer('arrows-wide')) { return; }
-    map.setLayoutProperty('arrows-wide', 'visibility', following ? 'none' : 'visible');
-    map.setLayoutProperty('arrows-near', 'visibility', following ? 'visible' : 'none');
-    if (toggle) { toggle.textContent = following ? '전체 보기' : '따라가기'; }
+    var near = nowFollowing();
+    map.setLayoutProperty('arrows-wide', 'visibility', near ? 'none' : 'visible');
+    map.setLayoutProperty('arrows-near', 'visibility', near ? 'visible' : 'none');
+    if (toggle) { toggle.textContent = near ? '전체 보기' : '따라가기'; }
   }
 
   /** 길 전체를 담는 자리로. */
@@ -454,11 +467,22 @@ function mapHtml(
     if (toggle) { toggle.style.display = 'block'; }
 
     function switchView(event) {
+      /*
+       * 출처 표기는 눌러서 열 수 있어야 한다.
+       *
+       * MapLibre는 표기 컨트롤을 지도 안에 넣는다. 지도 전체로 탭을 받으면서
+       * preventDefault를 부르는 바람에 "© OpenStreetMap"·"OpenMapTiles" 링크가
+       * 죽고 대신 보기가 바뀌었다 — 둘 다 표기를 **요구하는** 라이선스다.
+       * 링크 위에서 시작한 탭은 그냥 지나 보낸다.
+       */
+      var target = event.target;
+      if (target && target.closest && target.closest('a')) { return; }
+
       event.preventDefault();
       event.stopPropagation();
       following = !following;
       applyView();
-      if (following) { showWalker(600); } else { showWhole(true); }
+      if (nowFollowing()) { showWalker(600); } else { showWhole(true); }
     }
 
     /*
@@ -570,6 +594,19 @@ function mapHtml(
 
   window.__setProgress = function (walked, ahead, here, wide, near) {
     latest = { walked: walked, ahead: ahead, here: here, wide: wide, near: near };
+
+    /*
+     * 지금-자리를 **그리기 전에** 갱신한다.
+     *
+     * draw()가 applyView()를 부르고 그 판단이 latestCenter를 본다. 나중에 넣으면
+     * 첫 위치가 들어온 순간에도 '아직 모름'으로 읽혀서, 카메라는 걷는 사람에게
+     * 내려앉는데 화살표는 다음 위치가 올 때까지 전체 보기용으로 남는다.
+     */
+    var first = latestCenter == null;
+    if (CAN_FOLLOW && here && here.geometry) {
+      latestCenter = here.geometry.coordinates;
+    }
+
     // 스타일이 아직이면 그냥 들고 있는다 — 'styledata'가 올 때 이 값으로 그린다.
     if (map.getLayer('here')) { draw(); }
 
@@ -581,8 +618,6 @@ function mapHtml(
      * 그 자리로 부드럽게 내려앉은 뒤로는 계속 붙어 다닌다.
      */
     if (!CAN_FOLLOW || !here || !here.geometry) { return; }
-    var first = latestCenter == null;
-    latestCenter = here.geometry.coordinates;
     // 전체 보기를 고른 사람을 걸음마다 끌어당기지 않는다.
     if (following) { showWalker(first ? 900 : 600); }
   };
