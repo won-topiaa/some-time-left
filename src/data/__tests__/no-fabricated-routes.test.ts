@@ -77,11 +77,24 @@ describe('가짜 좌표는 출하 경로에 없다', () => {
       chain.indexOf('export function useRouteSuggestion')
     );
 
-    // 연쇄에 오르는 공급자는 이 둘뿐이고, 둘 다 RoadRouteProvider를 상속한다.
-    const constructed = [...body.matchAll(/new\s+(\w+)\s*\(/g)].map((m) => m[1]);
-    expect(constructed.sort()).toEqual(['OsrmRouteProvider', 'TmapRouteProvider']);
+    /*
+     * 이 자리에서 만들어도 되는, 공급자가 아닌 것들.
+     *
+     * 목록으로 두는 이유가 있다. 이름으로 거르면(예: `Provider`로 끝나는 것만)
+     * `new Fabricator()` 같은 걸 놓친다. 새 생성자가 이 자리에 끼면 무조건
+     * 이 테스트가 먼저 깨지고, 그때 사람이 "이게 길을 지어내지는 않는가"를
+     * 한 번 본다 — 이 파일이 하려는 일이 정확히 그것이다.
+     */
+    const NOT_A_PROVIDER = ['ApiError'];
 
-    for (const name of constructed) {
+    const constructed = [...body.matchAll(/new\s+(\w+)\s*\(/g)].map((m) => m[1]);
+    const providers = constructed.filter((name) => !NOT_A_PROVIDER.includes(name));
+    expect([...new Set(providers)].sort()).toEqual([
+      'OsrmRouteProvider',
+      'TmapRouteProvider',
+    ]);
+
+    for (const name of providers) {
       const file = readFileSync(
         join(SRC, 'data', `${name === 'TmapRouteProvider' ? 'tmap' : 'osrm'}-route-provider.ts`),
         'utf8'

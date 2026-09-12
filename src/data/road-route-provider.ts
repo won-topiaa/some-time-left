@@ -164,8 +164,12 @@ export class RoadRouteProvider implements RouteProvider {
    * 최단 경로는 시간 예산을 잡기 위한 것이라 환경 데이터를 부르지 않는다.
    * 여기서까지 외부 API를 때리면 첫 화면이 느려진다.
    */
-  async shortest(origin: LatLng, destination: LatLng): Promise<RouteCandidate> {
-    const parsed = await this.fetchRoute({ origin, destination });
+  async shortest(
+    origin: LatLng,
+    destination: LatLng,
+    timeoutMs?: number
+  ): Promise<RouteCandidate> {
+    const parsed = await this.fetchRoute({ origin, destination, timeoutMs });
 
     /*
      * 여기에도 관문을 둔다.

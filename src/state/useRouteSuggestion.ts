@@ -5,6 +5,9 @@ import { TmapRouteProvider } from '../data/tmap-route-provider';
 import { OsrmRouteProvider } from '../data/osrm-route-provider';
 import { isWalkablePath } from '../domain/route-sanity';
 import { isTmapConfigured } from '../config';
+import { ApiError } from '../data/http';
+import { isRetryable, pause } from '../data/retry';
+import { routeFailureLine } from '../data/route-failure';
 import { RECENT_WINDOW, loadRecords } from '../data/records';
 import { isShadeWorthy } from '../domain/shade';
 import { weightsFor } from '../domain/mood';
@@ -16,29 +19,7 @@ import {
   rankRoutes,
 } from '../domain/route-plan';
 import { planWalk, type WalkPlan } from '../domain/time';
-import type { LatLng, MoodId, ScoredRoute } from '../domain/types';
-
-/**
- * 마지막 실패를 사람이 읽을 한 줄로.
- *
- * 기다리면 풀릴 일과 그렇지 않은 일을 나눈다. 도로가 없는 곳을 찍은 사람에게
- * "잠시 뒤에 다시 해볼까요?"라고 하면, 눌러도 같은 화면이 돌아오는 막다른 길이
- * 된다 — 이 앱에서 재시도 버튼은 정말 다시 해볼 만할 때만 뜻이 있다.
- */
-export function routeFailureLine(failure: unknown): string {
-  const message = failure instanceof Error ? failure.message : '';
-
-  // 도로망이 그 근처를 아예 모른다. 다시 눌러도 같은 답이 온다.
-  if (message.includes('걸을 수 있는 길이 없어요')) {
-    return '그 근처에는 걸을 수 있는 길이 없어요.\n장소를 다시 골라볼까요?';
-  }
-  // 공급자가 길이라고 보기 어려운 좌표를 보냈다. 이것도 다시 부른다고 안 바뀐다.
-  if (message.includes('걸을 수 있는 모양이 아니에요')) {
-    return '길을 제대로 받지 못했어요.\n장소를 다시 골라볼까요?';
-  }
-  // 나머지는 대개 네트워크다. 그때는 정말 다시 해볼 만하다.
-  return '길을 찾지 못했어요. 잠시 뒤에 다시 해볼까요?';
-}
+import type { LatLng, MoodId, RouteCandidate, ScoredRoute } from '../domain/types';
 
 /**
  * 시도할 공급자들, 좋은 순서대로.
@@ -54,6 +35,67 @@ export function routeFailureLine(failure: unknown): string {
 function providerChain(): Array<() => RouteProvider> {
   const osrm = () => new OsrmRouteProvider();
   return isTmapConfigured() ? [() => new TmapRouteProvider(), osrm] : [osrm];
+}
+
+/**
+ * 최단 경로를 부를 때 시도마다 주는 제한 시간 (ms).
+ *
+ * 첫 번은 짧게 끊는다. 흔들린 요청은 끝까지 기다려 봐야 대개 안 오고, 그 기다림이
+ * 그대로 사람의 기다림이 된다 — 빨리 접고 다시 묻는 편이 낫다. 그래도 안 되면
+ * 두 번째에 기본값만큼 넉넉히 준다. 반대로 잡으면 실패한 날 두 배로 기다린다.
+ */
+const SHORTEST_TIMEOUTS_MS = [3500, 7000];
+
+/** 다시 묻기 전에 쉬는 시간 (ms). 바로 다시 던지면 같은 순간의 같은 장애를 만난다. */
+const SHORTEST_RETRY_SPACING_MS = 600;
+
+/**
+ * 최단 경로 한 장과 그걸 준 공급자.
+ *
+ * **이 한 번이 다른 모든 것의 기준점이다.** 여기서 실패하면 계획도, 후보도,
+ * 도착 시각도 세울 수 없어 화면이 통째로 실패로 간다. 그런데 여기엔 아무 보험이
+ * 없었다 — 지하철이 터널을 지나는 동안, 신호가 한 칸 떨어지는 순간에 걸리면
+ * "길을 찾지 못했어요"가 뜨고 사람이 직접 버튼을 눌러야 했다.
+ *
+ * 그래서 한 바퀴를 더 돈다. 다만 **다시 물어야 답이 달라질 공급자만** 다시 돈다 —
+ * 키가 틀렸다거나 도로망이 '그런 길 없다'고 대답한 쪽을 다시 부르면 같은 답을
+ * 두 번 받으면서 사람만 두 배로 기다린다.
+ */
+async function findShortest(
+  origin: LatLng,
+  destination: LatLng
+): Promise<{ provider: RouteProvider; shortest: RouteCandidate }> {
+  let pending = providerChain();
+  let lastFailure: unknown = null;
+
+  for (let round = 0; round < SHORTEST_TIMEOUTS_MS.length && pending.length > 0; round += 1) {
+    const again: Array<() => RouteProvider> = [];
+
+    for (const make of pending) {
+      try {
+        const provider = make();
+        const shortest = await provider.shortest(
+          origin,
+          destination,
+          SHORTEST_TIMEOUTS_MS[round]
+        );
+        return { provider, shortest };
+      } catch (failure) {
+        lastFailure = failure;
+        if (isRetryable(failure)) {
+          again.push(make);
+        }
+      }
+    }
+
+    pending = again;
+    if (pending.length > 0) {
+      await pause(SHORTEST_RETRY_SPACING_MS);
+    }
+  }
+
+  // 지어내지 않는다. 마지막 실패 이유를 그대로 올려 보낸다 — 화면이 그걸로 말을 고른다.
+  throw lastFailure ?? new ApiError('길을 찾지 못했어요', null);
 }
 
 export interface Suggestion {
@@ -200,26 +242,9 @@ export function useRouteSuggestion({
          * 기준점이라, 최단은 TMAP이 후보는 OSRM이 내면 두 속도 모형을 섞어 재는
          * 셈이 되고 "3분 전"이 그만큼 어긋난다. 그래서 하나를 고르면 끝까지 간다.
          */
-        let provider: RouteProvider | null = null;
-        let shortest: Awaited<ReturnType<RouteProvider['shortest']>> | null = null;
-        let lastError: unknown = null;
-
-        for (const make of providerChain()) {
-          try {
-            const attempted = make();
-            shortest = await attempted.shortest(origin, destination);
-            provider = attempted;
-            break;
-          } catch (failure) {
-            lastError = failure;
-          }
-        }
+        const { provider, shortest } = await findShortest(origin, destination);
 
         if (cancelled) return;
-        // 전부 실패했다. 지어내지 않고 위 catch로 보낸다.
-        if (provider == null || shortest == null) {
-          throw lastError ?? new Error('길을 찾지 못했어요');
-        }
 
         const walkPlan = planWalk({
           nowMs,

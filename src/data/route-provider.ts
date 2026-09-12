@@ -38,8 +38,14 @@ export interface RouteRequest {
 }
 
 export interface RouteProvider {
-  /** 최단 경로 하나. 시간 예산 계산의 기준점. */
-  shortest(origin: LatLng, destination: LatLng): Promise<RouteCandidate>;
+  /**
+   * 최단 경로 하나. 시간 예산 계산의 기준점.
+   *
+   * `timeoutMs`를 주면 이 한 번만 그만큼에서 끊는다. 다시 부를 수 있는 쪽에서
+   * 첫 시도를 짧게 끊고 다음에 넉넉히 주기 위한 것이다 — 처음부터 길게 잡으면
+   * 실패했을 때 사람이 두 배로 기다린다.
+   */
+  shortest(origin: LatLng, destination: LatLng, timeoutMs?: number): Promise<RouteCandidate>;
   /** 목표 시간 근처의 후보들. 많을수록 좋지만 5~8개면 충분하다. */
   candidates(request: RouteRequest): Promise<RouteCandidate[]>;
 }
