@@ -178,3 +178,69 @@ describe('geo', () => {
     });
   });
 });
+
+/*
+ * 서 있는 사람에게 하는 말.
+ *
+ * 조용한 동안 `speedMps`는 마지막으로 걷던 속도에 얼어 있다 — 표본은 측정이
+ * 들어올 때만 늘고, 5m를 안 움직이면 측정이 안 온다. 그래서 `STANDING_SPEED_MPS`
+ * 가지는 여기서 걸리지 않는다(그 가지는 지터로 들어온 느린 표본이 있을 때의 것이다).
+ * 얼어 있는 값 자체는 "이 속도로 걸으면"이라는 뜻으로 여전히 쓸 수 있고,
+ * 거짓이 되는 건 그걸 **"지금 속도"라고 부르는 문장**뿐이다.
+ */
+describe('paceAdvice — 서 있을 때', () => {
+  const standing = { remainingM: 1250, remainingSec: 1000, currentSpeedMps: 1.25 };
+
+  it('서 있는 사람에게 "지금 속도 그대로"라고 하지 않는다', () => {
+    const advice = paceAdvice({ ...standing, standing: true });
+
+    expect(advice.action).toBe('keep');
+    expect(advice.message).not.toContain('지금 속도');
+    expect(advice.message).toBe('지금 걷기 시작하면 딱 맞아요.');
+  });
+
+  it('서 있는 사람에게 더 천천히 걸으라고 하지 않는다', () => {
+    const advice = paceAdvice({
+      remainingM: 1000,
+      remainingSec: 1000,
+      currentSpeedMps: 1.6,
+      standing: true,
+    });
+
+    expect(advice.action).toBe('slower');
+    expect(advice.message).toBe('아직 여유 있어요.');
+  });
+
+  it('늦은 사람에게는 서 있든 걷든 같은 말을 한다', () => {
+    // "조금 서둘러야 해요"는 서 있는 사람에게도 참이다. 바꿀 이유가 없다.
+    const walking = paceAdvice({ remainingM: 1250, remainingSec: 500, standing: false, currentSpeedMps: 1.25 });
+    const stopped = paceAdvice({ remainingM: 1250, remainingSec: 500, standing: true, currentSpeedMps: 1.25 });
+
+    expect(walking.action).toBe('hurry');
+    expect(stopped.message).toBe(walking.message);
+  });
+
+  /*
+   * 이게 이 묶음에서 제일 중요한 못이다.
+   *
+   * 고치는 손이 자연스럽게 가는 곳은 `effectiveSpeed`다 — "서 있으니 기본 속도를
+   * 쓰자". 그러면 사람이 멈춰 선 순간 화면의 도착 시각이 이유 없이 튄다.
+   * 서 있다는 사실은 **문장만** 바꾼다. 숫자는 건드리지 않는다.
+   */
+  it('서 있다고 해서 숫자가 달라지지는 않는다', () => {
+    // 측정 속도를 기본 보행 속도와 **다르게** 둔다. 1.25로 두면 기본값을 끼워 넣는
+    // 회귀가 같은 숫자를 내놓아 이 못을 그냥 지나간다.
+    const brisk = { remainingM: 1250, remainingSec: 1000, currentSpeedMps: 1.6 };
+    const walking = paceAdvice({ ...brisk, standing: false });
+    const stopped = paceAdvice({ ...brisk, standing: true });
+
+    expect(stopped.predictedSec).toBe(walking.predictedSec);
+    expect(stopped.predictedDeltaSec).toBe(walking.predictedDeltaSec);
+    expect(stopped.requiredSpeedMps).toBe(walking.requiredSpeedMps);
+    expect(stopped.action).toBe(walking.action);
+  });
+
+  it('standing을 안 넘기면 걷는 사람으로 본다', () => {
+    expect(paceAdvice(standing).message).toBe('지금 속도 그대로면 딱 맞아요.');
+  });
+});

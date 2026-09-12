@@ -18,7 +18,15 @@
  * 있는 것으로 보되 너무 오래 조용하면 모른다고 말한다.
  */
 
-/** 걷는 화면이 첫 측정을 기다려 주는 시간 (ms). */
+/**
+ * 걷는 화면이 첫 좌표를 기다려 주는 시간 (ms).
+ *
+ * 이 유예가 성립하려면 첫 좌표가 **오게 되어 있어야** 한다. 구독만 걸어 두고
+ * 기다리면 안 된다 — 변경을 알리는 물건이라, 출발선에서 가만히 서 있는 사람에게는
+ * 첫 이벤트도 오지 않는다. 그러면 이 파일이 없애려던 "조용함 = 실패"가 이 가지로
+ * 되살아난다. 그래서 걷는 화면은 구독을 걸면서 `getCurrentLocation`으로 지금
+ * 위치를 **직접 묻는다**. 이 시계가 재는 건 그 물음의 답이 오기까지의 시간이다.
+ */
 export const FIRST_FIX_GRACE_MS = 20_000;
 
 /**
@@ -33,23 +41,14 @@ export const POSITION_STALE_MS = 3 * 60 * 1000;
 /**
  * 이만큼 조용하면 지금은 걷고 있지 않다고 본다 (ms).
  *
- * 5m마다, 늦어도 3초마다 오는 구독이다. 걷는 사람은 4초 안에 한 번은 들어온다 —
+ * 5m를 움직여야 오고, 아무리 자주 와도 3초에 한 번이다(timeInterval은 최소 주기,
+ * 즉 하한이다 — SDK 문서에 "지정한 주기보다 더 긴 간격으로 업데이트될 수 있어요"라고
+ * 적혀 있다). 그러니 걷는 사람은 4초 안에 한 번은 들어온다 —
  * 20초가 조용하면 서 있는 쪽이다. 좌표는 여전히 맞지만 **속도는 맞지 않는다**:
  * 조용한 동안 표본이 늘지 않아 마지막으로 걷던 속도에 멈춰 있기 때문이다.
  * 그 값을 "이 속도면"이라고 부르면 서 있는 사람에게 걷고 있다고 말하는 셈이다.
  */
 export const QUIET_MS = 20_000;
-
-/**
- * 오류를 믿어 주는 시간 (ms).
- *
- * 오류는 조용함과 다르다 — 시스템이 직접 못 하겠다고 말한 것이다. 그렇다고
- * 한 번의 오류로 남은 길 내내 눈을 감으면, 바로 다음에 들어온 멀쩡한 좌표까지
- * 못 쓰게 된다. **오류도 낡는다.** 계속 나는 오류라면 계속 새것이므로 눈은
- * 계속 감겨 있고, 한 번 튄 것이라면 30초 뒤에는 마지막 좌표로 돌아간다.
- * 그 좌표가 진짜로 낡았다면 아래의 POSITION_STALE_MS가 다시 잡는다.
- */
-export const ERROR_FRESH_MS = 30_000;
 
 export type PositionCertainty =
   /** 좌표를 믿어도 된다. 방금 받았거나, 조용하지만 그건 안 움직였다는 뜻이다. */
@@ -60,8 +59,17 @@ export type PositionCertainty =
   | 'lost';
 
 export interface PositionInput {
-  /** 마지막 오류 이후 흐른 시간 (ms). 오류가 난 적이 없으면 null. */
-  sinceErrorMs: number | null;
+  /**
+   * **지금 켜져 있는 구독이** 오류를 보고했는가.
+   *
+   * 구독마다 새로 판정한다. SDK의 `onError`는 구독을 거는 시점에만 울린다 —
+   * 권한을 거부당했거나 브리지 호출이 실패한 경우다(node_modules의
+   * UpdateLocationEvent.listener에서 requestPermission과 startUpdateLocation
+   * postMessage의 실패 경로가 전부다. 측정 이벤트 쪽에는 오류 경로가 없다).
+   * 그러니 이 값의 수명은 구독의 수명이고, 다시 구독할 때 비워야 한다 —
+   * 안 비우면 끊겼다 다시 걸린 멀쩡한 구독이 지난번 거부를 이어받는다.
+   */
+  errored: boolean;
   /** 측정을 한 번이라도 받았는가. */
   hadFix: boolean;
   /**
@@ -77,14 +85,13 @@ export interface PositionInput {
 }
 
 export function positionCertainty({
-  sinceErrorMs,
+  errored,
   hadFix,
   sinceListeningMs,
   sinceFixMs,
 }: PositionInput): PositionCertainty {
   // 오류는 조용함과 다르다. 이건 시스템이 직접 못 하겠다고 말한 것이다.
-  // 다만 방금 난 오류만 그렇다 — 오래된 오류는 지금을 설명하지 못한다.
-  if (sinceErrorMs != null && sinceErrorMs <= ERROR_FRESH_MS) {
+  if (errored) {
     return 'lost';
   }
 

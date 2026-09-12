@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import {
   Accuracy,
+  type Location,
   generateHapticFeedback,
+  getCurrentLocation,
   setScreenAwakeMode,
   startUpdateLocation,
 } from '@apps-in-toss/framework';
@@ -95,10 +97,11 @@ function Walk() {
   // 화면마다 남은 시간이 달라지고, 분 단위를 약속한 앱이 스스로 거짓말을 하게 된다.
   const offset = trip.clockOffsetMs;
   const [nowMs, setNowMs] = useState(() => Date.now() + offset);
-  // 마지막으로 위치 구독이 오류를 보고한 시각. 놓친 채로 페이스를 코칭하면
-  // 잘 걷는 사람에게 서두르라고 한다. 참/거짓이 아니라 시각으로 들고 있는 건
-  // 오류도 낡기 때문이다 — 한 번 튄 오류로 남은 길 내내 눈을 감지 않는다.
-  const [lostAtMs, setLostAtMs] = useState<number | null>(null);
+  // 지금 켜져 있는 구독이 오류를 보고했는가. 놓친 채로 페이스를 코칭하면
+  // 잘 걷는 사람에게 서두르라고 한다. 구독마다 새로 판정한다 — SDK의 onError는
+  // 구독을 거는 시점에만 울리므로(권한 거부, 브리지 실패) 이 값의 수명은 구독의
+  // 수명이고, 다시 구독하면서 비우지 않으면 멀쩡한 구독이 지난번 거부를 이어받는다.
+  const [locationLost, setLocationLost] = useState(false);
   // nowMs와 같은(보정된) 시계로 찍어 둔다. 한쪽만 보정하면 뺄셈이 흐른 시간이 아니게 된다.
   const [startedAtMs] = useState(() => Date.now() + offset);
 
@@ -155,7 +158,7 @@ function Walk() {
       //  유예가 이미 지나 있어 곧장 'lost'다.)
       lastFixAtMs.current = null;
       listeningSinceMs.current = Date.now();
-      setLostAtMs(null);
+      setLocationLost(false);
     });
     const onBlur = navigation.addListener('blur', () => setFocused(false));
     return () => {
@@ -185,6 +188,54 @@ function Walk() {
     return () => clearInterval(timer);
   }, [offset, focused]);
 
+  /**
+   * 들어온 좌표 하나를 화면에 반영한다.
+   *
+   * 구독이 준 것이든 우리가 직접 물어본 것이든 같은 길을 타야 한다 — 한쪽만
+   * 진행을 밀고 다른 쪽은 안 밀면, 첫 좌표가 어디서 왔느냐에 따라 화면이 달라진다.
+   */
+  const applyLocation = useCallback(
+    (location: Location) => {
+      const at: LatLng = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+      // 기기 시각보다 측정 시각이 정확하다
+      const ms = location.timestamp;
+
+      // 직전 측정과의 거리는 속도에도 쓰고, 진행이 껑충 뛰는 것도 막는다.
+      const movedM =
+        previous.current != null ? distanceM(previous.current.at, at) : null;
+
+      if (previous.current != null && movedM != null) {
+        samples.current.push({
+          distanceFromPrevM: movedM,
+          elapsedSec: (ms - previous.current.ms) / 1000,
+        });
+        setSpeedMps(estimateSpeedMps(samples.current));
+      }
+      previous.current = { at, ms };
+
+      setLocationLost(false);
+      lastFixAtMs.current = Date.now();
+
+      const walked = walkProgress(path, at, {
+        since: progress.current,
+        // 길이 굽어 있으므로 직선 거리보다 조금 더 갔을 수 있다. 여유를 둔다.
+        // 첫 측정은 비교할 앞이 없어 제한하지 않는다.
+        ...(movedM != null ? { maxAdvanceM: movedM * 1.5 + 20 } : {}),
+      });
+      progress.current = Math.max(progress.current, walked.alongRatio);
+      setAlongRatio(progress.current);
+      setRemainingM(walked.remainingM);
+      // 길에서 얼마나 떨어져 있는가. 남은 거리에 이미 섞여 들어가지만,
+      // 숫자가 슬그머니 늘어나는 것만으로는 길을 잘못 들었다는 걸 알 수 없다.
+      // 같은 투영에서 나온 값이라 경로를 두 번 훑지 않는다 — 표본마다 O(n)이다.
+      setOffRouteM(walked.offPathM);
+    },
+    [path]
+  );
+
   useEffect(() => {
     // 화면이 가려져 있으면 위치를 받을 이유가 없다. 도착 화면 동안 고정밀 GPS를
     // 켜 둔 채로 두면 배터리만 먹고, 안 보이는 화면을 몇 초마다 다시 그린다.
@@ -192,54 +243,44 @@ function Walk() {
       return;
     }
 
+    // 새로 거는 구독은 지난번 거부를 이어받지 않는다.
+    setLocationLost(false);
+
     const stop = startUpdateLocation({
       // 도착을 40m로 재고 5m 간격 표본으로 속도를 낸다. Balanced는 SDK 문서상
       // 오차가 수백 미터라 그 판정이 통째로 흔들린다 — 걷는 동안에는 High를 쓴다.
       options: { accuracy: Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
-      onEvent: (location) => {
-        const at: LatLng = {
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
-        };
-        // 기기 시각보다 측정 시각이 정확하다
-        const ms = location.timestamp;
-
-        // 직전 측정과의 거리는 속도에도 쓰고, 진행이 껑충 뛰는 것도 막는다.
-        const movedM =
-          previous.current != null ? distanceM(previous.current.at, at) : null;
-
-        if (previous.current != null && movedM != null) {
-          samples.current.push({
-            distanceFromPrevM: movedM,
-            elapsedSec: (ms - previous.current.ms) / 1000,
-          });
-          setSpeedMps(estimateSpeedMps(samples.current));
-        }
-        previous.current = { at, ms };
-
-        setLostAtMs(null);
-        lastFixAtMs.current = Date.now();
-
-        const walked = walkProgress(path, at, {
-          since: progress.current,
-          // 길이 굽어 있으므로 직선 거리보다 조금 더 갔을 수 있다. 여유를 둔다.
-          // 첫 측정은 비교할 앞이 없어 제한하지 않는다.
-          ...(movedM != null ? { maxAdvanceM: movedM * 1.5 + 20 } : {}),
-        });
-        progress.current = Math.max(progress.current, walked.alongRatio);
-        setAlongRatio(progress.current);
-        setRemainingM(walked.remainingM);
-        // 길에서 얼마나 떨어져 있는가. 남은 거리에 이미 섞여 들어가지만,
-        // 숫자가 슬그머니 늘어나는 것만으로는 길을 잘못 들었다는 걸 알 수 없다.
-        // 같은 투영에서 나온 값이라 경로를 두 번 훑지 않는다 — 표본마다 O(n)이다.
-        setOffRouteM(walked.offPathM);
-      },
+      onEvent: applyLocation,
       // 조용히 삼키면 잘 걷는 사람에게 서두르라고 재촉하게 된다. 모르면 모른다고 한다.
-      onError: () => setLostAtMs(Date.now()),
+      onError: () => setLocationLost(true),
     });
 
-    return stop;
-  }, [path, focused]);
+    /**
+     * 첫 좌표는 기다리지 않고 **직접 묻는다.**
+     *
+     * 구독은 변경을 알리는 물건이라, 출발선에서 가만히 서 있는 사람에게는 첫
+     * 이벤트조차 오지 않는다. 그걸 기다리다 유예가 끝나면 "지금 위치가 잡히지
+     * 않아요"가 뜬다 — 서 있다는 이유만으로. 이 파일이 없애려던 오해가 첫 측정
+     * 가지로 되살아나는 자리라, 움직임에 기대지 않는 한 번의 물음으로 막는다.
+     * 도착 화면에서 돌아온 사람도 같은 이유로 여기서 다시 좌표를 얻는다.
+     */
+    let cancelled = false;
+    getCurrentLocation({ accuracy: Accuracy.High })
+      .then((location) => {
+        // 그 사이 진짜 측정이 들어왔으면 그쪽이 더 새것이다.
+        if (cancelled || lastFixAtMs.current != null) {
+          return;
+        }
+        applyLocation(location);
+      })
+      // 실패해도 여기서 말하지 않는다. 구독의 onError가 같은 말을 이미 한다.
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [applyLocation, path, focused]);
 
   const goToArrival = useCallback(() => {
     if (navigating.current) {
@@ -306,12 +347,6 @@ function Walk() {
 
   const remainingSec = targetMs != null ? Math.max(0, (targetMs - nowMs) / 1000) : 0;
 
-  const advice = paceAdvice({
-    remainingM: remainingM ?? trip.route?.candidate.distanceM ?? 0,
-    remainingSec,
-    currentSpeedMps: speedMps,
-  });
-
   /*
    * 지금 위치를 알고 있는가.
    *
@@ -324,16 +359,29 @@ function Walk() {
    */
   const sinceFixMs = lastFixAtMs.current != null ? Date.now() - lastFixAtMs.current : 0;
   const certainty = positionCertainty({
-    sinceErrorMs: lostAtMs != null ? Date.now() - lostAtMs : null,
+    errored: locationLost,
     hadFix: lastFixAtMs.current != null,
     // 걷기 시작한 시각(startedAtMs)이 아니라 지금 구독이 시작된 시각으로 잰다.
     sinceListeningMs: Date.now() - listeningSinceMs.current,
     sinceFixMs,
   });
   const blind = !canAdvisePace(certainty);
-  // 좌표는 믿을 만한데 조용하다 = 서 있다. speedMps는 마지막으로 걷던 속도에
-  // 얼어 있으므로, 그 값으로 만든 도착 시각은 "이 속도면"이 아니다.
+  /**
+   * 좌표는 믿을 만한데 조용하다 = 서 있다.
+   *
+   * 조용한 동안 `speedMps`는 마지막으로 걷던 속도에 얼어 있다(표본은 측정이
+   * 들어올 때만 는다). 그래서 그 값으로 만든 문장에서 "지금 속도"라는 말만
+   * 거짓이 된다 — 안내 카드도, 그 아래 도착 시각 줄도 같이 고쳐 말해야 한다.
+   * 숫자는 그대로 두고 부르는 이름만 바꾼다.
+   */
   const standing = isQuiet(certainty, sinceFixMs);
+
+  const advice = paceAdvice({
+    remainingM: remainingM ?? trip.route?.candidate.distanceM ?? 0,
+    remainingSec,
+    currentSpeedMps: speedMps,
+    standing,
+  });
 
   // 위치를 모르면 벗어났는지도 모른다. 모르는 채로 벗어났다고 하지 않는다.
   const offRoute = !blind && offRouteM != null && offRouteM > OFF_ROUTE_M;

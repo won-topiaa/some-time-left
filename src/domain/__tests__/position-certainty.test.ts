@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ERROR_FRESH_MS,
   FIRST_FIX_GRACE_MS,
   POSITION_STALE_MS,
   QUIET_MS,
@@ -10,7 +9,7 @@ import {
 } from '../position-certainty';
 
 const base = {
-  sinceErrorMs: null,
+  errored: false,
   hadFix: true,
   sinceListeningMs: 60_000,
   sinceFixMs: 0,
@@ -38,42 +37,10 @@ describe('positionCertainty', () => {
   });
 
   it('오류가 보고되면 곧장 모른다 — 조용함과 다르다', () => {
-    expect(positionCertainty({ ...base, sinceErrorMs: 0 })).toBe('lost');
+    expect(positionCertainty({ ...base, errored: true })).toBe('lost');
     // 시작 직후라도, 측정을 받은 적이 있어도 마찬가지다.
     expect(
-      positionCertainty({
-        ...base,
-        sinceErrorMs: 0,
-        hadFix: false,
-        sinceListeningMs: 1_000,
-      })
-    ).toBe('lost');
-  });
-
-  /*
-   * 오류는 '지금 못 하겠다'는 말이지 '앞으로도 못 하겠다'는 말이 아니다.
-   * 참/거짓으로 들고 있으면 한 번 튄 오류가 남은 길 내내 눈을 감긴다 — 서 있는
-   * 동안에는 새 측정이 안 오므로 스스로 풀릴 기회조차 없다.
-   */
-  it('한 번 튄 오류는 낡는다 — 마지막 좌표가 아직 성하면 돌아간다', () => {
-    expect(
-      positionCertainty({ ...base, sinceErrorMs: ERROR_FRESH_MS + 1, sinceFixMs: 25_000 })
-    ).toBe('known');
-  });
-
-  it('오류가 계속 나면 계속 새것이다 — 눈은 감긴 채다', () => {
-    expect(
-      positionCertainty({ ...base, sinceErrorMs: ERROR_FRESH_MS - 1 })
-    ).toBe('lost');
-  });
-
-  it('오류가 낡아도 좌표까지 낡았으면 모르는 것이다', () => {
-    expect(
-      positionCertainty({
-        ...base,
-        sinceErrorMs: ERROR_FRESH_MS + 1,
-        sinceFixMs: POSITION_STALE_MS + 1,
-      })
+      positionCertainty({ ...base, errored: true, hadFix: false, sinceListeningMs: 1_000 })
     ).toBe('lost');
   });
 
@@ -109,11 +76,6 @@ describe('positionCertainty', () => {
 
   it('신호 대기만큼은 견딘다 — 2분을 서 있어도 안다고 한다', () => {
     expect(positionCertainty({ ...base, sinceFixMs: 2 * 60_000 })).toBe('known');
-  });
-
-  it('오류를 믿는 시간이 낡음 문턱보다 짧다', () => {
-    // 거꾸로면 오류가 낡기 전에 좌표가 먼저 낡아, 오류가 낡는 일 자체가 없다.
-    expect(ERROR_FRESH_MS).toBeLessThan(POSITION_STALE_MS);
   });
 
   it('첫 측정 유예보다 낡음 문턱이 넉넉하다', () => {

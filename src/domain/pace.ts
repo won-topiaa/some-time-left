@@ -14,6 +14,16 @@ export interface PaceInput {
   remainingSec: number;
   /** 최근 측정된 보행 속도 (m/s) */
   currentSpeedMps: number;
+  /**
+   * 지금 서 있는가 (신호 대기 등).
+   *
+   * **숫자는 건드리지 않고 문장만 바꾼다.** 서 있는 사람의 `currentSpeedMps`는
+   * 마지막으로 걷던 속도에 얼어 있는 값이라(표본은 측정이 들어올 때만 는다),
+   * 그걸 "지금 속도"라고 부르는 문장만 거짓이 된다. 예측 자체는 여전히
+   * "이 속도로 걸으면"이라는 뜻이라 그대로 쓸 수 있다 — 여기서 속도를 바꿔 버리면
+   * 사람이 멈춰 선 순간 화면의 도착 시각이 이유 없이 튄다.
+   */
+  standing?: boolean;
 }
 
 export interface PaceAdvice {
@@ -48,6 +58,7 @@ export function paceAdvice({
   remainingM,
   remainingSec,
   currentSpeedMps,
+  standing = false,
 }: PaceInput): PaceAdvice {
   const requiredSpeedMps = remainingSec > 0 ? remainingM / remainingSec : Infinity;
 
@@ -68,10 +79,21 @@ export function paceAdvice({
   }
 
   if (predictedDeltaSec < -KEEP_TOLERANCE_SEC) {
-    return { ...common, action: 'slower', message: '조금 천천히 걸어도 돼요.' };
+    // 서 있는 사람에게 더 천천히 걸으라고 할 수는 없다. 하려는 말은 같다 — 여유가 있다.
+    return {
+      ...common,
+      action: 'slower',
+      message: standing ? '아직 여유 있어요.' : '조금 천천히 걸어도 돼요.',
+    };
   }
 
-  return { ...common, action: 'keep', message: '지금 속도 그대로면 딱 맞아요.' };
+  // 서 있는 사람의 '지금 속도'는 0이고, 그대로면 영영 도착하지 않는다.
+  // 같은 예측을 "걷기 시작하면"이라고 부르면 참이 된다 — 화면 아래 줄과도 같은 말이 된다.
+  return {
+    ...common,
+    action: 'keep',
+    message: standing ? '지금 걷기 시작하면 딱 맞아요.' : '지금 속도 그대로면 딱 맞아요.',
+  };
 }
 
 /**
