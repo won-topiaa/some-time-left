@@ -33,6 +33,7 @@ import { EMPTY_ENVIRONMENT, loadEnvironment, type Environment } from './environm
 import { withDeadline } from './deadline';
 import { buildBuildingIndex, buildProfileLookup } from './buildings/profile';
 import { inspectPath } from '../domain/route-sanity';
+import { interpolate } from '../domain/geo';
 import type { LatLng, RouteCandidate } from '../domain/types';
 import type { RouteProvider, RouteRequest } from './route-provider';
 import { DEFAULT_WALK_SPEED_MPS } from '../domain/pace';
@@ -113,6 +114,31 @@ const EMPTY_ROUND_SCALE = 0.6;
 interface FoundPath {
   route: ParsedRoute;
   magnitude: number;
+}
+
+/**
+ * 경유지를 거쳐 가는 삼각형들을 촘촘히 찍은 점들.
+ *
+ * 실제 후보 좌표가 오기 전에 "그 근처"를 받아 두기 위한 것이다. 촘촘해야 하는
+ * 이유는 혼잡도다 — 서울 장소 121곳 중 경로 **근처에 있는 것**을 골라 묻는데,
+ * 꼭짓점만 찍으면 사이에 있는 동네가 통째로 빠진다.
+ */
+function corridorPoints(
+  origin: LatLng,
+  destination: LatLng,
+  waypoints: LatLng[],
+  perLeg = 8
+): LatLng[] {
+  const points: LatLng[] = [];
+  for (const via of waypoints) {
+    for (let i = 0; i <= perLeg; i += 1) {
+      points.push(interpolate(origin, via, i / perLeg));
+    }
+    for (let i = 1; i <= perLeg; i += 1) {
+      points.push(interpolate(via, destination, i / perLeg));
+    }
+  }
+  return points;
 }
 
 /** 요청 사이에 간격을 둘 때 쓴다. */
@@ -225,6 +251,38 @@ export class RoadRouteProvider implements RouteProvider {
     // 목표가 아니라 그 조금 밑을 겨눈다. 흩어진 것들이 목표 위로 넘어가지 않도록.
     const aim = aimSec(targetSec);
 
+    /*
+     * 환경 데이터를 **먼저 띄운다.**
+     *
+     * 예전엔 후보를 다 받은 뒤에 불렀다. 그래서 순위를 다듬는 값 하나가 기다리는
+     * 시간의 맨 끝에 통째로 얹혔다 — 출처마다 1.5초, 바깥 시한까지 최대 2초다.
+     * 후보를 받는 동안 같이 받으면 그 2초가 사라진다.
+     *
+     * 문제는 "어디를" 받을지였다. 실제 후보 좌표는 아직 없다. 그런데 경유지는
+     * **지금 알 수 있다** — `planWaypoints`는 순수 함수다. 그래서 출발지에서
+     * 경유지를 거쳐 목적지로 가는 삼각형들을 촘촘히 찍어 그 근처를 미리 받는다.
+     *
+     * 값이 하나 있다. 실제 길은 도로를 따라 그 삼각형에서 얼마간 벗어나므로,
+     * 벗어난 만큼의 공원·건물·혼잡도는 못 받고 중립값이 된다. 순위를 조금 덜
+     * 정확하게 매기는 것과 길 찾기가 2초 늦는 것 중에서 이쪽을 택했다.
+     * (같은 이유로 이미 건물 1000건 상한을 받아들이고 있다 — 아래 주석 참고.)
+     */
+    const predicted = corridorPoints(
+      origin,
+      destination,
+      planWaypoints({
+        origin,
+        destination,
+        targetSec: aim,
+        speedMps: DEFAULT_WALK_SPEED_MPS,
+      })
+    );
+    const environmentSoon = withDeadline(
+      loadEnvironment(predicted.length > 0 ? [predicted] : [], undefined, ENVIRONMENT_DEADLINE_MS),
+      ENVIRONMENT_DEADLINE_MS + 500,
+      EMPTY_ENVIRONMENT
+    );
+
     const first = await this.fetchPaths({ origin, destination, targetSec: aim, scale: 1 });
 
     // 도로망은 직선이 아니라서 첫 추정은 빗나가는 게 정상이다.
@@ -270,33 +328,14 @@ export class RoadRouteProvider implements RouteProvider {
     }
 
     /*
-     * 환경 데이터는 **검색 전체에서 한 번만** 받는다.
+     * 환경 데이터는 **검색 전체에서 한 번만** 받는다. 위에서 이미 띄워 뒀으므로
+     * 여기서는 받아 놓은 것을 거둔다 — 후보를 받는 동안 같이 왔다.
      *
-     * 예전엔 라운드 안에 있어서, 보정까지 가는 날이면 혼잡도·공원·건물을 두 벌
-     * 받았다. 같은 동네를 도는 후보들이라 두 번째는 거의 같은 답을 다시 받는
-     * 셈인데, 그 한 벌이 통째로 기다리는 시간에 얹혔다. 모든 후보의 좌표가
-     * 모인 지금 한 번만 받으면 라운드 수와 상관없이 한 벌이면 된다.
-     *
-     * **값이 하나 있다.** 브이월드 건물 조회는 경계 상자 하나에 최대 1000건이라,
-     * 두 라운드를 합친 더 넓은 상자에서는 잘릴 수 있다. 잘린 만큼은 그늘이
-     * 중립값이 된다 — 라운드마다 따로 받으면 각자 1000건을 받겠지만, 그러려면
-     * 이 함수가 고치려던 그 한 벌을 도로 들여야 한다. 길이 7초 늦는 것보다
-     * 그늘이 덜 정확한 편이 낫다고 보고 이쪽을 택했다.
-     *
-     * 그리고 기다려 주는 시간에 천장을 둔다 — 이건 순위를 다듬는 값이지 길이 아니다.
+     * **값이 하나 있다.** 브이월드 건물 조회는 경계 상자 하나에 최대 1000건이라
+     * 넓은 상자에서는 잘릴 수 있다. 잘린 만큼은 그늘이 중립값이 된다.
+     * 길이 몇 초 늦는 것보다 그늘이 덜 정확한 편이 낫다고 보고 이쪽을 택했다.
      */
-    const environment: Environment = await withDeadline(
-      // 시한은 **출처마다** 건다. 밖에서 셋을 묶어 한 번에 끊으면 이미 도착한
-      // 둘까지 같이 버려진다 — 하나가 느리다고 나머지를 잃을 이유가 없다.
-      // 바깥의 시한은 그래도 남겨 둔다. 안쪽이 어떤 이유로든 안 끝날 때의 바닥이다.
-      loadEnvironment(
-        parsed.map((route) => route.path),
-        undefined,
-        ENVIRONMENT_DEADLINE_MS
-      ),
-      ENVIRONMENT_DEADLINE_MS + 500,
-      EMPTY_ENVIRONMENT
-    );
+    const environment: Environment = await environmentSoon;
 
     /*
      * 건물 격자와 지나온 좌표 격자도 여기서 한 번만 만든다.

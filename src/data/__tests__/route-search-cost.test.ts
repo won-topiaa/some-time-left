@@ -31,6 +31,9 @@ function road(seed: number): LatLng[] {
   return points;
 }
 
+/** 무엇이 먼저 시작됐는지. 환경 데이터가 후보보다 먼저 떠야 겹쳐서 받는다. */
+const started: string[] = [];
+
 /** 요청마다 durationSec을 지정해 보정 라운드를 켜고 끌 수 있게 한다. */
 function provider(durationSec: number) {
   const calls: Array<{ timeoutMs?: number; waypoints?: LatLng[] }> = [];
@@ -38,6 +41,7 @@ function provider(durationSec: number) {
   const instance = new RoadRouteProvider({
     idPrefix: 'test',
     fetchRoute: async (query) => {
+      started.push('길');
       calls.push({ timeoutMs: query.timeoutMs, waypoints: query.waypoints });
       seed += 1;
       const parsed: ParsedRoute = {
@@ -62,8 +66,12 @@ const request = (targetSec: number) => ({
 
 describe('길 찾기에 드는 값', () => {
   beforeEach(() => {
+    started.length = 0;
     loadEnvironment.mockReset();
-    loadEnvironment.mockResolvedValue({ congestion: [], parks: [], buildings: [] });
+    loadEnvironment.mockImplementation(async () => {
+      started.push('환경');
+      return { congestion: [], parks: [], buildings: [] };
+    });
   });
 
   /*
@@ -77,9 +85,35 @@ describe('길 찾기에 드는 값', () => {
 
     expect(routes.length).toBeGreaterThan(6); // 두 라운드가 실제로 돌았다
     expect(loadEnvironment).toHaveBeenCalledTimes(1);
-    // 한 번 부를 때 두 라운드의 좌표를 다 넘긴다 — 나중에 받는 대신 모아서 받는다.
-    expect(loadEnvironment.mock.calls[0][0]).toHaveLength(routes.length);
     expect(calls.length).toBe(10); // 첫 라운드 6 + 보정 4
+  });
+
+  /*
+   * **기다리는 시간의 맨 끝에 얹히지 않는다.**
+   *
+   * 예전엔 후보를 다 받은 뒤에 환경 데이터를 불렀다. 순위를 다듬는 값 하나가
+   * 길 찾기 끝에 통째로 붙어서, 출처마다 1.5초에 바깥 시한까지 최대 2초가
+   * 더 걸렸다. 실제 후보 좌표가 아직 없어도 경유지는 지금 알 수 있으므로,
+   * 그 근처를 미리 받아 두고 후보를 받는 동안 같이 기다린다.
+   */
+  it('후보를 받기 전에 환경 데이터를 먼저 띄운다', async () => {
+    const { instance } = provider(25 * 60);
+    await instance.candidates(request(25 * 60));
+
+    expect(started[0]).toBe('환경');
+  });
+
+  it('미리 받을 자리를 촘촘히 찍는다', async () => {
+    /*
+     * 혼잡도는 서울 장소 121곳 중 경로 **근처에 있는 것**을 골라 묻는다.
+     * 꼭짓점만 찍으면 사이에 있는 동네가 통째로 빠져 중립값이 된다.
+     */
+    const { instance } = provider(25 * 60);
+    await instance.candidates(request(25 * 60));
+
+    const passed = loadEnvironment.mock.calls[0][0] as LatLng[][];
+    expect(passed).toHaveLength(1);
+    expect(passed[0].length).toBeGreaterThan(50);
   });
 
   it('첫 라운드가 목표에 맞으면 보정을 아예 안 돈다', async () => {

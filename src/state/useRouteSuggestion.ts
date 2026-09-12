@@ -211,6 +211,17 @@ export function useRouteSuggestion({
       setStretched(true);
       setFloor(null);
 
+      /*
+       * 기록은 **지금 띄운다.** 기다리게 하지 않는다.
+       *
+       * 이건 기기 안의 저장소를 읽는 일이라 위치나 길과 아무 상관이 없다. 그런데
+       * 최단 경로와 후보 사이에 직렬로 끼어 있었다 — 기록이 쌓인 기기에서는
+       * 읽고 걸러내는 그 시간이 그대로 길 찾기에 얹혔다.
+       *
+       * 실패해도 검색은 계속된다. 기록이 없으면 전부 처음 걷는 길로 볼 뿐이다.
+       */
+      const recordsSoon = loadRecords().catch(() => []);
+
       // 위치 실패와 길 찾기 실패는 원인이 다르다. 한 덩어리로 잡아 "위치를 확인하지
       // 못했어요"라고 하면, 네트워크가 흔들렸을 뿐인데 권한을 의심하게 만든다.
       let origin: LatLng;
@@ -270,7 +281,7 @@ export function useRouteSuggestion({
           return;
         }
 
-        const records = await loadRecords().catch(() => []);
+        const records = await recordsSoon;
         const recent = records.slice(0, RECENT_WINDOW).map((r) => r.routeId);
         /*
          * 지어낸 좌표가 남아 있는 기록은 여기서 걸러 낸다.
