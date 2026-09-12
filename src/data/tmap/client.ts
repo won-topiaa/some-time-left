@@ -83,12 +83,30 @@ export async function searchPlaces(keyword: string, near?: LatLng): Promise<Plac
     searchType: 'all',
   });
 
-  // 현재 위치를 넘기면 가까운 곳부터 나온다. 약속 장소는 대개 근처다.
+  /*
+   * 현재 위치는 **순서를 위해서만** 넘긴다. 걸러내라고 넘기지 않는다.
+   *
+   * 예전엔 `searchtypCd: 'R'`과 `radius: '10'`을 같이 보냈다. 주석에는
+   * "가까운 곳부터 나온다"라고 적혀 있었지만 반경 검색은 **가까운 것만 남긴다** —
+   * 순서가 아니라 배제다. 그래서 이 층만 아는 이름(예: 봉천역)을 치면 결과가
+   * 통째로 비었고, 화면은 "찾는 곳이 없어요"를 내놨다.
+   *
+   * 같은 키·같은 엔드포인트인데 `npm run check-config`의 검색은 결과를 받아
+   * 왔다는 것이 단서였다. 그 호출에는 이 세 줄이 없다.
+   *
+   * 거리로 앞세우는 일은 우리가 이미 한다 — `places.ts`의 `rankPlaces`가
+   * 이름 일치 → 거리 → 짧은 이름으로 다시 세운다. 그러니 공급자에게 걸러 달라고
+   * 할 이유가 없고, 걸러 달라고 하면 그 층이 아는 것까지 잃는다.
+   *
+   * `reqCoordType`은 **보내는 좌표가 무엇인지** 밝히는 값이다. 안 밝히고 좌표를
+   * 보내면 기본값이 무엇이냐에 따라 엉뚱한 자리를 가리킬 수 있다 — 이 파일의
+   * 경로 호출은 처음부터 이걸 밝히고 있었는데(위의 `reqCoordType: 'WGS84GEO'`),
+   * 검색 호출만 빠져 있었다.
+   */
   if (near != null) {
+    params.set('reqCoordType', 'WGS84GEO');
     params.set('centerLon', String(near.lng));
     params.set('centerLat', String(near.lat));
-    params.set('searchtypCd', 'R');
-    params.set('radius', '10');
   }
 
   const response = await requestJson<TmapPoiResponse>(

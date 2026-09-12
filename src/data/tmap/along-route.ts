@@ -103,7 +103,10 @@ async function searchNear(keyword: string, center: LatLng, radiusKm: number): Pr
     count: '10',
     resCoordType: 'WGS84GEO',
     searchType: 'all',
+    // 여기서는 반경이 곧 목적이다 — "지나는 길에 있는 것"을 묻고 있다.
     searchtypCd: 'R',
+    // 보내는 좌표가 무엇인지 밝힌다. 안 밝히면 기본값에 따라 중심이 엉뚱해진다.
+    reqCoordType: 'WGS84GEO',
     centerLon: String(center.lng),
     centerLat: String(center.lat),
     radius: String(radiusKm),

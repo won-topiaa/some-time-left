@@ -108,21 +108,25 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
     return Number.isFinite(grace) ? withinGrace(lookup, grace) : lookup.catch(() => [] as Place[]);
   };
 
-  let online: Place[];
-  if (!isTmapConfigured()) {
-    online = await wait(searchOsmPlaces(trimmed, near));
-  } else {
-    const lookups = [wait(searchPlaces(trimmed, near))];
+  /*
+   * **있는 층을 전부 동시에 묻는다.** 이 파일 첫머리가 그렇게 하겠다고 적어 둔 일이다.
+   *
+   * 예전엔 OSM을 TMAP이 **정확히 빈손일 때만** 물었다. 그래서 TMAP이 엉뚱한
+   * 한 건이라도 주면 OSM은 아예 안 물었고, 두 지도가 서로 모르는 이름을 안다는
+   * 바로 그 사실을 쓰지 못했다 — osm-places.ts의 주석이 그걸 이유로 적고 있는데도.
+   *
+   * 나란히 묻는 것이 더 느리지도 않다. 유예는 온라인 전체에 한 덩어리이고
+   * (`remaining()`), 셋이 같은 시계를 나눠 쓰며 병렬로 기다린다.
+   */
+  const lookups: Array<Promise<Place[]>> = [wait(searchOsmPlaces(trimmed, near))];
+  if (isTmapConfigured()) {
+    lookups.push(wait(searchPlaces(trimmed, near)));
     // 주소꼴이면 지오코딩도 함께. 같은 키를 쓴다.
     if (looksLikeAddress(trimmed)) {
       lookups.push(wait(geocodeAddress(trimmed)));
     }
-    online = (await Promise.all(lookups)).flat();
-    // TMAP이 빈손이면 OSM에 한 번 더. 두 지도는 서로 모르는 이름을 안다.
-    if (online.length === 0 && remaining() > 0) {
-      online = await wait(searchOsmPlaces(trimmed, near));
-    }
   }
+  const online: Place[] = (await Promise.all(lookups)).flat();
 
   return rankPlaces(trimmed, dedupe([...offline, ...online]), near).slice(0, LIMIT);
 }
