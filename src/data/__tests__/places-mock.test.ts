@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { findPlaces } from '../places';
 import { configureApi, isTmapConfigured } from '../../config';
 import { SEOUL_HOTSPOTS } from '../seoul/hotspots';
+import { KOREA_STATIONS } from '../stations/korea';
 import type { LatLng } from '../../domain/types';
 
 /**
@@ -38,11 +39,34 @@ describe('findPlaces — 오프라인 바닥: 서울 핫스팟', () => {
     }
   });
 
+  /*
+   * 이 테스트가 지키는 것은 "좌표를 지어내지 않는다"다. 한때 키가 없으면 좌표를
+   * 만들어 내는 공급자로 떨어졌고, 산자락을 가로지르는 삼각형이 실기기에 떴다.
+   *
+   * 출처는 둘이 됐다. 역 색인이 생기면서 '강남역'처럼 두 목록에 다 있는 이름은
+   * 역 색인이 받는다 — OSM의 역 노드라 걸어갈 자리가 더 정확하다(핫스팟 좌표는
+   * 혼잡도를 재는 지점이라 역 자체가 아니다. 강남역의 두 좌표는 110m 떨어져 있다).
+   * 어느 쪽이든 **번들 안 목록의 값 그대로**여야 한다는 약속은 그대로다.
+   */
   it('돌려준 좌표는 실제 목록의 좌표 그대로다', async () => {
     const [top] = await findPlaces('강남역');
-    const source = SEOUL_HOTSPOTS.find((spot) => spot.areaName === top.name);
-    expect(source).toBeDefined();
-    expect(top.at).toEqual(source!.at);
+    const hotspot = SEOUL_HOTSPOTS.find((spot) => spot.areaName === top.name);
+    const station = KOREA_STATIONS.find((row) => row[0] === top.name);
+
+    const verbatim =
+      (hotspot != null && hotspot.at.lat === top.at.lat && hotspot.at.lng === top.at.lng) ||
+      (station != null && station[1] === top.at.lat && station[2] === top.at.lng);
+    expect(verbatim, `${top.name} ${top.at.lat},${top.at.lng}는 어느 목록에도 없는 좌표다`).toBe(
+      true
+    );
+  });
+
+  it('강남역은 역 색인이 받는다 — 역 노드가 걸어갈 자리다', async () => {
+    const [top] = await findPlaces('강남역');
+    const station = KOREA_STATIONS.find((row) => row[0] === '강남역');
+
+    expect(station).toBeDefined();
+    expect(top.at).toEqual({ lat: station![1], lng: station![2] });
   });
 
   it('영문 이름은 대소문자를 가리지 않는다', async () => {

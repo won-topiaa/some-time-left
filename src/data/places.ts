@@ -3,8 +3,9 @@
  *
  * 세 층이다. 아래일수록 믿을 수 있고 위일수록 많이 안다.
  *
- *   오프라인  전국 행정구역 색인(`regions/`) + 서울 핫스팟 122곳.
- *            네트워크 없이 답한다. **"지역"은 언제나 여기서 찾아진다.**
+ *   오프라인  전국 행정구역 색인(`regions/`) + 전국 역 색인(`stations/`)
+ *            + 서울 핫스팟 121곳. 네트워크 없이 답한다.
+ *            **"지역"과 "역"은 언제나 여기서 찾아진다.**
  *   OSM      Photon. 키 없이 역·대학·가게를 안다. 남의 무료 서버라 SLA가 없다.
  *   TMAP     키가 있을 때. 한국 POI를 가장 잘 알고, 주소는 지오코딩이 받는다.
  *
@@ -24,6 +25,7 @@ import { searchPlaces } from './tmap/client';
 import { geocodeAddress } from './tmap/geocode';
 import { searchOsmPlaces } from './osm-places';
 import { fold, matchRank, searchRegions } from './regions/search';
+import { searchStations } from './stations/search';
 import { isTmapConfigured } from '../config';
 import { SEOUL_HOTSPOTS } from './seoul/hotspots';
 import { distanceM } from '../domain/geo';
@@ -57,9 +59,19 @@ function hotspotPlaces(query: string): Place[] {
   }));
 }
 
-/** 네트워크 없이 답하는 것 전부. */
+/**
+ * 네트워크 없이 답하는 것 전부.
+ *
+ * 역이 핫스팟보다 앞이다. 서울대입구역처럼 두 곳에 다 있는 이름은 앞의 것이
+ * 남는데(`dedupe`), 역 색인은 OSM의 역 노드라 걸어갈 자리가 더 정확하다 —
+ * 핫스팟 좌표는 혼잡도를 재는 '지점'이라 역 자체가 아닐 수 있다.
+ */
 function offlinePlaces(query: string, near?: LatLng): Place[] {
-  return dedupe([...searchRegions(query, near), ...hotspotPlaces(query)]);
+  return dedupe([
+    ...searchRegions(query, near),
+    ...searchStations(query, near),
+    ...hotspotPlaces(query),
+  ]);
 }
 
 /** "테헤란로 152", "역삼동 737" 처럼 주소로 보이는 입력인가. */
