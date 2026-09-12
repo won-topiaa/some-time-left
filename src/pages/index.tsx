@@ -410,7 +410,14 @@ function Home() {
         그래서 아래로 선도 긋지 않는다.
       */}
       <View style={styles.topBar}>
-        <Text style={styles.wordmark}>자투리 시간</Text>
+        {/*
+          글꼴을 키우면 이름과 알약이 한 줄에 안 들어간다(실측: 1.6배에서 355px,
+          본문 폭 342px). 둘 중 **줄어도 되는 쪽은 이름**이다 — 알약은 누르는
+          것이라 글자가 잘리면 무엇을 누르는지 모르게 된다.
+        */}
+        <Text style={styles.wordmark} numberOfLines={1}>
+          자투리 시간
+        </Text>
 
         <Pressable
           style={({ pressed }) => [styles.trace, pressed && styles.pressed]}
@@ -419,8 +426,16 @@ function Home() {
           accessibilityLabel={
             walkedKm != null ? `지나온 길, 지금까지 ${walkedKm}킬로미터` : '지나온 길'
           }
+          /*
+            보이는 알약은 33pt다 — 윗변에서 이보다 커지면 이름과 인사말을 누른다.
+            그래서 크기는 두고 **손가락이 닿는 자리만** 넓힌다(33 + 12 = 45pt).
+            접근성 최소가 44pt라 그 아래로 두면 잘 안 눌리는 버튼이 된다.
+          */
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
         >
-          <Text style={styles.traceText}>지나온 길</Text>
+          <Text style={styles.traceText} numberOfLines={1}>
+            지나온 길
+          </Text>
           {/*
             쌓인 거리. 걷고 돌아올 때마다 늘고, 그게 이 앱에서 유일하게 쌓이는
             것이라 누를 이유도 이 숫자가 만든다 — 라벨보다 진하게 둔다.
@@ -856,6 +871,8 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       color: colors.inkSoft,
       fontWeight: '600',
       letterSpacing: 0.4,
+      // 좁아지면 이름이 먼저 줄어든다. 알약은 온전히 남아야 한다.
+      flexShrink: 1,
     },
     /*
       지나온 길로 가는 문.
@@ -866,8 +883,10 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       헤어라인 알약(`_404`의 '처음으로', 기록 화면의 '이 길 공유하기'와 같다).
       면은 여전히 안 칠한다.
 
-      윗변에 있으므로 본문 크기 대신 캡션으로 둔다. 여기서 커지면 이름과 다투고,
-      주인공이어야 할 인사말과도 다툰다.
+      다만 **치수는 그 둘보다 작다.** 윗변에 놓이면서 본문 크기 대신 캡션으로
+      낮췄고(저쪽은 59pt, 여기는 33pt), 여기서 커지면 이름과 다투고 주인공이어야
+      할 인사말과도 다툰다. 모자란 손가락 자리는 hitSlop이 메운다 — 보이는 크기와
+      닿는 크기를 따로 두는 건 이 자리에서만 하는 일이다.
     */
     trace: {
       flexDirection: 'row',
@@ -878,6 +897,8 @@ const createStyles = (colors: Palette, type: TypeScale) =>
       borderRadius: radius.pill,
       borderWidth: 1,
       borderColor: colors.line,
+      // 이름이 아무리 길어져도 이 알약은 제 크기를 지킨다.
+      flexShrink: 0,
     },
     traceText: { ...type.caption, color: colors.inkSoft },
     /** 누를 이유를 만드는 숫자. 라벨보다 진하다. */
