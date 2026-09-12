@@ -30,6 +30,27 @@ export const FIRST_FIX_GRACE_MS = 20_000;
  */
 export const POSITION_STALE_MS = 3 * 60 * 1000;
 
+/**
+ * 이만큼 조용하면 지금은 걷고 있지 않다고 본다 (ms).
+ *
+ * 5m마다, 늦어도 3초마다 오는 구독이다. 걷는 사람은 4초 안에 한 번은 들어온다 —
+ * 20초가 조용하면 서 있는 쪽이다. 좌표는 여전히 맞지만 **속도는 맞지 않는다**:
+ * 조용한 동안 표본이 늘지 않아 마지막으로 걷던 속도에 멈춰 있기 때문이다.
+ * 그 값을 "이 속도면"이라고 부르면 서 있는 사람에게 걷고 있다고 말하는 셈이다.
+ */
+export const QUIET_MS = 20_000;
+
+/**
+ * 오류를 믿어 주는 시간 (ms).
+ *
+ * 오류는 조용함과 다르다 — 시스템이 직접 못 하겠다고 말한 것이다. 그렇다고
+ * 한 번의 오류로 남은 길 내내 눈을 감으면, 바로 다음에 들어온 멀쩡한 좌표까지
+ * 못 쓰게 된다. **오류도 낡는다.** 계속 나는 오류라면 계속 새것이므로 눈은
+ * 계속 감겨 있고, 한 번 튄 것이라면 30초 뒤에는 마지막 좌표로 돌아간다.
+ * 그 좌표가 진짜로 낡았다면 아래의 POSITION_STALE_MS가 다시 잡는다.
+ */
+export const ERROR_FRESH_MS = 30_000;
+
 export type PositionCertainty =
   /** 좌표를 믿어도 된다. 방금 받았거나, 조용하지만 그건 안 움직였다는 뜻이다. */
   | 'known'
@@ -39,31 +60,38 @@ export type PositionCertainty =
   | 'lost';
 
 export interface PositionInput {
-  /** 위치 구독이 오류를 보고했는가. */
-  errored: boolean;
+  /** 마지막 오류 이후 흐른 시간 (ms). 오류가 난 적이 없으면 null. */
+  sinceErrorMs: number | null;
   /** 측정을 한 번이라도 받았는가. */
   hadFix: boolean;
-  /** 걷기 시작한 뒤 흐른 시간 (ms). */
-  sinceStartMs: number;
+  /**
+   * **구독을 시작한 뒤** 흐른 시간 (ms). 걷기 시작한 뒤가 아니다.
+   *
+   * 위치 구독은 화면이 가려지면 끊고 다시 보이면 새로 건다. 다시 걸린 구독은
+   * 첫 측정을 처음부터 다시 기다리므로, 걷기 시작한 시각으로 재면 20분째 걷던
+   * 사람이 돌아오는 순간 유예 없이 'lost'가 된다 — 기다릴 자격은 구독마다 새로 난다.
+   */
+  sinceListeningMs: number;
   /** 마지막 측정 이후 흐른 시간 (ms). 측정이 없었으면 무시된다. */
   sinceFixMs: number;
 }
 
 export function positionCertainty({
-  errored,
+  sinceErrorMs,
   hadFix,
-  sinceStartMs,
+  sinceListeningMs,
   sinceFixMs,
 }: PositionInput): PositionCertainty {
   // 오류는 조용함과 다르다. 이건 시스템이 직접 못 하겠다고 말한 것이다.
-  if (errored) {
+  // 다만 방금 난 오류만 그렇다 — 오래된 오류는 지금을 설명하지 못한다.
+  if (sinceErrorMs != null && sinceErrorMs <= ERROR_FRESH_MS) {
     return 'lost';
   }
 
   if (!hadFix) {
     // 첫 측정은 원래 몇 초 걸린다. 그 구간을 실패로 부르면 걷기 시작할 때마다
     // 경고가 번쩍인다.
-    return sinceStartMs > FIRST_FIX_GRACE_MS ? 'lost' : 'waiting';
+    return sinceListeningMs > FIRST_FIX_GRACE_MS ? 'lost' : 'waiting';
   }
 
   return sinceFixMs > POSITION_STALE_MS ? 'lost' : 'known';
@@ -72,4 +100,16 @@ export function positionCertainty({
 /** 페이스를 말해도 되는가. 좌표를 믿을 때만 재촉한다. */
 export function canAdvisePace(certainty: PositionCertainty): boolean {
   return certainty === 'known';
+}
+
+/**
+ * 좌표는 믿을 만하지만 지금 걷고 있지는 않은가.
+ *
+ * 'known' 안에는 두 사람이 있다 — 방금 측정이 들어온 걷는 사람과, 조용해서
+ * 오히려 안다고 판정된 서 있는 사람. 좌표를 쓰는 데는 둘이 같지만, **속도를
+ * 쓰는 데는 다르다.** 서 있는 사람의 speedMps는 마지막으로 걷던 속도에 얼어
+ * 있으므로, 그 값으로 만든 도착 시각은 "이 속도면"이 아니라 "걷기 시작하면"이다.
+ */
+export function isQuiet(certainty: PositionCertainty, sinceFixMs: number): boolean {
+  return certainty === 'known' && sinceFixMs > QUIET_MS;
 }

@@ -13,6 +13,7 @@ import { arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { walkFootnote } from '../domain/copy';
 import {
   canAdvisePace,
+  isQuiet,
   positionCertainty,
 } from '../domain/position-certainty';
 import { RouteMap } from '../ui/RouteMap';
@@ -72,6 +73,14 @@ function Walk() {
    * 측정 시각과 비교해 오래 조용하면 모르는 상태로 물러선다.
    */
   const lastFixAtMs = useRef<number | null>(null);
+  /**
+   * 지금 켜져 있는 위치 구독이 시작된 시각 (기기 시계).
+   *
+   * 첫 측정을 기다려 주는 유예는 **구독마다** 새로 난다. 걷기 시작한 시각으로
+   * 재면, 도착 화면에 다녀오느라 구독이 끊겼다 다시 걸린 사람은 유예가 이미
+   * 다 지나 있어서 돌아오자마자 "위치가 잡히지 않아요"를 보게 된다.
+   */
+  const listeningSinceMs = useRef(Date.now());
   /** 경로에서 떨어진 거리 (m). 아직 모르면 null. */
   const [offRouteM, setOffRouteM] = useState<number | null>(null);
   /**
@@ -86,8 +95,10 @@ function Walk() {
   // 화면마다 남은 시간이 달라지고, 분 단위를 약속한 앱이 스스로 거짓말을 하게 된다.
   const offset = trip.clockOffsetMs;
   const [nowMs, setNowMs] = useState(() => Date.now() + offset);
-  // 위치를 놓쳤는가. 놓친 채로 페이스를 코칭하면 잘 걷는 사람에게 서두르라고 한다.
-  const [locationLost, setLocationLost] = useState(false);
+  // 마지막으로 위치 구독이 오류를 보고한 시각. 놓친 채로 페이스를 코칭하면
+  // 잘 걷는 사람에게 서두르라고 한다. 참/거짓이 아니라 시각으로 들고 있는 건
+  // 오류도 낡기 때문이다 — 한 번 튄 오류로 남은 길 내내 눈을 감지 않는다.
+  const [lostAtMs, setLostAtMs] = useState<number | null>(null);
   // nowMs와 같은(보정된) 시계로 찍어 둔다. 한쪽만 보정하면 뺄셈이 흐른 시간이 아니게 된다.
   const [startedAtMs] = useState(() => Date.now() + offset);
 
@@ -137,6 +148,14 @@ function Walk() {
       // 위치 표본은 이어 붙이지 않는다. 화면이 가려진 동안 GPS가 꺼져 있었으므로
       // 다음 측정과의 간격이 몇 분씩 벌어져, 그대로 speed를 내면 거의 0이 된다.
       previous.current = null;
+      // 구독도 새로 걸린다. 가려져 있던 동안 측정이 없었던 건 당연한 일이므로,
+      // 그 침묵을 '위치를 잃었다'로 셈하지 않는다 — 마지막 측정 시각과 오류를
+      // 함께 비운 다음, 첫 측정을 기다리는 시계를 여기서 다시 시작한다.
+      // (셋 중 하나만 비우면 오히려 나빠진다. 시계를 안 옮기고 측정만 비우면
+      //  유예가 이미 지나 있어 곧장 'lost'다.)
+      lastFixAtMs.current = null;
+      listeningSinceMs.current = Date.now();
+      setLostAtMs(null);
     });
     const onBlur = navigation.addListener('blur', () => setFocused(false));
     return () => {
@@ -198,7 +217,7 @@ function Walk() {
         }
         previous.current = { at, ms };
 
-        setLocationLost(false);
+        setLostAtMs(null);
         lastFixAtMs.current = Date.now();
 
         const walked = walkProgress(path, at, {
@@ -216,7 +235,7 @@ function Walk() {
         setOffRouteM(walked.offPathM);
       },
       // 조용히 삼키면 잘 걷는 사람에게 서두르라고 재촉하게 된다. 모르면 모른다고 한다.
-      onError: () => setLocationLost(true),
+      onError: () => setLostAtMs(Date.now()),
     });
 
     return stop;
@@ -303,13 +322,18 @@ function Walk() {
    * `nowMs`가 1초마다 바뀌므로 이 값도 같이 다시 계산된다 — ref를 렌더에서
    * 읽는 것이 값을 갱신해 주지는 않지만, 그 타이머가 그 일을 한다.
    */
+  const sinceFixMs = lastFixAtMs.current != null ? Date.now() - lastFixAtMs.current : 0;
   const certainty = positionCertainty({
-    errored: locationLost,
+    sinceErrorMs: lostAtMs != null ? Date.now() - lostAtMs : null,
     hadFix: lastFixAtMs.current != null,
-    sinceStartMs: nowMs - startedAtMs,
-    sinceFixMs: lastFixAtMs.current != null ? Date.now() - lastFixAtMs.current : 0,
+    // 걷기 시작한 시각(startedAtMs)이 아니라 지금 구독이 시작된 시각으로 잰다.
+    sinceListeningMs: Date.now() - listeningSinceMs.current,
+    sinceFixMs,
   });
   const blind = !canAdvisePace(certainty);
+  // 좌표는 믿을 만한데 조용하다 = 서 있다. speedMps는 마지막으로 걷던 속도에
+  // 얼어 있으므로, 그 값으로 만든 도착 시각은 "이 속도면"이 아니다.
+  const standing = isQuiet(certainty, sinceFixMs);
 
   // 위치를 모르면 벗어났는지도 모른다. 모르는 채로 벗어났다고 하지 않는다.
   const offRoute = !blind && offRouteM != null && offRouteM > OFF_ROUTE_M;
@@ -322,11 +346,14 @@ function Walk() {
    */
   const warnedOffRoute = useRef(false);
   useEffect(() => {
-    if (offRouteM == null || blind) {
+    // 길로 돌아온 것은 위치를 믿든 말든 사실이다. 이 해제를 blind 뒤에 두면,
+    // 눈을 감고 있는 사이에 돌아온 사람은 걸어 둔 경고가 안 풀려서 다음에 또
+    // 벗어나도 알림을 못 받는다.
+    if (offRouteM != null && offRouteM <= OFF_ROUTE_M) {
+      warnedOffRoute.current = false;
       return;
     }
-    if (offRouteM <= OFF_ROUTE_M) {
-      warnedOffRoute.current = false;
+    if (offRouteM == null || blind) {
       return;
     }
     if (!warnedOffRoute.current) {
@@ -412,7 +439,8 @@ function Walk() {
       */}
       {!blind && (
         <Text style={styles.projection}>
-          이 속도면 {formatClock(nowMs + advice.predictedSec * 1000)} 도착
+          {standing ? '걷기 시작하면' : '이 속도면'}{' '}
+          {formatClock(nowMs + advice.predictedSec * 1000)} 도착
           {trip.arriveAtMs != null && ` · ${formatClock(trip.arriveAtMs)} 약속`}
         </Text>
       )}
