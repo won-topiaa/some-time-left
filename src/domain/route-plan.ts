@@ -12,13 +12,46 @@ import { dominantFeature, scoreFeatures, type FeatureWeights } from './mood';
 import { ARRIVE_EARLY_SEC, PROMISE_FLOOR_SEC } from './time';
 import type { RouteCandidate, ScoredRoute } from './types';
 
-/** 늦는 쪽 오차의 허용 폭 (초). 좁을수록 지각에 가혹해진다. */
-const LATE_SIGMA_SEC = 60;
-/** 일찍 도착하는 쪽 오차의 허용 폭 (초). 목표보다 더 일찍 도착하는 건 덜 나쁘다. */
-const EARLY_SIGMA_SEC = 180;
+/**
+ * 늦는 쪽 오차의 허용 폭 (초).
+ *
+ * **약속을 지키는 구간 안에서는 거의 평평해야 한다.** 60초였을 때 이런 일이
+ * 있었다 — 목표 30분에 29.3분과 31.1분 두 후보가 관문을 통과했는데 fit이
+ * 0.947 대 0.298로 3.2배 벌어졌다. 기분이 낼 수 있는 차이는 최대 2배이므로
+ * 기분은 이길 수가 없었고, 추신이 약속한 "오늘 기분에 맞춰서요"가 거짓이 됐다.
+ *
+ * 늦는 쪽 관문은 `LATE_SLACK_SEC`(120초)다. 그 끝에서도 fit이 0.78 남으므로
+ * 구간 안에서는 1.28배만 벌어진다 — 기분이 결정할 수 있다. 구간 밖은 어차피
+ * `arrivesOnTime`이 막고, 거기서는 fit이 빠르게 떨어져 기분이 못 살려 낸다.
+ */
+const LATE_SIGMA_SEC = 240;
+/**
+ * 일찍 도착하는 쪽 오차의 허용 폭 (초).
+ *
+ * 이쪽 관문은 `ON_TARGET_EARLY_SEC`(5분)다. 늦는 쪽보다 넓게 두는 건 5분 일찍
+ * 닿는 것도 약속을 지키는 일이기 때문이고, 그래도 늦는 쪽보다 **덜 평평하다** —
+ * 같은 약속 안이라면 자투리 시간을 더 쓰는 쪽이 이 앱이 하려는 일이다.
+ */
+const EARLY_SIGMA_SEC = 420;
 
-/** 기분 점수가 최종 점수에 기여하는 최대 비율. 나머지는 fit이 가져간다. */
-const MOOD_SHARE = 0.5;
+/**
+ * 기분 점수가 최종 점수에 기여하는 최대 비율. 나머지는 fit이 가져간다.
+ *
+ * 내보내는 이유: 기분이 낼 수 있는 최대 배수가 `1 / (1 - MOOD_SHARE)`다.
+ * fit의 폭을 정할 때 그 값과 견줘야 하므로 테스트가 이 수를 직접 본다 —
+ * 2배라고 적어 두면 이 값이 바뀌는 날 테스트가 조용히 거짓이 된다.
+ */
+export const MOOD_SHARE = 0.5;
+
+/**
+ * 기분 점수가 이보다 덜 벌어지면 후보들이 사실상 똑같다고 본다.
+ *
+ * 상대값으로 세우기 때문에 필요한 값이다. 성질을 하나도 못 재서 전부 중립인 날
+ * (키가 없거나 환경 API가 전부 실패한 날) 0으로 나누게 되고, 나눠지더라도
+ * 부동소수 끝자리 차이를 "기분에 맞는 길"로 부풀려 내놓게 된다. 그날은 기분이
+ * 말을 얹지 않고 물러나는 편이 정직하다.
+ */
+const MOOD_FLAT_EPSILON = 1e-6;
 
 /**
  * 목표 시간 대비 소요 시간의 적합도 (0~1).
@@ -110,16 +143,57 @@ export function rankRoutes(
 ): ScoredRoute[] {
   const recent = new Set(recentRouteIds);
 
+  /*
+   * 기분은 **이 후보들 사이에서** 잰다.
+   *
+   * 절대값을 그대로 곱한 적이 있다. 그런데 성질값은 실제로 0.1~0.3밖에 안
+   * 벌어지고, 가중치는 합이 1이라 그 차이가 다시 눌린다 — 후보 사이의 기분
+   * 배수가 1.05배쯤밖에 안 됐다. fit은 같은 구간에서 3배씩 벌어지니 기분은
+   * 언제나 졌다. 고른 기분이 결과를 바꾸지 못하면 그 질문은 물어볼 이유가 없다.
+   *
+   * 그래서 "가장 맞는 후보"와 "가장 안 맞는 후보"를 양끝에 두고 그 사이에서
+   * 센다. 오늘 기분이 고를 수 있는 최선이 실제로 1.0을 받는다.
+   */
+  const moodScores = candidates.map((candidate) =>
+    scoreFeatures(candidate.features, weights)
+  );
+
+  /*
+   * 재는 자는 **내놓을 수 있는 후보들**로 만든다.
+   *
+   * 처음엔 후보 전부로 만들었는데, 그러면 어차피 관문(`arrivesOnTime`)에서
+   * 걸러질 길이 양끝을 차지하면서 정작 화면에 나갈 수 있는 것들이 가운데로
+   * 눌렸다. 실측: 약속을 지키는 후보가 7개인 날에도 기분 여섯이 두 갈래만
+   * 골랐다. 고를 수 없는 것과 견줘서 정하는 것은 자를 잘못 든 것이다.
+   *
+   * 하나도 약속을 못 지키는 날에는 있는 것으로 잰다 — 그때는 그게 전부다.
+   */
+  const keeps = candidates.map((candidate) =>
+    arrivesOnTime(candidate.durationSec, targetSec)
+  );
+  const pool = keeps.some(Boolean)
+    ? moodScores.filter((_, index) => keeps[index])
+    : moodScores;
+  const lowest = Math.min(...pool);
+  const moodSpread = Math.max(...pool) - lowest;
+  const flat = !(moodSpread > MOOD_FLAT_EPSILON);
+
   return candidates
-    .map<ScoredRoute>((candidate) => {
+    .map<ScoredRoute>((candidate, index) => {
       const fit = durationFit(candidate.durationSec, targetSec);
-      const moodScore = scoreFeatures(candidate.features, weights);
+      const moodScore = moodScores[index];
+      // 전부 똑같으면 기분은 말을 얹지 않는다. 그때는 fit이 정한다.
+      // 자를 통과 후보로 만들었으므로 탈락 후보는 0~1을 벗어날 수 있다 — 접어 둔다.
+      const standing = flat
+        ? 0.5
+        : Math.min(1, Math.max(0, (moodScore - lowest) / moodSpread));
       const repeat = recent.has(candidate.id) ? REPEAT_PENALTY : 1;
-      const score = fit * (1 - MOOD_SHARE + MOOD_SHARE * moodScore) * repeat;
+      const score = fit * (1 - MOOD_SHARE + MOOD_SHARE * standing) * repeat;
 
       return {
         candidate,
         fit,
+        // 화면과 기록에는 **잰 값**을 남긴다. 상대값은 순위를 정할 때만 쓴다.
         moodScore,
         score,
         dominantFeature: dominantFeature(candidate.features, weights),

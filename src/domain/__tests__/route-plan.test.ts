@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { weightsFor } from '../mood';
-import { arrivesOnTime, durationFit, firstRoute, nextRoute, rankRoutes } from '../route-plan';
+import { MOODS, scoreFeatures, weightsFor } from '../mood';
+import {
+  MOOD_SHARE,
+  arrivesOnTime,
+  durationFit,
+  firstRoute,
+  nextRoute,
+  rankRoutes,
+} from '../route-plan';
 import { ARRIVE_EARLY_SEC, PROMISE_FLOOR_SEC } from '../time';
 import type { RouteCandidate, RouteFeatures } from '../types';
 
@@ -45,8 +52,36 @@ describe('durationFit', () => {
     expect(late).toBeLessThan(early);
   });
 
-  it('많이 늦으면 사실상 탈락한다', () => {
-    expect(durationFit(32 * MIN, 27 * MIN)).toBeLessThan(0.01);
+  /*
+   * 예전엔 `durationFit(32분, 27분) < 0.01`로 못 박아 뒀다. 그 수는 늦는 쪽 폭이
+   * 60초였을 때의 값이고, 그 좁음이 바로 문제였다 — 약속을 지키는 두 후보
+   * (목표 30분에 29.3분과 31.1분) 사이에서도 fit이 3.2배 벌어져 기분이 이길 수가
+   * 없었다. 폭을 넓히면서 그 수는 못이 아니라 흔적이 됐으므로, **지켜야 할
+   * 성질** 두 개로 바꿔 적는다.
+   */
+  it('약속을 벗어난 길은 기분으로도 못 살린다', () => {
+    const target = 27 * MIN;
+    const tooLate = target + 300;
+    // 관문 밖이라는 것부터 확인한다. 안쪽이면 이 성질을 요구할 이유가 없다.
+    expect(arrivesOnTime(tooLate, target)).toBe(false);
+
+    const strongestRescue = 1 / (1 - MOOD_SHARE);
+    expect(durationFit(tooLate, target) * strongestRescue).toBeLessThan(
+      durationFit(target, target)
+    );
+  });
+
+  it('약속을 지키는 구간 안에서는 기분이 결정할 수 있다', () => {
+    const target = 27 * MIN;
+    const strongestRescue = 1 / (1 - MOOD_SHARE);
+
+    // 늦는 쪽 관문 끝(+2분)과 이른 쪽 관문 끝(-5분).
+    for (const durationSec of [target + 120, target - 300]) {
+      expect(arrivesOnTime(durationSec, target)).toBe(true);
+      expect(durationFit(target, target) / durationFit(durationSec, target)).toBeLessThan(
+        strongestRescue
+      );
+    }
   });
 });
 
@@ -286,5 +321,143 @@ describe('weightsFor', () => {
 
   it('"햇볕이 싫어요"는 이미 그늘이 최우선이라 더 얹지 않는다', () => {
     expect(weightsFor('hot', true)).toEqual(weightsFor('hot', false));
+  });
+});
+
+/**
+ * 고른 기분이 결과를 바꾸는가.
+ *
+ * 이 앱은 첫 화면 추신에서 "오늘 기분에 맞춰서요"라고 약속한다. 그런데 실기기에서
+ * 기분을 바꿔도 늘 같은 길이 나왔다. 원인이 둘이었는데 둘 다 기분과 무관한
+ * 곳에 있었다 — 후보가 목표를 넘겨 관문에 한 장만 남았고(waypoints.ts), 남은
+ * 것들 사이에서도 fit이 기분을 압도했다(위의 폭).
+ *
+ * 여기서는 두 번째만 본다. 약속을 지키는 후보가 여럿 있을 때 기분이 실제로
+ * 결정권을 갖는지.
+ */
+describe('rankRoutes — 기분이 결정한다', () => {
+  const targetSec = 27 * MIN;
+
+  /*
+   * 약속을 지키는 세 후보. 성질 차이를 **실제로 재지는 만큼만** 벌려 둔다.
+   *
+   * 0.9 대 0.2처럼 벌려 놓으면 절대값만으로도 기분이 이겨서, 정규화를 없애도
+   * 테스트가 통과한다 — 실기기에서 안 되던 것을 못 잡는 못이 된다. 실측한 성질
+   * 차이는 0.1~0.15 수준이고, 가중치 합이 1이라 그 차이가 다시 눌린다.
+   */
+  const promiseKeepers = [
+    candidate('quiet', targetSec + 90, { quiet: 0.62, scenic: 0.48, flat: 0.48, unbroken: 0.48 }),
+    candidate('scenic', targetSec - 90, { quiet: 0.48, scenic: 0.62, flat: 0.48, unbroken: 0.48 }),
+    candidate('flat', targetSec + 30, { quiet: 0.48, scenic: 0.48, flat: 0.62, unbroken: 0.62 }),
+  ];
+
+  it('셋 다 약속을 지킨다 — 여기서는 시간이 가릴 일이 아니다', () => {
+    for (const c of promiseKeepers) {
+      expect(arrivesOnTime(c.durationSec, targetSec)).toBe(true);
+    }
+  });
+
+  it('기분을 바꾸면 뽑히는 길이 바뀐다', () => {
+    const picked = new Set(
+      MOODS.map(
+        (mood) =>
+          rankRoutes(promiseKeepers, { targetSec, weights: weightsFor(mood.id) })[0].candidate.id
+      )
+    );
+
+    // 여섯 기분이 한 길만 고른다면 기분을 물어본 의미가 없다.
+    expect(picked.size).toBeGreaterThan(1);
+  });
+
+  it('절대값만으로는 기분이 이길 수 없다 — 이 후보들이 그 증거다', () => {
+    /*
+     * fit 차이가 기분의 **절대** 차이보다 크다. 그래서 정규화 없이는 시간이 전부
+     * 결정한다. 이 관계가 깨지면 위 테스트가 정규화를 안 해도 통과하게 된다.
+     */
+    const weights = weightsFor('pensive');
+    const scores = promiseKeepers.map((c) => scoreFeatures(c.features, weights));
+    const absoluteRatio =
+      (1 - MOOD_SHARE + MOOD_SHARE * Math.max(...scores)) /
+      (1 - MOOD_SHARE + MOOD_SHARE * Math.min(...scores));
+    const fits = promiseKeepers.map((c) => durationFit(c.durationSec, targetSec));
+    const fitRatio = Math.max(...fits) / Math.min(...fits);
+
+    expect(absoluteRatio).toBeLessThan(fitRatio);
+  });
+
+  /*
+   * 상대값으로 세우는 데서 오는 위험. 성질을 하나도 못 잰 날(키가 없거나 환경
+   * API가 전부 실패한 날) 후보들의 기분 점수는 완전히 같다. 그때 억지로 순위를
+   * 매기면 부동소수 끝자리를 "기분에 맞는 길"로 부풀려 내놓게 된다.
+   */
+  it('성질을 못 재면 기분은 말을 얹지 않는다', () => {
+    const sameEverywhere = [
+      candidate('near', targetSec + 30),
+      candidate('far', targetSec + 110),
+    ];
+
+    for (const mood of MOODS) {
+      const ranked = rankRoutes(sameEverywhere, { targetSec, weights: weightsFor(mood.id) });
+      // 시간이 정한다 — 목표에 가까운 쪽.
+      expect(ranked[0].candidate.id).toBe('near');
+      // 기분 배수는 모두 가운데(0.5)로 놓인다 — 아무도 유리하지 않다.
+      expect(ranked[0].score).toBeCloseTo(
+        ranked[0].fit * (1 - MOOD_SHARE + MOOD_SHARE * 0.5),
+        6
+      );
+    }
+  });
+
+  /*
+   * 자를 후보 전부로 만들면, 어차피 관문에서 걸러질 길이 양끝을 차지하면서
+   * 정작 화면에 나갈 수 있는 것들이 가운데로 눌린다. 실측: 약속을 지키는 후보가
+   * 7개인 날에도 기분 여섯이 두 갈래만 골랐다.
+   */
+  it('고를 수 없는 후보는 자를 왜곡하지 않는다', () => {
+    const tooLate = candidate('too-late', targetSec + 600, {
+      quiet: 1,
+      flat: 1,
+      shade: 1,
+      scenic: 1,
+      novelty: 1,
+      unbroken: 1,
+    });
+    expect(arrivesOnTime(tooLate.durationSec, targetSec)).toBe(false);
+
+    const order = (cands: RouteCandidate[]) =>
+      rankRoutes(cands, { targetSec, weights: weightsFor('pensive') })
+        .filter((r) => arrivesOnTime(r.candidate.durationSec, targetSec))
+        .map((r) => r.candidate.id);
+
+    expect(order([...promiseKeepers, tooLate])).toEqual(order(promiseKeepers));
+
+    /*
+     * 순서만 보면 못이 안 된다 — 정규화는 단조 변환이라 순서를 바꾸지 않는다.
+     * 정작 잃는 것은 **폭**이다. 고를 수 없는 길이 자의 양끝을 차지하면 남은
+     * 것들이 가운데로 눌려 기분이 낼 수 있는 차이가 줄어든다. 그래서 폭을 본다.
+     */
+    const factors = rankRoutes([...promiseKeepers, tooLate], {
+      targetSec,
+      weights: weightsFor('pensive'),
+    })
+      .filter((r) => arrivesOnTime(r.candidate.durationSec, targetSec))
+      .map((r) => r.score / r.fit);
+
+    expect(Math.max(...factors)).toBeCloseTo(1, 6);
+    expect(Math.min(...factors)).toBeCloseTo(1 - MOOD_SHARE, 6);
+  });
+
+  it('잰 값은 그대로 남긴다 — 상대값은 순위에만 쓴다', () => {
+    // 화면과 기록이 보는 moodScore가 후보 집합에 따라 흔들리면 안 된다.
+    const alone = rankRoutes([promiseKeepers[0]], {
+      targetSec,
+      weights: weightsFor('pensive'),
+    })[0];
+    const together = rankRoutes(promiseKeepers, {
+      targetSec,
+      weights: weightsFor('pensive'),
+    }).find((r) => r.candidate.id === 'quiet');
+
+    expect(together?.moodScore).toBeCloseTo(alone.moodScore, 10);
   });
 });

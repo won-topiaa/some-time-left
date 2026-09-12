@@ -7,7 +7,11 @@ vi.mock('../environment', () => ({
   loadEnvironment: (...args: unknown[]) => loadEnvironment(...args),
 }));
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { RoadRouteProvider } from '../road-route-provider';
+import { DEFAULT_WALK_SPEED_MPS } from '../../domain/pace';
+import { distanceM } from '../../domain/geo';
 import type { ParsedRoute } from '../tmap/parse';
 import type { LatLng } from '../../domain/types';
 
@@ -133,5 +137,94 @@ describe('길 찾기에 드는 값', () => {
     const { instance } = provider(25 * 60);
 
     await expect(instance.candidates(request(25 * 60))).resolves.toHaveLength(6);
+  });
+});
+
+/**
+ * 보정 라운드가 **어디서 출발하는가.**
+ *
+ * 1라운드는 배율을 넓게 훑는다(`WIDE_SPREAD`). 그러니 가장 가까웠던 후보는
+ * 배율 0.5에서 나왔을 수도, 1.9에서 나왔을 수도 있다. 그걸 `1`로 두고 보정하면
+ * 엉뚱한 자리에서 출발해서, 두 라운드를 돌고도 목표를 못 맞춘다.
+ *
+ * 도로망을 흉내 내되 **단조**로 둔다 — 경유지를 멀리 밀면 오래 걸린다. 실제
+ * 도로망은 비단조라서 이 테스트보다 어렵고, 그래서 폭을 넓게 훑는 것이다.
+ */
+describe('보정 라운드의 출발점', () => {
+  beforeEach(() => {
+    loadEnvironment.mockReset();
+    loadEnvironment.mockResolvedValue({ congestion: [], parks: [], buildings: [] });
+  });
+
+  /** 경유지를 지나는 삼각형 길이를 그대로 소요 시간으로 돌려준다. */
+  function geometricProvider() {
+    let seed = 0;
+    return new RoadRouteProvider({
+      idPrefix: 'geo',
+      fetchRoute: async ({ waypoints }) => {
+        seed += 1;
+        const via = waypoints?.[0];
+        const lengthM =
+          via == null
+            ? distanceM(origin, destination)
+            : distanceM(origin, via) + distanceM(via, destination);
+        const parsed: ParsedRoute = {
+          path: road(seed),
+          distanceM: lengthM,
+          durationSec: lengthM / DEFAULT_WALK_SPEED_MPS,
+          crossings: null,
+          stairs: null,
+        };
+        return parsed;
+      },
+    });
+  }
+
+  it('두 라운드를 돌면 목표 언저리에 닿는다', async () => {
+    const targetSec = 30 * 60;
+    const routes = await geometricProvider().candidates(request(targetSec));
+
+    expect(routes.length).toBeGreaterThan(0);
+    const closest = Math.min(...routes.map((r) => Math.abs(r.durationSec - targetSec)));
+    // 목표의 5% 안. 배율 1에서 보정을 시작하면 이 안에 못 들어온다.
+    expect(closest).toBeLessThan(targetSec * 0.05);
+  });
+
+  it('후보가 목표를 양쪽에서 감싼다', async () => {
+    const targetSec = 30 * 60;
+    const routes = await geometricProvider().candidates(request(targetSec));
+    const durations = routes.map((r) => r.durationSec);
+
+    // 한쪽으로만 몰리면 관문에서 통째로 걸러지거나 통째로 통과한다.
+    expect(Math.min(...durations)).toBeLessThan(targetSec);
+    expect(Math.max(...durations)).toBeGreaterThan(targetSec);
+  });
+});
+
+/**
+ * 보정의 출발점은 소스에 못으로 박는다.
+ *
+ * 동작으로 잡으려면 1라운드가 목표를 못 맞히는 도로망이 필요하다. 그런데 폭을
+ * 넓게 훑도록 고친 뒤로는 흉내 낸 도로망에서 1라운드가 거의 맞혀 버려서,
+ * 보정 라운드 자체가 돌지 않는다 — 잡고 싶은 코드가 실행되지 않는다.
+ * 실제 도로망(비단조)에서만 갈리는 차이라 여기서는 약속만 지킨다.
+ */
+describe('보정은 가장 가까웠던 후보의 배율에서 출발한다', () => {
+  const source = readFileSync(join(__dirname, '..', 'road-route-provider.ts'), 'utf8');
+
+  it('refineScale에 그 후보의 배율을 넘긴다', () => {
+    const call = source.slice(
+      source.indexOf('refineScale('),
+      source.indexOf(';', source.indexOf('refineScale('))
+    );
+
+    // 1을 넘기면, 배율 0.5에서 나온 최선을 1에서 나온 것으로 치고 보정한다.
+    expect(call).toContain('magnitude');
+    expect(call).not.toMatch(/,\s*1\s*\)/);
+  });
+
+  it('받아 온 길마다 그 배율을 같이 들고 나간다', () => {
+    // 성공한 것만 남기면서 순서(=배율)를 잃으면 위 약속을 지킬 수 없다.
+    expect(source).toContain('waypointMagnitude(index, count, spread)');
   });
 });

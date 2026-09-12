@@ -23,7 +23,12 @@
 
 import { buildVisitedIndex, deriveFeatures } from './features';
 import { toStreetSegments, type ParsedRoute } from './tmap/parse';
-import { planWaypoints, refineScale } from './waypoints';
+import {
+  NARROW_SPREAD,
+  planWaypoints,
+  refineScale,
+  waypointMagnitude,
+} from './waypoints';
 import { EMPTY_ENVIRONMENT, loadEnvironment, type Environment } from './environment';
 import { withDeadline } from './deadline';
 import { buildBuildingIndex, buildProfileLookup } from './buildings/profile';
@@ -98,6 +103,17 @@ const CANDIDATE_TIMEOUT_MS = 3500;
  * 당겨 본다. 도로가 성긴 동네에서 옆으로 크게 벌린 점이 전부 허공에 찍힌 경우다.
  */
 const EMPTY_ROUND_SCALE = 0.6;
+
+/**
+ * 받아 온 좌표열 하나와, **그걸 만든 배율**.
+ *
+ * 배율을 같이 들고 다니는 이유는 보정 라운드다. 1라운드가 배율을 넓게 훑으므로
+ * 가장 가까웠던 후보가 어느 배율에서 나왔는지 알아야 그 자리에서 보정할 수 있다.
+ */
+interface FoundPath {
+  route: ParsedRoute;
+  magnitude: number;
+}
 
 /** 요청 사이에 간격을 둘 때 쓴다. */
 function delay(ms: number): Promise<void> {
@@ -213,9 +229,9 @@ export class RoadRouteProvider implements RouteProvider {
 
     // 도로망은 직선이 아니라서 첫 추정은 빗나가는 게 정상이다.
     const best = closestTo(first, aim);
-    const onTarget = best != null && Math.abs(best.durationSec - aim) <= REFINE_THRESHOLD_SEC;
+    const onTarget = best != null && Math.abs(best.route.durationSec - aim) <= REFINE_THRESHOLD_SEC;
 
-    let parsed = first;
+    let found = first;
     if (!onTarget) {
       /*
        * 첫 라운드가 통째로 빈 날에도 한 번 더 해 본다.
@@ -224,16 +240,30 @@ export class RoadRouteProvider implements RouteProvider {
        * 있는데, 배율을 줄여 안쪽으로 당기면 붙는 날이 있다. 여기서 포기하면
        * 화면은 "돌아갈 길을 못 찾았어요"로 물러선다.
        */
-      const nextScale = best == null ? EMPTY_ROUND_SCALE : refineScale(best.durationSec, aim, 1);
+      /*
+       * 보정의 기준은 **가장 가까웠던 그 후보의 배율**이다.
+       *
+       * 예전엔 `1`을 넘겼다. 1라운드가 여섯을 같은 배율로 던지던 때는 그게 맞았지만,
+       * 지금은 배율을 넓게 훑으므로 가장 가까웠던 것이 배율 0.5였을 수도 1.9였을
+       * 수도 있다. 그걸 1로 두고 보정하면 엉뚱한 데서 출발한다.
+       */
+      const nextScale =
+        best == null
+          ? EMPTY_ROUND_SCALE
+          : refineScale(best.route.durationSec, aim, best.magnitude);
       const second = await this.fetchPaths({
         origin,
         destination,
         targetSec: aim,
         scale: nextScale,
         count: REFINE_COUNT,
-      }).catch(() => [] as ParsedRoute[]);
-      parsed = [...first, ...second];
+        // 중심이 대충 맞은 상태라 좁게 훑는다.
+        spread: NARROW_SPREAD,
+      }).catch(() => [] as FoundPath[]);
+      found = [...first, ...second];
     }
+
+    const parsed = found.map((entry) => entry.route);
 
     if (parsed.length === 0) {
       return [];
@@ -316,13 +346,15 @@ export class RoadRouteProvider implements RouteProvider {
     targetSec,
     scale,
     count = CANDIDATE_COUNT,
+    spread,
   }: {
     origin: LatLng;
     destination: LatLng;
     targetSec: number;
     scale: number;
     count?: number;
-  }): Promise<ParsedRoute[]> {
+    spread?: number;
+  }): Promise<FoundPath[]> {
     const waypoints = planWaypoints({
       origin,
       destination,
@@ -330,6 +362,7 @@ export class RoadRouteProvider implements RouteProvider {
       speedMps: DEFAULT_WALK_SPEED_MPS,
       count,
       scale,
+      spread,
     });
 
     /*
@@ -358,8 +391,15 @@ export class RoadRouteProvider implements RouteProvider {
      * 것은 다른 말이다 — 공급자는 앞으로도 늘어날 것이고, 새로 붙는 쪽이 또
      * 직선을 그어 보낼 수 있다. 관문은 출처를 묻지 않는다.
      */
-    return results.flatMap((result) =>
-      result.status === 'fulfilled' && inspectPath(result.value.path).ok ? [result.value] : []
+    /*
+     * 어떤 배율이 이 길을 만들었는지 같이 들고 나간다. 보정 라운드가 그 배율에서
+     * 출발해야 하기 때문이다 — 성공한 것만 남기면서 순서(=배율)를 잃으면
+     * 보정이 엉뚱한 데서 시작한다.
+     */
+    return results.flatMap((result, index) =>
+      result.status === 'fulfilled' && inspectPath(result.value.path).ok
+        ? [{ route: result.value, magnitude: scale * waypointMagnitude(index, count, spread) }]
+        : []
     );
   }
 }
@@ -398,13 +438,13 @@ function assertWalkable(parsed: ParsedRoute, what: string): void {
   }
 }
 
-function closestTo(candidates: ParsedRoute[], targetSec: number): ParsedRoute | null {
-  return candidates.reduce<ParsedRoute | null>((best, candidate) => {
+function closestTo(candidates: FoundPath[], targetSec: number): FoundPath | null {
+  return candidates.reduce<FoundPath | null>((best, candidate) => {
     if (best == null) {
       return candidate;
     }
-    return Math.abs(candidate.durationSec - targetSec) <
-      Math.abs(best.durationSec - targetSec)
+    return Math.abs(candidate.route.durationSec - targetSec) <
+      Math.abs(best.route.durationSec - targetSec)
       ? candidate
       : best;
   }, null);
