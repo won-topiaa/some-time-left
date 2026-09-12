@@ -11,6 +11,10 @@ import { distanceM, splitPath, walkProgress } from '../domain/geo';
 import { DEFAULT_WALK_SPEED_MPS, estimateSpeedMps, paceAdvice } from '../domain/pace';
 import { arrivalAt, formatClock, formatDuration } from '../domain/time';
 import { walkFootnote } from '../domain/copy';
+import {
+  canAdvisePace,
+  positionCertainty,
+} from '../domain/position-certainty';
 import { RouteMap } from '../ui/RouteMap';
 import { RouteSource } from '../ui/RouteSource';
 import { radius, spacing } from '../ui/theme';
@@ -27,14 +31,6 @@ export const Route = createRoute('/walk', {
 
 /** 도착 판정 반경 (m). */
 const ARRIVED_RADIUS_M = 40;
-
-/**
- * 위치가 이만큼 안 들어오면 "못 잡고 있다"고 본다 (ms).
- *
- * 첫 측정까지는 원래 몇 초 걸리므로(timeInterval 3초) 바로 경고하면
- * 걷기 시작할 때마다 "위치가 안 잡혀요"가 번쩍인다. 그 정상 구간은 지나 보낸다.
- */
-const LOCATION_GRACE_MS = 20_000;
 
 /**
  * 계획한 도착이 약속 앞 목표와 이만큼 안쪽이면 "그 시각에 맞추고 있다"고 말한다 (ms).
@@ -297,13 +293,23 @@ function Walk() {
     currentSpeedMps: speedMps,
   });
 
-  // 위치를 못 잡고 있으면 페이스는 추측일 뿐이다. 추측으로 재촉하지 않는다.
-  // 첫 측정을 기다리는 정상 구간은 지나 보내고, 그 뒤로도 없으면 그렇다고 말한다.
-  // 한 번 잡혔더라도 오래 조용하면(지하도·실내) 같은 이유로 모른다고 말한다.
-  const blind =
-    locationLost ||
-    (remainingM == null && nowMs - startedAtMs > LOCATION_GRACE_MS) ||
-    (lastFixAtMs.current != null && Date.now() - lastFixAtMs.current > LOCATION_GRACE_MS);
+  /*
+   * 지금 위치를 알고 있는가.
+   *
+   * 판단은 도메인에 있다(`positionCertainty`) — 조용함을 곧장 '모른다'로 읽어서
+   * 횡단보도에 서 있기만 해도 위치를 못 잡는다고 말했고, 그 바람에 서 있는
+   * 사람에게 가장 필요한 페이스 안내가 가려졌다. 이유는 그 파일 첫머리에 있다.
+   *
+   * `nowMs`가 1초마다 바뀌므로 이 값도 같이 다시 계산된다 — ref를 렌더에서
+   * 읽는 것이 값을 갱신해 주지는 않지만, 그 타이머가 그 일을 한다.
+   */
+  const certainty = positionCertainty({
+    errored: locationLost,
+    hadFix: lastFixAtMs.current != null,
+    sinceStartMs: nowMs - startedAtMs,
+    sinceFixMs: lastFixAtMs.current != null ? Date.now() - lastFixAtMs.current : 0,
+  });
+  const blind = !canAdvisePace(certainty);
 
   // 위치를 모르면 벗어났는지도 모른다. 모르는 채로 벗어났다고 하지 않는다.
   const offRoute = !blind && offRouteM != null && offRouteM > OFF_ROUTE_M;
@@ -371,7 +377,13 @@ function Walk() {
         </View>
       </View>
 
-      {blind ? (
+      {certainty === 'waiting' ? (
+        /* 시작 직후. 못 잡은 게 아니라 아직 안 온 것이므로 그렇게 말한다. */
+        <View style={[styles.advice, adviceTone.keep]}>
+          <Text style={styles.adviceText}>위치를 찾고 있어요</Text>
+          <Text style={styles.adviceSub}>잠시만요, 곧 안내를 시작할게요.</Text>
+        </View>
+      ) : blind ? (
         <View style={[styles.advice, adviceTone.keep]}>
           <Text style={styles.adviceText}>지금 위치가 잡히지 않아요</Text>
           <Text style={styles.adviceSub}>시간은 계속 재고 있을게요.</Text>
