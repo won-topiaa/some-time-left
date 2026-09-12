@@ -24,8 +24,8 @@
 import { searchPlaces } from './tmap/client';
 import { geocodeAddress } from './tmap/geocode';
 import { searchOsmPlaces } from './osm-places';
-import { fold, matchRank, searchRegions } from './regions/search';
-import { searchStations } from './stations/search';
+import { fold, searchRegions } from './regions/search';
+import { rankStation, searchStations } from './stations/search';
 import { isTmapConfigured } from '../config';
 import { SEOUL_HOTSPOTS } from './seoul/hotspots';
 import { distanceM } from '../domain/geo';
@@ -62,15 +62,27 @@ function hotspotPlaces(query: string): Place[] {
 /**
  * 네트워크 없이 답하는 것 전부.
  *
- * 역이 핫스팟보다 앞이다. 서울대입구역처럼 두 곳에 다 있는 이름은 앞의 것이
- * 남는데(`dedupe`), 역 색인은 OSM의 역 노드라 걸어갈 자리가 더 정확하다 —
- * 핫스팟 좌표는 혼잡도를 재는 '지점'이라 역 자체가 아닐 수 있다.
+ * 역 이름은 역 색인이 받는다. 핫스팟 121곳 중 41곳이 역 색인과 이름이 겹치는데,
+ * 두 좌표는 같은 역을 가리키면서도 조금씩 다르다 — 핫스팟 좌표는 혼잡도를 재는
+ * '지점'이고 역 색인은 OSM의 역 노드다. 걸어갈 자리는 뒤엣것이다.
+ *
+ * **`dedupe`에 맡기면 안 된다.** 그건 300m 안에서만 같은 곳으로 보므로, 서울역
+ * (301m)·수유역(341m)·용산역(355m)·구로디지털단지역(502m)은 둘 다 살아남아
+ * 같은 이름 두 줄이 나란히 뜬다. 부제가 없는 핫스팟 줄이 위에 서기도 하고,
+ * 그걸 누르면 역에서 300~500m 떨어진 측정 지점으로 걸어간다 — 3분을 계산하는
+ * 앱에서 4~7분치 오차다. 그래서 거리와 무관하게 이름으로 걸러 낸다.
+ *
+ * 혼잡도는 이것과 무관하게 붙는다 — `seoul/congestion.ts`가 좌표에서 700m 반경의
+ * 핫스팟을 따로 찾으므로, 여기서 목록에서 빼도 그 역의 혼잡도는 그대로 재진다.
  */
 function offlinePlaces(query: string, near?: LatLng): Place[] {
+  const stations = searchStations(query, near);
+  const stationNames = new Set(stations.map((place) => fold(place.name)));
+
   return dedupe([
     ...searchRegions(query, near),
-    ...searchStations(query, near),
-    ...hotspotPlaces(query),
+    ...stations,
+    ...hotspotPlaces(query).filter((place) => !stationNames.has(fold(place.name))),
   ]);
 }
 
@@ -140,7 +152,12 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
   }
   const online: Place[] = (await Promise.all(lookups)).flat();
 
-  return rankPlaces(trimmed, dedupe([...offline, ...online]), near).slice(0, LIMIT);
+  // 어느 줄이 번들에서 온 것인지 그대로 들고 간다. `dedupe`는 걸러낼 뿐이라
+  // 객체가 그대로 남으므로, 순서가 아니라 정체로 구별할 수 있다.
+  return rankPlaces(trimmed, dedupe([...offline, ...online]), near, new Set(offline)).slice(
+    0,
+    LIMIT
+  );
 }
 
 /**
@@ -152,13 +169,42 @@ export async function findPlaces(query: string, near?: LatLng): Promise<Place[]>
  * 잣대를 못 대는 것(이름에 검색어가 없는 온라인 결과 — 별칭·영문명 히트)은
  * 맨 뒤에 원래 순서대로 둔다.
  */
-function rankPlaces(query: string, places: Place[], near?: LatLng): Place[] {
+function rankPlaces(
+  query: string,
+  places: Place[],
+  near?: LatLng,
+  offline: ReadonlySet<Place> = new Set()
+): Place[] {
   const needle = fold(query);
   return places
     .map((place, index) => ({
       place,
       index,
-      rank: matchRank(needle, place.name) ?? 3,
+      /*
+       * 잣대는 역 모듈과 **같은 것**을 쓴다.
+       *
+       * 예전엔 `matchRank`를 그대로 썼다. 그런데 역 색인은 양쪽의 '역'을 떼고
+       * 한 번 더 보는 잣대로 1순위를 올려 보내는데, 여기서 다른 잣대로 다시
+       * 세우면 그 역이 뒤로 밀린다. 실제로 부산 서면에 서서 "서면"을 치면
+       * 눈앞의 서면역이 rank 1이 되어 이름이 정확히 '서면'인 읍면 여덟 곳에
+       * 8칸을 다 내주고 화면에서 사라졌다. "이수역"의 총신대입구(이수)역도
+       * 같은 이유로 "잣대를 못 대는 것"(rank 3) 통에 들어갔다.
+       */
+      rank: rankStation(needle, fold(place.name)) ?? 3,
+      /*
+       * 잣대가 같고 거리도 같으면 번들 안의 것이 먼저다.
+       *
+       * 번들 안의 줄은 **그 장소 자체**(역·동)이고, 온라인 결과는 대개 그
+       * 주변의 것이다. 같은 급으로 맞았는데 어느 쪽을 위에 둘지 정해야 한다면,
+       * 지어낼 수 없는 쪽을 위에 둔다.
+       *
+       * **이것만으로 해결되지 않는 경우가 있다.** "이수역"을 쳤을 때 TMAP이
+       * '이수역1번출구'처럼 검색어로 **시작하는** 이름 여덟 줄을 주면, 그들은
+       * rank 1이고 145m 옆의 총신대입구(이수)역은 rank 2라 여덟 칸이 먼저 찬다.
+       * 접두 일치가 부분 일치보다 잘 맞는 것은 맞는 판정이므로 여기서 뒤집지
+       * 않았다 — 그 여덟 줄도 같은 환승역 출구라 걸어갈 자리는 다르지 않다.
+       */
+      fromBundle: offline.has(place) ? 0 : 1,
       // 거리는 여기서 한 번만. 비교자 안에서 재면 정렬이 하버사인을 n log n 번 다시 돈다
       // — regions/search.ts가 정확히 이 이유로 미리 재 둔다. 같은 규칙이다.
       distance: near == null ? 0 : distanceM(near, place.at),
@@ -166,6 +212,7 @@ function rankPlaces(query: string, places: Place[], near?: LatLng): Place[] {
     .sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       if (a.rank === 3) return a.index - b.index;
+      if (a.fromBundle !== b.fromBundle) return a.fromBundle - b.fromBundle;
       if (a.distance !== b.distance) return a.distance - b.distance;
       return a.place.name.length - b.place.name.length;
     })

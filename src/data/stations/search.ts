@@ -62,12 +62,18 @@ interface Hit {
 }
 
 /**
- * 얼마나 잘 맞는가. 작을수록 좋다. 못 맞으면 null.
+ * 얼마나 잘 맞는가. 작을수록 좋다. 못 맞으면 null. `folded`는 다듬어진 이름이어야 한다.
  *
  * '역'을 뗀 쪽으로도 한 번 본다. 둘 중 더 잘 맞는 값을 쓴다 — "이수역"이
  * "총신대입구(이수)역"에 걸리는 건 이 두 번째 시도 덕이다.
+ *
+ * 내보내는 이유: `places.ts`가 여러 출처를 한 줄로 다시 세울 때 **같은 잣대**를
+ * 써야 한다. 여기서만 '역'을 동일시하고 거기서는 안 하면, 이 모듈이 1순위로
+ * 올려 보낸 역이 그 자리에서 다시 뒤로 밀린다 — 실제로 그랬다: 부산 서면에 서서
+ * "서면"을 치면 눈앞의 서면역이 rank 1이 되어, 이름이 정확히 '서면'인 읍면
+ * 여덟 곳(경주 82km·남해 116km·순천 143km…)에 8칸을 다 내주고 잘렸다.
  */
-function rankStation(needle: string, folded: string): number | null {
+export function rankStation(needle: string, folded: string): number | null {
   const direct = matchRank(needle, folded);
   const bare = matchRank(withoutStationSuffix(needle), withoutStationSuffix(folded));
   if (direct == null) return bare;
