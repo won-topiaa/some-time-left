@@ -7,9 +7,11 @@ import {
   postscriptGroups,
   promiseLine,
   routeReason,
+  tooShortRouteLines,
   walkFootnote,
   walkShareText,
 } from '../copy';
+import { departAt, formatDuration, planWalk, waitSec } from '../time';
 import { MOODS, dominantFeature, weightsFor } from '../mood';
 import { FEATURE_KEYS } from '../types';
 import { ARRIVE_EARLY_SEC, WET_ARRIVE_EARLY_SEC, promisedMinutes } from '../time';
@@ -388,5 +390,57 @@ describe('walkShareText — 남에게 보내는 한 덩어리', () => {
       const text = walkShareText({ ...base, mood: mood.id }, 1000);
       expect(text).toContain(mood.label);
     }
+  });
+});
+
+/**
+ * 늘리긴 했는데 목표 언저리에 못 닿는 날.
+ *
+ * 예전엔 "딱 맞는 길이 없었어요. 가장 가까운 길로 보여드릴게요."로 끝났다.
+ * 앱이 못 한 일을 사람에게 넘기는 말인데, 정작 그날의 답은 이미 손에 있었다 —
+ * 길이 목표보다 짧다는 건 그만큼 늦게 나서면 딱 맞는다는 뜻이다.
+ */
+describe('tooShortRouteLines', () => {
+  it('사과 대신 숫자를 준다', () => {
+    const lines = tooShortRouteLines({ walkSec: 25 * 60, earlyBySec: 10 * 60 });
+
+    expect(lines.headline).toBe('25분 걷는 길이 최선이에요.');
+    expect(lines.sub).toBe('10분 일찍 닿아요.');
+  });
+
+  it('"가장 긴 길"이라고 하지 않는다', () => {
+    // 고르는 식에는 기분과 반복 감점도 들어가서, 가장 오래 걷는 후보가 아닐 수 있다.
+    const lines = tooShortRouteLines({ walkSec: 25 * 60, earlyBySec: 10 * 60 });
+
+    expect(`${lines.headline}${lines.sub}`).not.toContain('가장');
+  });
+
+  it('한 시간이 넘는 길도 그대로 읽힌다', () => {
+    expect(tooShortRouteLines({ walkSec: 65 * 60, earlyBySec: 6 * 60 }).headline).toBe(
+      '1시간 5분 걷는 길이 최선이에요.'
+    );
+  });
+
+  /*
+   * 화면에 '10분'이 두 번 나온다 — 이 두 줄의 "10분 일찍"과, 아래 나설 시각 줄의
+   * "10분 뒤". 둘이 어긋나면 같은 화면이 스스로를 반박한다. 어긋날 수 없다는 것을
+   * 여기서 못 박는다: 목표에서 모자란 만큼이 곧 늦게 나서도 되는 만큼이다.
+   */
+  it('목표에서 모자란 만큼이 곧 기다리는 만큼이다', () => {
+    const nowMs = 0;
+    const arriveAtMs = 40 * 60 * 1000;
+    const plan = planWalk({ nowMs, arriveAtMs, shortestSec: 5 * 60, earlySec: 300 });
+    if (plan.kind !== 'stretch') {
+      throw new Error('이 입력은 늘리는 날이어야 한다');
+    }
+
+    const walkSec = 25 * 60;
+    const earlyBySec = plan.targetWalkSec - walkSec;
+    const waiting = waitSec(departAt(arriveAtMs, walkSec, nowMs, plan.earlySec), nowMs);
+
+    expect(earlyBySec).toBe(waiting);
+    expect(tooShortRouteLines({ walkSec, earlyBySec }).sub).toContain(
+      formatDuration(waiting)
+    );
   });
 });

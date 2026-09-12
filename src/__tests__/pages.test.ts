@@ -177,3 +177,45 @@ describe('walk.tsx — 위치 확신 배선', () => {
     expect(between('const advice = paceAdvice({', '});')).toContain('standing');
   });
 });
+
+/**
+ * 목표에 못 닿는 날, 화면이 사과로 끝나지 않는다.
+ *
+ * 그날의 답은 이미 손에 있다 — 길이 목표보다 짧다는 건 그만큼 늦게 나서면 딱
+ * 맞는다는 뜻이고, 나설 시각은 바로 아래 줄이 이미 적고 있다. 문장은 copy.ts가
+ * 고르고(그래야 시험할 수 있다), 화면은 그걸 가져다 쓰기만 한다.
+ */
+describe('route.tsx — 목표에 못 닿는 날', () => {
+  const source = readFileSync(path.join(PAGES_DIR, 'route.tsx'), 'utf8');
+
+  it('사과 문구가 화면에 박혀 있지 않다', () => {
+    expect(source).not.toContain('딱 맞는 길이 없었어요');
+    expect(source).not.toContain('가장 가까운 길로 보여드릴게요');
+  });
+
+  it('두 줄을 copy.ts에서 가져다 쓴다', () => {
+    expect(source).toContain('tooShortRouteLines(');
+  });
+
+  it('일찍 닿는 양을 목표와 실제 길에서 낸다', () => {
+    /*
+     * 화면에 '10분'이 두 번 나온다 — "10분 일찍 닿아요"와 아래 줄의 "10분 뒤".
+     * 둘은 같은 뺄셈에서 나와야 어긋나지 않는다(copy.test.ts가 그 항등식을
+     * 못 박아 뒀다). 여기서 다른 수를 끼워 넣으면 화면이 스스로를 반박한다.
+     */
+    const call = source.slice(
+      source.indexOf('tooShortRouteLines('),
+      source.indexOf('})', source.indexOf('tooShortRouteLines('))
+    );
+    expect(call).toMatch(/earlyBySec:[^,]*targetWalkSec[^,]*-[^,]*durationSec/);
+  });
+
+  it('길이 없는 날에는 소요 시간을 말하지 않는다', () => {
+    // 없는 숫자로 문장을 만들면 "0분 걷는 길이 최선이에요"가 뜬다.
+    const chosen = source.slice(
+      source.indexOf('const tooShort ='),
+      source.indexOf('tooShortRouteLines(')
+    );
+    expect(chosen).toContain('route != null');
+  });
+});

@@ -54,6 +54,38 @@ export function routeReason(mood: MoodId, feature: FeatureKey): string {
  * 그래서 이 줄은 **약속**을 말하고, 숫자는 아래가 말하고, 이유는 그 아래가 말한다.
  * "찾아볼게요"도 아니다 — 길은 이미 찾아서 밑에 그려져 있다.
  */
+/**
+ * 늘리는 데는 성공했는데 목표 언저리에 못 닿는 날의 두 줄.
+ *
+ * 예전엔 여기가 사과였다 — "딱 맞는 길이 없었어요. 가장 가까운 길로 보여드릴게요."
+ * 앱이 못 한 일을 사람에게 넘기는 말이고, 정작 사람이 알고 싶은 것은 답이 없다.
+ * 사실 이 날의 답은 이미 손에 있다. 길이 목표보다 이만큼 짧다는 건 **그만큼
+ * 늦게 나서면 딱 맞는다**는 뜻이고, 나설 시각은 화면이 이미 아래 줄에 적고 있다.
+ *
+ * 그래서 두 줄은 그 뺄셈을 눈에 보이게만 한다.
+ *   25분 걷는 길이 최선이에요.
+ *   10분 일찍 닿아요.
+ *   (아래 줄) 12:16에 나서면 딱 맞아요 · 10분 뒤
+ * 두 번 나오는 '10분'은 같은 수다 — 목표에서 모자란 만큼이 곧 기다리는 만큼이다.
+ *
+ * "가장 긴 길"이라고는 하지 않는다. 고르는 식에는 기분과 반복 감점도 들어가서
+ * 가장 오래 걷는 후보가 아닐 수 있다. 지킬 수 있는 말만 한다.
+ */
+export function tooShortRouteLines({
+  walkSec,
+  earlyBySec,
+}: {
+  /** 실제로 내놓는 길의 소요 시간 (초). */
+  walkSec: number;
+  /** 목표보다 이만큼 일찍 닿는다 (초). */
+  earlyBySec: number;
+}): { headline: string; sub: string } {
+  return {
+    headline: `${formatDuration(walkSec)} 걷는 길이 최선이에요.`,
+    sub: `${formatDuration(earlyBySec)} 일찍 닿아요.`,
+  };
+}
+
 export function planHeadline(plan: WalkPlan): string {
   switch (plan.kind) {
     case 'stretch':

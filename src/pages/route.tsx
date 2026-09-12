@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
-import { alongRouteHint, planHeadline, routeReason } from '../domain/copy';
+import {
+  alongRouteHint,
+  planHeadline,
+  routeReason,
+  tooShortRouteLines,
+} from '../domain/copy';
 import { fetchPlaceAlongRoute, type AlongRoutePlace } from '../data/tmap/along-route';
 import {
   arrivalAt,
@@ -98,6 +103,26 @@ function RouteScreen() {
       ? departAt(trip.arriveAtMs, route.candidate.durationSec, nowMs + clockOffsetMs, plannedEarlySec)
       : null;
   const waitingSec = waitSec(leaveAtMs, nowMs + clockOffsetMs);
+
+  /**
+   * 늘리긴 했는데 목표 언저리에 못 닿는 날의 두 줄. 그런 날이 아니면 null.
+   *
+   * 상한에서 잘린 날(`capped`)은 애초에 목표에 맞을 수가 없으므로 여기 오지 않고,
+   * 아예 못 늘린 날(`!stretched`)은 위에서 따로 말한다. 길이 없으면 소요 시간을
+   * 말할 수 없으니 그때도 물러선다 — 없는 숫자로 문장을 만들지 않는다.
+   */
+  const tooShort =
+    plan != null &&
+    plan.kind === 'stretch' &&
+    stretched &&
+    !plan.capped &&
+    !onTarget &&
+    route != null
+      ? tooShortRouteLines({
+          walkSec: route.candidate.durationSec,
+          earlyBySec: plan.targetWalkSec - route.candidate.durationSec,
+        })
+      : null;
 
   // 가는 길에 스치는 가게 한 곳. 목적이 아니라 곁에 있다고 알려주는 정도.
   // 경로가 바뀌면(다른 길) 다시 찾고, 없으면 없는 채로 둔다.
@@ -217,11 +242,12 @@ function RouteScreen() {
             ? '오늘은 돌아갈 길을 못 찾았어요.'
             : /*
                 상한에서 잘린 날은 애초에 "넉넉히 걸어볼까요"라 목표에 맞을 수가 없다.
-                그 밖의 날에 목표에 못 미치면 — 후보가 전부 늦어 최단으로 물러섰거나,
-                늘린 길이 죄다 이르거나 — 맞췄다고 하지 않는다.
+                그 밖의 날에 목표에 못 미치면 — 늘린 길이 죄다 이르거나 — 맞췄다고
+                하지 않는다. 다만 사과로 끝내지도 않는다: 모자란 만큼이 곧 늦게
+                나서도 되는 만큼이라, 아래 두 줄과 나설 시각이 그 뺄셈을 대신한다.
               */
-              plan.kind === 'stretch' && !plan.capped && !onTarget
-              ? '딱 맞는 길이 없었어요.'
+              tooShort != null
+              ? tooShort.headline
               : planHeadline(plan)}
         </Text>
 
@@ -248,9 +274,7 @@ function RouteScreen() {
           그때 "먼저 닿는 길이에요"를 그대로 두면 화면에 적힌 도착 시각과
           바로 어긋난다 — 아래 도착 시각이 그 거짓말을 즉시 들키게 만든다.
         */}
-        {plan.kind === 'stretch' && stretched && !plan.capped && !onTarget && (
-          <Text style={styles.sub}>가장 가까운 길로 보여드릴게요.</Text>
-        )}
+        {tooShort != null && <Text style={styles.sub}>{tooShort.sub}</Text>}
 
         {route != null && (
           <View style={styles.card}>
